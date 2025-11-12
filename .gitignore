@@ -2,3 +2,6 @@
 .venv/
 generation/raw_data/
 .DS_Store
+refs/
+exploration/
+requirements.txt

@@ -37,7 +37,7 @@ ISO_3166_alpha2 = [
 
 def _get_output_path(title: str):
     PULL_DATE = datetime.now(timezone.utc).strftime("%m-%d-%Y")
-    output_dir = "./datasets"
+    output_dir = "./raw_data"
     os.makedirs(output_dir, exist_ok=True)
     return os.path.join(output_dir, f"{title}_pull-{PULL_DATE}.json")
 
