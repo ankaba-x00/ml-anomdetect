@@ -3,3 +3,4 @@
 generation/raw_data/
 .DS_Store
 requirements.txt
+__pycache__/
