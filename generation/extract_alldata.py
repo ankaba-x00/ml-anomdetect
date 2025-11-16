@@ -23,6 +23,7 @@ DSFILE_MAP = {
     "iq_bandwidth_time": [True, "inetqal_bandwidth_time_pull-11-6-2025.json"],
     "iq_dns_time": [True, "inetqal_dns_time_pull-11-6-2025.json"],
     "iq_latency_time": [True, "inetqal_latency_time_pull-11-6-2025.json"],
+    "l3_origin": [False, True, "l3attack_origin_pull-11-6-2025.json"],
     "l3_origin_time": [True, "l3attack_origin_time_pull-11-6-2025.json"],
     "l3_origin_bitrate_time": [True, "l3attack_origin_bitrate_time_pull-11-6-2025.json"],
     "l3_origin_duration_time": [True, "l3attack_origin_duration_time_pull-11-6-2025.json"],
@@ -32,7 +33,6 @@ DSFILE_MAP = {
     "l3_target_bitrate_time": [True, "l3attack_target_bitrate_time_pull-11-6-2025.json"],
     "l3_target_duration_time": [True, "l3attack_target_duration_time_pull-11-6-2025.json"],
     "l3_target_protocol_time": [True, "l3attack_target_protocol_time_pull-11-6-2025.json"],
-    "l3_origin": [False, True, "l3attack_origin_pull-11-6-2025.json"],
     "l7_target": [False, True, "l7attack_target_pull-11-10-2025.json"],
     "l7_time": [True, "l7attack_time_pull-11-6-2025.json"],
     "l7_mitigations_time": [True, "l7attack_mitigations_time_pull-11-6-2025.json"],
@@ -193,10 +193,15 @@ def read_json_notime_csplit(file: str, name: str) -> dict:
     
     all_data = _read_file(file)
     
+    if "target" in name:
+        country_field = "targetCountryAlpha2"
+    else:
+        country_field = "originCountryAlpha2"
+
     data_dict = nontemp_csplit_extraction(
         all_data,
         field_map={
-            "countries": "originCountryAlpha2",
+            "countries": country_field,
             "values": lambda item: float(item["value"]) if "value" in item and item["value"] not in (None, "null", "") else np.nan,
             "ranks": lambda item: item["rank"] if "rank" in item else np.nan
         }
@@ -292,6 +297,7 @@ if __name__=='__main__':
                 data = read_json_notime(file, key)
     
         if data:
-            save_data(data, key)
+            print(data)
+            #save_data(data, key)
         else:
             print(f"No data extracted for {key}, skipping save.")
