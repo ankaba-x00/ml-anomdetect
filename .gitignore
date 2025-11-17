@@ -1,6 +1,6 @@
 .env
 .venv/
-generation/raw_data/
+datasets/raw
 .DS_Store
 requirements.txt
 __pycache__/

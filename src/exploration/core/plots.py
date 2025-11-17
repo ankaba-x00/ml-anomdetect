@@ -7,7 +7,7 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Patch
 import matplotlib as mpl
 from sklearn.decomposition import PCA
-from core.time_utils import conv_iso_to_utc
+from .time_utils import conv_iso_to_utc
 warnings.filterwarnings("ignore", message=".*tight_layout.*")
 pd.set_option('future.no_silent_downcasting', True)
 

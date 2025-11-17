@@ -3,13 +3,17 @@
 import os, json
 import numpy as np
 import pickle
+from pathlib import Path
 
 
 #########################################
 ##                PARAMS               ##
 #########################################
 
-DSDIR = "./raw_data"
+FILE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = FILE_DIR.parents[1]
+RAW_DIR = PROJECT_ROOT / "datasets" / "raw"
+PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 DSFILE_MAP = {
     "aibots_crawlers_time": [True, "aibots_crawlers_time_pull-11-6-2025.json"],
     "anomalies": [False, False, "anomalies_pull-11-6-2025.json"],
@@ -38,18 +42,16 @@ DSFILE_MAP = {
     "l7_mitigations_time": [True, "l7attack_mitigations_time_pull-11-6-2025.json"],
     "l7_origin": [False, True, "l7attack_origin_pull-11-6-2025.json"],
 } # name: time_data, csplit, file
-OUTDIR = "../datasets"
-
 
 #########################################
 ##           SANITY CHECKS             ##
 #########################################
 
-def check_dsfiles_exist(file_map: dict, folder: str):
+def check_dsfiles_exist(file_map: dict):
     for name, value in file_map.items():
         file = value[-1]
-        path = os.path.join(folder, file)
-        if not os.path.isfile(path):
+        path = RAW_DIR / file
+        if not path.is_file():
             raise FileNotFoundError(f"FileNotFound: {name}")
     print("All dataset files found.")
 
@@ -150,11 +152,11 @@ def temp_csplit_extraction(data: dict, fields: list, result_key: str = "main") -
 ##               CONVERTER             ##
 #########################################
 
-def _read_file(file: str) -> dict:
+def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
 
-def read_json_notime(file: str, name: str) -> dict:
+def read_json_notime(file: Path, name: str) -> dict:
     print(f"{name}\t processed as non-temporal data...")
     
     all_data = _read_file(file)
@@ -188,7 +190,7 @@ def read_json_notime(file: str, name: str) -> dict:
     
     return data_dict
 
-def read_json_notime_csplit(file: str, name: str) -> dict:
+def read_json_notime_csplit(file: Path, name: str) -> dict:
     print(f"{name}\t processed as non-temporal, country-resolved data...")
     
     all_data = _read_file(file)
@@ -209,7 +211,7 @@ def read_json_notime_csplit(file: str, name: str) -> dict:
     
     return data_dict
 
-def read_json_time_csplit(file: str, name: str) -> dict:
+def read_json_time_csplit(file: Path, name: str) -> dict:
     print(f"{name}\t processed as temporal, country-resolved data...")    
     all_data = _read_file(file)
     
@@ -274,9 +276,9 @@ def read_json_time_csplit(file: str, name: str) -> dict:
 ##             PRINT-OUT               ##
 #########################################
 
-def save_data(data: dict, name: str, outdir: str = OUTDIR):
-    os.makedirs(outdir, exist_ok=True)
-    outfile = os.path.join(outdir, f"{name}.pkl")
+def save_data(data: dict, name: str):
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    outfile = PROCESSED_DIR / f"{name}.pkl"
     with open(outfile, "wb") as f:
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
     print(f"{name}\t saved to {outfile}!")
@@ -284,20 +286,24 @@ def save_data(data: dict, name: str, outdir: str = OUTDIR):
 
 
 if __name__=='__main__':   
-    check_dsfiles_exist(DSFILE_MAP, DSDIR)
+    check_dsfiles_exist(DSFILE_MAP)
     
     for key, value in DSFILE_MAP.items():
-        file = os.path.join(DSDIR, value[-1])
-        if value[0]:
-            data = read_json_time_csplit(file, key)
+        is_time = value[0]
+        is_csplit = value[1] if len(value) == 3 else False
+        filename = value[-1]
+
+        path = RAW_DIR / filename
+
+        if is_time:
+            data = read_json_time_csplit(path, key)
         else:
-            if value[1]:
-                data = read_json_notime_csplit(file, key)
+            if is_csplit:
+                data = read_json_notime_csplit(path, key)
             else: 
-                data = read_json_notime(file, key)
+                data = read_json_notime(path, key)
     
         if data:
-            print(data)
-            #save_data(data, key)
+            save_data(data, key)
         else:
             print(f"No data extracted for {key}, skipping save.")

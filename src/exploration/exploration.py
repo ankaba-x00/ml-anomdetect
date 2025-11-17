@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
-import os
 from typing import Optional
-import numpy as np 
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from core import (
-    conv_pkltodf, timezones, add_local_daytypes, add_local_daytimes, add_fluctuation_metrics, normalize_per_date, aggregate_directional, preprocess_matrix, evaluate_kmeans_over_k, fit_final_kmeans, boxplot_valdist, boxplot_valdist_daytypes, boxplot_valdist_daytimes, heatmap_activity_fluctuations, heatmap_anomalies, heatmap_log10_attack_profile, barplot_activity_fluctuations, barplot_top_attackers, lineplot_clustering_eval_curves, pca_clusterplot, radarchart_attack_fingerprint
+from src.data import conv_pkltodf
+from .core import (
+    timezones, add_local_daytypes, add_local_daytimes, add_fluctuation_metrics, normalize_per_date, aggregate_directional, preprocess_matrix, evaluate_kmeans_over_k, fit_final_kmeans, boxplot_valdist, boxplot_valdist_daytypes, boxplot_valdist_daytimes, heatmap_activity_fluctuations, heatmap_anomalies, heatmap_log10_attack_profile, barplot_activity_fluctuations, barplot_top_attackers, lineplot_clustering_eval_curves, pca_clusterplot, radarchart_attack_fingerprint
 )
 
 
@@ -266,8 +263,13 @@ def run_exploration(in_folder: str, out_folder: str):
 
 
 if __name__ == "__main__":
-    INDIR = "../datasets"
-    OUTDIR = "./figures"
+    from pathlib import Path
+    
+    BASE_DIR = Path(__file__).resolve().parent
+    PROJECT_ROOT = BASE_DIR.parents[1]
+    INDIR = PROJECT_ROOT / "datasets" / "processed"
+    OUTDIR = PROJECT_ROOT / "outputs" / "exploration"
+    OUTDIR.mkdir(parents=True, exist_ok=True)
     
     print("Starting data exploration...")
     result = run_exploration(INDIR, OUTDIR)

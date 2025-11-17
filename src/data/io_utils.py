@@ -151,7 +151,8 @@ def conv_pkltodf(file: str, folder: str) -> pd.DataFrame:
 
 
 if __name__=="__main__":
-    
+    from pathlib import Path
+
     parser = argparse.ArgumentParser(
         description="Process and flatten pickled dataset files."
     )
@@ -180,6 +181,9 @@ if __name__=="__main__":
         parser.print_help()
         exit(1)
 
-    DSDIR = "../../datasets"
+    FILE_DIR = Path(__file__).resolve().parent
+    PROJECT_ROOT = FILE_DIR.parents[1]
+    DSDIR = PROJECT_ROOT / "datasets" / "processed"
+
     df = conv_pkltodf(args.file_key, DSDIR)
     print(df)
