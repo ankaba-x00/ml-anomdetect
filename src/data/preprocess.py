@@ -43,6 +43,7 @@ DSFILE_MAP = {
     "l7_origin": [False, True, "l7attack_origin_pull"],
 } # name: time_data, csplit, file
 
+
 #########################################
 ##            INTIAL CHECK             ##
 #########################################
@@ -61,6 +62,7 @@ def find_latest_pull(prefix: str) -> Path:
         raise FileNotFoundError(f"No files found starting with: {prefix}")
     matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[0]
+
 
 #########################################
 ##              EXTRACTION             ##

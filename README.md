@@ -10,20 +10,20 @@ A modular pipeline for collecting, preprocessing, and analyzing global traffic d
     - autoencoder
     - LSTM/Transformer-based forecasting residuals
     - etc.
-4. Predict gloabal or country-level anomalies in current internet traffic.
+4. Perfom hyperparameter tuning on model of choice
+5. Predict gloabal or country-level anomalies in current internet traffic.
 
 ## Module usage
 run the following commands in $PROJECT_ROOT:
 
-### Run complete module: 
-                        __add__later__
-
-### Run stages
+### Run module: 
 1. Run fetching stage
-                        python -m src.data.fetch
+                        python -m scripts.run_fetch
 2. Run feature-engineering stage
-                        __add__later__
+                        python -m scripts.run_prep
 3. Run model training stage
-                        __add__later__
-4. Run inference stage
-                        __add__later__
+                        python -m scripts.run_train
+4. Run model tuning stage
+                        python -m scripts.run_tune
+5. Run inference stage
+                        python -m scripts.run_inference
