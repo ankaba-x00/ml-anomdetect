@@ -6,3 +6,6 @@ __pycache__/
 requirements.txt
 
 datasets/raw/*
+datasets/processed/*
+datasets/featured/*
+datasets/scalers/*
