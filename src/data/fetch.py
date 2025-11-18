@@ -67,6 +67,7 @@ def _requests_session():
 def _print_range():
     print(f"\nData will be fetched \n\t FROM incl. {DATE_FROM.strftime('%m/%d/%Y')} \n\t TO incl. {DATE_TO.strftime('%m/%d/%Y')}\n")
 
+
 #########################################
 ##               FETCHER               ##
 #########################################
@@ -288,105 +289,124 @@ def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2)
 
 if __name__ == "__main__":
 
-        #--- HTTP reqests
-        # TITLE = "httpreq"
-        # URL = "https://api.cloudflare.com/client/v4/radar/http/top/locations"
-        # params = {"name": "main", "limit": 200}
-        # pull_notime_data(TITLE, URL, params)
+    #--- HTTP reqests
+    TITLE = "httpreq"
+    URL = "https://api.cloudflare.com/client/v4/radar/http/top/locations"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_data(TITLE, URL, params)
 
-        # TITLE = "httpreq_time"
-        # URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
-        # params = {"name": "main"}
-        # pull_time_datapercountry(TITLE, URL, params)
+    TITLE = "httpreq_time"
+    URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
+    params = {"name": "main"}
+    print(f"Fetching data {TITLE}...")
+    pull_time_datapercountry(TITLE, URL, params)
 
-        # BOT_CLASS = ["Likely_Automated", "Likely_Human"]
-        # URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
-        # for botcl in BOT_CLASS:
-        #     TITLE = f"httpreq_{botcl.replace('Likely_', '').lower()}_time"
-        #     params = {"name": "main", "botClass": botcl}
-        #     pull_time_datapercountry(TITLE, URL, params)
+    BOT_CLASS = ["Likely_Automated", "Likely_Human"]
+    URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
+    for botcl in BOT_CLASS:
+        TITLE = f"httpreq_{botcl.replace('Likely_', '').lower()}_time"
+        params = {"name": "main", "botClass": botcl}
+        print(f"Fetching data {TITLE}...")
+        pull_time_datapercountry(TITLE, URL, params)
 
-        #--- Netflow traffic
-        # TITLE = "traffic"
-        # URL = "https://api.cloudflare.com/client/v4/radar/netflows/top/locations"
-        # params = {"name": "main", "limit": 200}
-        # pull_notime_data(TITLE, URL, params)
+    #--- Netflow traffic
+    TITLE = "traffic"
+    URL = "https://api.cloudflare.com/client/v4/radar/netflows/top/locations"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_data(TITLE, URL, params)
 
     TITLE = "traffic_time"
     URL="https://api.cloudflare.com/client/v4/radar/netflows/timeseries"
     params = {"name": "main"}
+    print(f"Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
-    # #--- AI bots and crawlers
+    #--- AI bots and crawlers
     TITLE = "aibots_crawlers_time"
     URL = "https://api.cloudflare.com/client/v4/radar/ai/bots/timeseries"
     params = {"name": "main"}
+    print(f"Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
-    # #--- Bots
-    # TITLE = "bots_time"
-    # URL = "https://api.cloudflare.com/client/v4/radar/bots/timeseries"
-    # params = {"name": "main"}
-    # pull_time_datapercountry(TITLE, URL, params)
+    #--- Bots
+    TITLE = "bots_time"
+    URL = "https://api.cloudflare.com/client/v4/radar/bots/timeseries"
+    params = {"name": "main"}
+    print(f"Fetching data {TITLE}...")
+    pull_time_datapercountry(TITLE, URL, params)
 
-    # #--- Internet quality
-    # URL = "https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups"
-    # METRICS = ["bandwidth","dns","latency"]
-    # for metric in METRICS:
-    #     TITLE = f"inetqal_{metric}_time"
-    #     params = {"name": "main", "metric": metric}
-    #     pull_time_datapercountry(TITLE, URL, params)
+    #--- Internet quality
+    URL = "https://api.cloudflare.com/client/v4/radar/quality/iqi/timeseries_groups"
+    METRICS = ["bandwidth","dns","latency"]
+    for metric in METRICS:
+        TITLE = f"inetqal_{metric}_time"
+        params = {"name": "main", "metric": metric}
+        print(f"Fetching data {TITLE}...")
+        pull_time_datapercountry(TITLE, URL, params)
 
-    # #--- Nework L3 attacks
-    # TITLE = "l3attack_origin"
-    # URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/origin"
-    # params = {"name": "main", "limit": 200}
-    # pull_notime_datapercountry(TITLE, URL, params)
+    #--- Nework L3 attacks
+    TITLE = "l3attack_origin"
+    URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/origin"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_datapercountry(TITLE, URL, params)
 
-    # TITLE = "l3attack_target"
-    # URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/target"
-    # params = {"name": "main", "limit": 200}
-    # pull_notime_datapercountry(TITLE, URL, params)
+    TITLE = "l3attack_target"
+    URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/target"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_datapercountry(TITLE, URL, params)
 
-    # DIRECTION = ["Origin", "Target"]
-    # for dir in DIRECTION:
-    #     params = {"name": "main", "direction": dir}
-    #     TITLE = f"l3attack_{dir.lower()}_time"
-    #     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries"
-    #     pull_time_datapercountry(TITLE, URL, params)
-    #     TITLE = f"l3attack_{dir.lower()}_bitrate_time"
-    #     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/bitrate"
-    #     pull_time_datapercountry(TITLE, URL, params)
-    #     TITLE = f"l3attack_{dir.lower()}_duration_time"
-    #     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/duration"
-    #     pull_time_datapercountry(TITLE, URL, params)
-    #     TITLE = f"l3attack_{dir.lower()}_protocol_time"
-    #     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/protocol"
-    #     pull_time_datapercountry(TITLE, URL, params)
+    DIRECTION = ["Origin", "Target"]
+    for dir in DIRECTION:
+        params = {"name": "main", "direction": dir}
+        TITLE = f"l3attack_{dir.lower()}_time"
+        URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries"
+        print(f"Fetching data {TITLE}...")
+        pull_time_datapercountry(TITLE, URL, params)
+        TITLE = f"l3attack_{dir.lower()}_bitrate_time"
+        URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/bitrate"
+        print(f"Fetching data {TITLE}...")
+        pull_time_datapercountry(TITLE, URL, params)
+        TITLE = f"l3attack_{dir.lower()}_duration_time"
+        URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/duration"
+        print(f"Fetching data {TITLE}...")
+        pull_time_datapercountry(TITLE, URL, params)
+        TITLE = f"l3attack_{dir.lower()}_protocol_time"
+        URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/protocol"
+        print(f"Fetching data {TITLE}...")
+        pull_time_datapercountry(TITLE, URL, params)
+    
+    #--- WAF L7 attacks
+    TITLE = "l7attack_origin"
+    URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top/locations/origin"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_datapercountry(TITLE, URL, params)
 
-    # #--- WAF L7 attacks
-    # TITLE = "l7attack_origin"
-    # URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top/locations/origin"
-    # params = {"name": "main", "limit": 200}
-    # pull_notime_datapercountry(TITLE, URL, params)
+    TITLE = "l7attack_target"
+    URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top/locations/target"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_datapercountry(TITLE, URL, params)
 
-    # TITLE = "l7attack_target"
-    # URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top/locations/target"
-    # params = {"name": "main", "limit": 200}
-    # pull_notime_datapercountry(TITLE, URL, params)
+    TITLE = f"l7attack_time"
+    URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries"
+    params = {"name": "main"}
+    print(f"Fetching data {TITLE}...")
+    pull_time_datapercountry(TITLE, URL, params)
 
-    # TITLE = f"l7attack_time"
-    # URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries"
-    # params = {"name": "main"}
-    # pull_time_datapercountry(TITLE, URL, params)
+    TITLE = f"l7attack_mitigations_time"
+    URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries_groups/mitigation_product"
+    params = {"name": "main"}
+    print(f"Fetching data {TITLE}...")
+    pull_time_datapercountry(TITLE, URL, params)
 
-    # TITLE = f"l7attack_mitigations_time"
-    # URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries_groups/mitigation_product"
-    # params = {"name": "main"}
-    # pull_time_datapercountry(TITLE, URL, params)
-
-        #--- Traffic anomalies
-        # TITLE = "anomalies"
-        # URL = "https://api.cloudflare.com/client/v4/radar/traffic_anomalies"
-        # params = {"name": "main", "limit": 200}
-        # pull_notime_data(TITLE, URL, params)
+    #--- Traffic anomalies
+    TITLE = "anomalies"
+    URL = "https://api.cloudflare.com/client/v4/radar/traffic_anomalies"
+    params = {"name": "main", "limit": 200}
+    print(f"Fetching data {TITLE}...")
+    pull_notime_data(TITLE, URL, params)
