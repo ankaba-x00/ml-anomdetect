@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, pickle, argparse
+import os, pickle
 import pandas as pd
 import numpy as np
 
@@ -149,9 +149,9 @@ def conv_pkltodf(file: str, folder: str) -> pd.DataFrame:
         raise ValueError("Data dict layering not valid. Aborting dataframe conversion!")
 
 
-
 if __name__=="__main__":
     from pathlib import Path
+    import argparse
 
     parser = argparse.ArgumentParser(
         description="Process and flatten pickled dataset files."

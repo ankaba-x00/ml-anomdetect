@@ -3,7 +3,6 @@
 from pathlib import Path
 import pandas as pd
 import pickle
-from datetime import datetime
 from src.data.feature_engineering import (
     COUNTRIES,
     build_feature_matrix,
@@ -24,9 +23,8 @@ SCALER_DIR.mkdir(parents=True, exist_ok=True)
 
 
 #########################################
-##            BUILD HELPERS            ##
+##               HELPER                ##
 #########################################
-
 
 def save_feature_matrix(country: str, X: pd.DataFrame, scaler):
     fpath = FEATURE_DIR / f"features_{country}.pkl"
@@ -39,6 +37,10 @@ def save_feature_matrix(country: str, X: pd.DataFrame, scaler):
 
     print(f"[OK] Saved {country} features and scaler.")
 
+
+#########################################
+##                 RUN                 ##
+#########################################
 
 def build_all_countries():
     for c in COUNTRIES:
