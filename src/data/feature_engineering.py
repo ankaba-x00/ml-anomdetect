@@ -5,6 +5,8 @@ import pandas as pd
 from pathlib import Path
 from sklearn.preprocessing import RobustScaler
 from src.data.io_utils import conv_pkltodf
+from src.exploration.core.time_utils import conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
+from src.exploration.core.params import timezones
 
 
 ########################################################
@@ -53,7 +55,7 @@ def _load_nonperiod_csplit(key: str, country: str, rename: str) -> pd.Series:
     These are NOT timestamps but per-date aggregated values.
     Value for each date and assign that to the date.
 
-    --> !! rrently dead code residue from playing with feature matrix, might use or delete later !!
+    --> !! currently dead code residue from playing with feature matrix, might use or delete later !!
     """
     df = _load_df(key)
 
@@ -241,7 +243,7 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     df["ratio_netflow_http"] = df["netflow"] / df["http"].replace(0, 1e-6)
 
     # ============================
-    # 4. time cyclic encoding
+    # 4a. time cyclic encoding
     # ============================
 
     df["hour"] = df.index.hour
@@ -253,6 +255,48 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     df["dow_cos"] = np.cos(2 * np.pi * df["dow"] / 7)
 
     df = df.drop(columns=["hour", "dow"])
+
+    # ============================
+    # 4b. local-time daytype + daytime
+    # ============================
+
+    iso_series = df.index.to_series().dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Daytype / weekday
+    dt_df = conv_iso_to_local_with_daytype(iso_series, country, timezones)
+    dt_df["daytype_bin"] = dt_df["daytype"].map({"Weekday": 0, "Weekend": 1}).astype(int)
+
+    # Daytime buckets
+    daytimes = conv_iso_to_local_with_daytimes(iso_series, country, timezones)
+    daytime_map = {
+        "Deep night": 0,
+        "Morning": 1,
+        "Business hours": 2,
+        "Evening": 3,
+        "Early night": 4,
+        "Unknown": -1,
+    }
+    daytimes["daytime_bin"] = daytimes["daytime"].map(daytime_map).astype(int)
+
+    df["weekday_idx"] = dt_df["weekday"].astype(int)
+    df["daytype"] = dt_df["daytype_bin"]
+    df["daytime"] = daytimes["daytime_bin"]
+
+    # ============================
+    # 4c. month + week periodic encodings
+    # ============================
+
+    # month of year 1–12
+    df["month"] = df.index.month
+    df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+    df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+
+    # week of year 1–52 (ISO week)
+    df["week"] = df.index.isocalendar().week.astype(int)
+    df["week_sin"] = np.sin(2 * np.pi * df["week"] / 52)
+    df["week_cos"] = np.cos(2 * np.pi * df["week"] / 52)
+
+    df = df.drop(columns=["month", "week"])
 
     # ============================
     # 5. rolling aggregates
