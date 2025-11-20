@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Converts raw datasets as fetched from Cloudflare to internal df structure
-- converts raw datasets as defined in DSFILE_MAP
-- outputs pkl files
+Converts all or single raw dataset file as fetched from Cloudflare to internal df structure
+- converts raw dataset as defined in DSFILE_MAP
+- outputs pkl file
 
 Outputs:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m src.data.preprocess
+    python -m src.data.preprocess <all|key>
 """
 
-import os, json
+import json
 import numpy as np
 import pickle
 from pathlib import Path
@@ -59,18 +59,21 @@ DSFILE_MAP = {
 ##            INTIAL CHECK             ##
 #########################################
 
+def _dsfile_exists(value: list):
+    prefix = value[-1]
+    match = list(RAW_DIR.glob(f"{prefix}*.json"))
+    if not match:
+        raise FileNotFoundError(f"[Error] No JSON file starting with '{prefix}' found. Aborting preprocessing stage.")
+
 def check_dsfiles_exist(file_map: dict):
-    for name, value in file_map.items():
-        prefix = value[-1]
-        matches = list(RAW_DIR.glob(f"{prefix}*.json"))
-        if not matches:
-            raise FileNotFoundError(f"No JSON files starting with '{prefix}' found. Aborting preprocessing stage.")
+    for name in file_map:
+        _dsfile_exists(file_map[name])
     print("All dataset prefixes validated. Starting preprocessing stage...")
 
 def find_latest_pull(prefix: str) -> Path:
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not matches:
-        raise FileNotFoundError(f"No files found starting with: {prefix}")
+        raise FileNotFoundError(f"[Error] No files found starting with: {prefix}")
     matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[0]
 
@@ -103,7 +106,7 @@ def nontemp_extraction(data: dict, field_map: dict, result_key: str = "main") ->
             elif isinstance(logic, str):
                 extracted[out_field] = [item.get(logic) for item in result if logic in item]
             else:
-                raise ValueError(f"Unsupported field logic: {out_field}")
+                raise ValueError(f"[Error] Unsupported field logic: {out_field}")
             
         if any(extracted.values()):
             data_dict[day_str] = extracted
@@ -114,10 +117,6 @@ def nontemp_csplit_extraction(data: dict, field_map: dict, result_key: str = "ma
     data_dict = {}
 
     for region, region_data in data.items():
-        if not isinstance(region_data, list):
-            print(f"Unexpected data type for region {region}: {type(region_data)}")
-            continue
-
         region_result = nontemp_extraction(region_data, field_map, result_key)
         if region_result:
             data_dict[region] = region_result
@@ -128,10 +127,6 @@ def temp_csplit_extraction(data: dict, fields: list, result_key: str = "main") -
     data_dict = {}
 
     for region, region_data in data.items():
-        if not isinstance(region_data, list):
-            print(f"Unexpected data type for region {region}: {type(region_data)}")
-            continue
-
         data_dict[region] = {}
 
         for day_entry in region_data:
@@ -175,14 +170,12 @@ def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
 
-def read_json_notime(file: Path, name: str) -> dict:
+def read_json_notime(data: dict, name: str) -> dict:
     print(f"{name}\t processed as non-temporal data...")
-    
-    all_data = _read_file(file)
     
     if name == "anomalies":
         data_dict = nontemp_extraction(
-            all_data, 
+            data, 
             result_key="trafficAnomalies", 
             field_map={
                 "types": "type",
@@ -198,29 +191,27 @@ def read_json_notime(file: Path, name: str) -> dict:
 
     elif name in ["httpreq", "traffic"]:
         data_dict = nontemp_extraction(
-            all_data,
+            data,
             field_map={
                 "countries": "clientCountryAlpha2",
                 "values": lambda item: float(item["value"]) if "value" in item and item["value"] not in (None, "null", "") else np.nan,
             }
         )
     else:
-        raise KeyError(f"Key {name} not found, aborting!")
+        raise KeyError(f"[Error] Key {name} not found, aborting!")
     
     return data_dict
 
-def read_json_notime_csplit(file: Path, name: str) -> dict:
+def read_json_notime_csplit(data: dict, name: str) -> dict:
     print(f"{name}\t processed as non-temporal, country-resolved data...")
-    
-    all_data = _read_file(file)
-    
+        
     if "target" in name:
         country_field = "targetCountryAlpha2"
     else:
         country_field = "originCountryAlpha2"
 
     data_dict = nontemp_csplit_extraction(
-        all_data,
+        data,
         field_map={
             "countries": country_field,
             "values": lambda item: float(item["value"]) if "value" in item and item["value"] not in (None, "null", "") else np.nan,
@@ -230,18 +221,17 @@ def read_json_notime_csplit(file: Path, name: str) -> dict:
     
     return data_dict
 
-def read_json_time_csplit(file: Path, name: str) -> dict:
-    print(f"{name}\t processed as temporal, country-resolved data...")    
-    all_data = _read_file(file)
+def read_json_time_csplit(data: dict, name: str) -> dict:
+    print(f"{name}\t processed as temporal, country-resolved data...")
     
     if name.startswith("iq"):
         data_dict = temp_csplit_extraction(
-            all_data, 
+            data, 
             fields=["p25", "p50", "p75"]
         )
     elif "bitrate" in name:
         data_dict = temp_csplit_extraction(
-            all_data, 
+            data, 
             fields=[
                 "UNDER_500_MBPS",
                 "_500_MBPS_TO_1_GBPS",
@@ -252,7 +242,7 @@ def read_json_time_csplit(file: Path, name: str) -> dict:
         )
     elif "duration" in name:
         data_dict = temp_csplit_extraction(
-            all_data, 
+            data, 
             fields=[
                 "UNDER_10_MINS",
                 "_10_MINS_TO_20_MINS",
@@ -264,12 +254,12 @@ def read_json_time_csplit(file: Path, name: str) -> dict:
         )
     elif "protocol" in name:
         data_dict = temp_csplit_extraction(
-            all_data, 
+            data, 
             fields=["UDP", "TCP", "ICMP", "GRE"]
         )
     elif "mitigations" in name:
         data_dict = temp_csplit_extraction(
-            all_data, 
+            data, 
             fields=[
                 "WAF",
                 "DDOS",
@@ -282,11 +272,11 @@ def read_json_time_csplit(file: Path, name: str) -> dict:
         )
     elif "time" in name:
         data_dict = temp_csplit_extraction(
-            all_data, 
+            data, 
             fields=["values"]
         )
     else:
-        raise KeyError(f"Key {name} not found, aborting!")
+        raise KeyError(f"[Error] Key {name} not found, aborting!")
     
     return data_dict
 
@@ -307,29 +297,74 @@ def save_data(data: dict, name: str):
 ##                MAIN                 ##
 #########################################
 
-def run_preprocess():
+def preprocess_all():
     check_dsfiles_exist(DSFILE_MAP)
     
-    for key, value in DSFILE_MAP.items():
-        is_time = value[0]
-        is_csplit = bool(value[1])
-        prefix = value[-1]
+    for key in DSFILE_MAP:
+        preprocess_single(key, check=False)
 
-        path = find_latest_pull(prefix)
 
-        if is_time:
-            data = read_json_time_csplit(path, key)
-        else:
-            if is_csplit:
-                data = read_json_notime_csplit(path, key)
-            else: 
-                data = read_json_notime(path, key)
+def preprocess_single(name: str, check: bool = True):
+    value = DSFILE_MAP[name]
+
+    if check:
+        _dsfile_exists(value)
     
-        if data:
-            save_data(data, key)
-        else:
-            print(f"No data extracted for {key}, skipping save.")
+    is_time = value[0]
+    is_csplit = bool(value[1])
+    prefix = value[-1]
+
+    path = find_latest_pull(prefix)
+    data = _read_file(path)
+
+    if is_time:
+        conv_data = read_json_time_csplit(data, name)
+    else:
+        if is_csplit:
+            conv_data = read_json_notime_csplit(data, name)
+        else: 
+            conv_data = read_json_notime(data, name)
+
+    if conv_data:
+        save_data(conv_data, name)
+    else:
+        print(f"[Error] No data extracted for {name}, skipping save.")
 
 
 if __name__=='__main__':
-    run_preprocess()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Preprocess all or single dataset file."
+    )
+
+    parser.add_argument(
+        "-k", "--keys",
+        action="store_true",
+        help="show available file keys and exit"
+    )
+
+    parser.add_argument(
+        "file_key",
+        nargs="?",
+        help="file key to process <all|[aibots_crawlers_time, anomalies, ...]>"
+    )
+
+    args = parser.parse_args()
+
+    if args.keys:
+        print("Available file keys:")
+        for key in DSFILE_MAP.keys():
+            print(f"\t- {key}")
+        exit(0)
+
+    if not args.file_key:
+        parser.print_help()
+        exit(1)
+
+    key = args.file_key
+
+    if key.lower() == "all":
+        preprocess_all()
+    else:
+        preprocess_single(key)
