@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+"""
+Visually and numerically explores datasets as pulled from Cloudflare
+- value distributions : boxplots ts, daytime, daytype resolved
+- activity fluctuations : heatmaps daytime, daytype resolved
+- activity fluctuations : barplots top/tail countries daytime, daytype resolved
+- anomalies : heatmap countries x dates
+- attack profiles : heatmaps log10 normalized daily shares per country L3, L7 resolved
+- attack profiles : lineplots cluster eval and scatter plots PCA on specified final_k cluster L3, L7 resolved
+- attack profiles : radar plots with attack fingerprint for specified countries origin, target resolved
+- 
+
+Outputs:
+    png files : results/exploration/<figure_type>.png
+
+Usage: 
+    python -m src.data.exploration
+"""
 
 from typing import Optional
 import pandas as pd

@@ -135,7 +135,7 @@ def _load_dsfile(file: str, folder: str) -> dict:
 
 
 #########################################
-##               HELPER                ##
+##                MAIN                 ##
 #########################################
 
 def conv_pkltodf(file: str, folder: str) -> pd.DataFrame:

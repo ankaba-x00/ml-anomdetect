@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""
+Fetches raw datasets from Cloudflare.
+- outputs json files
+
+Outputs:
+    raw files : datasets/raw/<dataset>.json
+
+Usage: 
+    python -m src.data.fetch
+"""
 
 import time, requests, json, os
 from pathlib import Path

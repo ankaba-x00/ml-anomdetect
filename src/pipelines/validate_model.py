@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
 Validate a trained autoencoder:
- - loads model and features
- - computes reconstruction errors
- - prints summary stats
- - saves CSV
+- loads model and features
+- computes reconstruction errors
+- prints summary stats
 
-Usage:
-    python -m src.pipelines.validate_model US
+Outputs: 
+    error per ts : results/models/validate/<COUNTRY_CODE>_validation.csv
+
+Usage (required in <...>, optional in [...]):
+    python -m src.pipelines.validate_model <COUNTRY_CODE|all> [>> stdout_val.txt]
 """
 
+import pickle, json
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from src.data.feature_engineering import build_feature_matrix
+from src.data.feature_engineering import build_feature_matrix, COUNTRIES
 from src.models.evaluate import reconstruction_error
 from src.models.train import load_autoencoder
-from src.data.feature_engineering import COUNTRIES
 
 
 #########################################
@@ -40,29 +42,53 @@ def validate_single(country: str):
     print(f"==============================")
 
     model_path = MODELS_DIR / f"{country}_autoencoder.pt"
+    scaler_path = MODELS_DIR / f"{country}_scaler_cont.pkl"
+    num_path = MODELS_DIR / f"{country}_num_cont.json"
+
+
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
-    scaler_path = MODELS_DIR / f"{country}_scaler.pkl"
-
+    if not scaler_path.exists():
+        raise FileNotFoundError(f"Scaler not found: {scaler_path}")
+    if not num_path.exists():
+        raise FileNotFoundError(f"Num_cont not found: {num_path}")
+    
+    # --------------------
+    # Load model + config, scaler, num_cont
+    # --------------------
     model, cfg = load_autoencoder(model_path)
 
+    with open(scaler_path, "rb") as f:
+        scaler = pickle.load(f)
+
+    num_cont = json.load(open(num_path))["num_cont"]
+
     # --------------------
-    # Load feature matrix
+    # Load feature matrix (unscaled)
     # --------------------
-    # TODO: write load function later instead of being lazy and build again
-    X, scaler = build_feature_matrix(country)
-    X_np = X.values.astype(np.float32)
+    X_cont_df, X_cat_df, num_cont_check, cat_dims, _ = build_feature_matrix(country)
+
+    # Consistency check
+    if num_cont != num_cont_check:
+        raise ValueError("num_cont mismatch between scaler and feature matrix")
+
+    # scale continuous features using training scaler
+    Xc_np = X_cont_df.values.astype(np.float32)
+    Xk_np = X_cat_df.values.astype(np.int64)
 
     # -------------------------
     # APPLY SAME SPLIT AS TRAIN
     # -------------------------
-    # TODO: random sampling not yet implemented
-    n_total = len(X_np)
+    # TODO: random sampling not implemented
+    ts = X_cont_df.index
+    n_total = len(ts)
+    
     n_train = int(n_total * (1 - cfg.val_split))
     n_val = n_total - n_train
 
-    X_val = X_np[n_train:]
-    ts_val = X.index[n_train:]
+    Xc_val = Xc_np[n_train:]
+    Xk_val = Xk_np[n_train:]
+    ts_val = ts[n_train:]
 
     print(f"Total samples: {n_total}")
     print(f"Train samples: {n_train}")
@@ -71,8 +97,16 @@ def validate_single(country: str):
     # -------------------------
     # Compute reconstruction error
     # -------------------------
-    errors = reconstruction_error(model, X_val, cfg.device)
+    errors = reconstruction_error(
+        model=model,
+        X_cont=Xc_val,
+        X_cat=Xk_val,
+        device=cfg.device,
+    )
 
+    # -------------------------
+    # Print summary
+    # -------------------------
     print("\n--- Validation Error Summary ---")
     print(f"Min error:  {errors.min():.6f}")
     print(f"Mean error: {errors.mean():.6f}")

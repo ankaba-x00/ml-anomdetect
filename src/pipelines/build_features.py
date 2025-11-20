@@ -1,4 +1,21 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3#!/usr/bin/env python3
+"""
+Builds and saves feature matrix for all countries:
+- loads processed time-series data
+- constructs merged feature dataframe for each country
+- splits into:
+        a) continuous features (scaled)
+        b) categorical index features
+- fits and saves a RobustScaler per country
+- saves feature matrices for use during training and inference
+
+Outputs:
+    feature matrix : datasets/featured/features_<COUNTRY_CODE>.pkl
+    scaler : datasets/scalers/scaler_<COUNTRY_CODE>.pkl
+
+Usage:
+    python -m src.pipelines.build_features
+"""
 
 from pathlib import Path
 import pandas as pd
@@ -26,10 +43,26 @@ SCALER_DIR.mkdir(parents=True, exist_ok=True)
 ##               HELPER                ##
 #########################################
 
-def save_feature_matrix(country: str, X: pd.DataFrame, scaler):
+def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame, num_cont: int, cat_dims: list[int], scaler):
+    """
+    Save:
+      - continuous scaled features (float32)
+      - categorical index features (int)
+      - scaler for inference
+      - metadata: num_cont and cat_dims
+    """
     fpath = FEATURE_DIR / f"features_{country}.pkl"
     with open(fpath, "wb") as f:
-        pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(
+            {
+                "continuous": X_cont,
+                "categorical": X_cat,
+                "num_cont": num_cont,
+                "cat_dims": cat_dims,
+            },
+            f,
+            protocol=pickle.HIGHEST_PROTOCOL,
+        )
 
     spath = SCALER_DIR / f"scaler_{country}.pkl"
     with open(spath, "wb") as f:
@@ -49,16 +82,11 @@ def build_all_countries():
         print(f"==============================")
 
         try:
-            X, scaler = build_feature_matrix(c)
-            #print(X.shape)
-            #print(X.columns)
-            #print("All floats:", set(X.apply(lambda col: col.apply(lambda x: isinstance(x, float)).all())))
-            #print("Missing values in:", X.columns[X.isnull().any()].tolist())
-            save_feature_matrix(c, X, scaler)
+            X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(c)
+            save_feature_matrix(c, X_cont, X_cat, num_cont, cat_dims, scaler)
         except Exception as e:
             print(f"[ERROR] Could not build {c}: {e}")
             continue
-
 
 if __name__ == "__main__":
     build_all_countries()

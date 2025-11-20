@@ -320,13 +320,92 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 ########################################################
 
 def build_feature_matrix(country: str):
+    """
+    Build feature matrix for a given country.
+    Returns
+    -------
+    X_cont : pd.DataFrame
+        Scaled continuous features (float32)
+    X_cat : pd.DataFrame
+        Categorical index features (int64), columns in a FIXED order.
+    num_cont : int
+        Number of continuous features.
+    cat_dims : dict[str, int]
+        Mapping from categorical column name -> cardinality.
+        Keys match X_cat.columns exactly and order defines embedding order.
+    scaler : RobustScaler
+        Fitted scaler for continuous features.
+    """
     df = build_country_dataframe(country).copy()
 
+    # ==========================================
+    # Add categorical index features
+    # ==========================================
+
+    # 1. weekday (0–6)
+    df["weekday_idx"] = df.index.dayofweek
+    # 2. daytype (0 = weekday, 1 = weekend)
+    df["daytype_idx"] = (df["weekday_idx"] >= 5).astype(int)
+    # 3. daytime buckets (0–4)
+    hour = df.index.hour
+    df["daytime_idx"] = (
+        hour.map(lambda h:
+                 0 if h < 6 else
+                 1 if h < 9 else
+                 2 if h < 17 else
+                 3 if h < 22 else 4)
+    )
+    # 4. month (0–11)
+    df["month_idx"] = df.index.month - 1
+    # 5. week of year (0–52)
+    df["week_idx"] = df.index.isocalendar().week.astype(int) - 1
+
+    # ==========================================
+    # Separate categorical vs continuous
+    # ==========================================
+
+    categorical_cols = [
+        "weekday_idx",
+        "daytype_idx",
+        "daytime_idx",
+        "month_idx",
+        "week_idx",
+    ]
+
+    continuous_cols = [c for c in df.columns if c not in categorical_cols]
+
+    df_cont = df[continuous_cols].astype(np.float32)
+    df_cat = df[categorical_cols].astype("int64")
+
+    # ==========================================
+    # Fit scaler ONLY on continuous features
+    # ==========================================
+
     scaler = RobustScaler()
-    X = pd.DataFrame(
-        scaler.fit_transform(df),
-        index=df.index,
-        columns=df.columns
+    X_cont_scaled = pd.DataFrame(
+        scaler.fit_transform(df_cont),
+        index=df_cont.index,
+        columns=df_cont.columns
     )
 
-    return X, scaler
+    # ==========================================
+    # Generate embedding metadata
+    # ==========================================
+
+    num_cont = X_cont_scaled.shape[1]
+
+    # category cardinalities as a dict[col_name: cardinality]
+    cat_dims = {
+        col: int(df_cat[col].max()) + 1 for col in categorical_cols
+    }
+
+    # ==========================================
+    # Return 5 components:
+    # - scaled continuous features
+    # - integer categorical features
+    # - number of continuous dims (for autoencoder)
+    # - embedding cardinalities (for embedding layers)
+    # - scaler
+    # ==========================================
+
+    return X_cont_scaled, df_cat, num_cont, cat_dims, scaler

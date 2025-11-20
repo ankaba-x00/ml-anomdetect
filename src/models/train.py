@@ -4,7 +4,6 @@ from typing import Any
 from src.models.autoencoder import AEConfig, TabularAutoencoder
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 
@@ -13,26 +12,31 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 #########################################
 
 def _make_dataloaders(
-    X: np.ndarray,
+    X_cont: np.ndarray,
+    X_cat: np.ndarray,
     batch_size: int,
     val_split: float,
     time_series_split: bool,
 ) -> tuple[DataLoader, DataLoader]:
-    """Create train/validation DataLoaders from a 2D numpy array X."""
-    X_tensor = torch.from_numpy(X.astype(np.float32))
-    n_total = len(X_tensor)
+    """
+    Build DataLoaders for:
+       X_cont : continuous scaled features (float32)
+       X_cat  : categorical integer features (int64)
+    """
+    Xc = torch.from_numpy(X_cont.astype(np.float32))
+    Xk = torch.from_numpy(X_cat.astype(np.int64))
+    n_total = len(Xc)
 
     if time_series_split: 
         # chronological split: FIRST segment train, LAST segment validation: TODO: random sampling better?
         n_train = int(n_total * (1 - val_split))
-        train_ds, val_ds = TensorDataset(X_tensor[:n_train]), TensorDataset(X_tensor[n_train:])
+        train_ds = TensorDataset(Xc[:n_train], Xk[:n_train])
+        val_ds = TensorDataset(Xc[n_train:], Xk[n_train:])
     else:
         # random split
-        full_ds = TensorDataset(X_tensor)
+        full_ds = TensorDataset(Xc, Xk)
         n_val = max(1, int(n_total * val_split))
         n_train = n_total - n_val
-        if n_train <= 0:
-            raise ValueError("val_split too large, no train samples remain.")
         train_ds, val_ds = random_split(full_ds, [n_train, n_val])
 
     train_loader = DataLoader(
@@ -52,11 +56,15 @@ def _make_dataloaders(
 
 
 def train_autoencoder(
-    X: np.ndarray,
+    X_cont: np.ndarray,
+    X_cat: np.ndarray,
     config: AEConfig,
 ) -> tuple[TabularAutoencoder, dict[str, Any]]:
     """
-    Train an autoencoder on a single country's feature matrix X.
+    Train autoencoder with continuous + categorical inputs.
+
+    X_cont : (T, D_cont) float32 scaled features
+    X_cat  : (T, 3) int64 categorical indices
 
     Returns
     -------
@@ -67,9 +75,12 @@ def train_autoencoder(
 
     device = torch.device(config.device)
 
+    assert X_cat.shape[1] == len(config.cat_dims), f"Mismatch: X_cat has {X_cat.shape[1]} cols, but cat_dims defines {len(config.cat_dims)} categories"
+
     # DataLoaders
     train_loader, val_loader = _make_dataloaders(
-        X, 
+        X_cont=X_cont,
+        X_cat=X_cat,
         batch_size=config.batch_size, 
         val_split=config.val_split,
         time_series_split=config.time_series_split,
@@ -77,7 +88,8 @@ def train_autoencoder(
 
     # Model
     model = TabularAutoencoder(
-        input_dim=config.input_dim,
+        num_cont=config.num_cont,
+        cat_dims=config.cat_dims,
         latent_dim=config.latent_dim,
         hidden_dims=config.hidden_dims,
         dropout=config.dropout,
@@ -90,7 +102,6 @@ def train_autoencoder(
     )
 
     scheduler = None
-    #Learning Rate Scheduler (optional)
     if config.use_lr_scheduler:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, 
@@ -100,7 +111,7 @@ def train_autoencoder(
             min_lr=1e-6 # minimum learning rate
         )
 
-    criterion = nn.MSELoss(reduction="none") #weighted loss that emphasizes rare feature patterns TODO: best here?
+    criterion = torch.nn.MSELoss(reduction="none") #weighted loss that emphasizes rare feature patterns TODO: best here?
 
     best_val_loss = float("inf")
     best_state = None
@@ -121,27 +132,28 @@ def train_autoencoder(
         running_train = 0.0
         n_train = 0
 
-        for (batch_X,) in train_loader:
-            batch_X = batch_X.to(device)
+        for batch_Xc, batch_Xk in train_loader:
+            batch_Xc = batch_Xc.to(device)
+            batch_Xk = batch_Xk.to(device)
 
             optimizer.zero_grad()
-            recon = model(batch_X)
-
+            recon = model(batch_Xc, batch_Xk)
+            
             # criterion returns (batch, feature_dim)
-            per_feature_loss = criterion(recon, batch_X)
+            per_feature_loss = criterion(recon, batch_Xc)
             per_sample_loss = per_feature_loss.mean(dim=1)
             loss = per_sample_loss.mean()
             
             loss.backward()
 
             # gradient clipping (optional)
-            if config.gradient_clip is not None and config.gradient_clip > 0:
+            if config.gradient_clip and config.gradient_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
             
             optimizer.step()
 
-            running_train += loss.item() * batch_X.size(0)
-            n_train += batch_X.size(0)
+            running_train += loss.item() * batch_Xc.size(0)
+            n_train += batch_Xc.size(0)
 
         train_loss = running_train / max(n_train, 1)
 
@@ -152,16 +164,19 @@ def train_autoencoder(
         running_val = 0.0
         n_val = 0
         with torch.no_grad():
-            for (batch_X,) in val_loader:
-                batch_X = batch_X.to(device)
-                recon = model(batch_X)
+            for batch_Xc, batch_Xk in val_loader:
+                assert batch_Xk.shape[1] == len(config.cat_dims), "Batch categorical shape mismatch!"
+                
+                batch_Xc = batch_Xc.to(device)
+                batch_Xk = batch_Xk.to(device)
+                recon = model(batch_Xc, batch_Xk)
 
-                per_feature_loss = criterion(recon, batch_X)
+                per_feature_loss = criterion(recon, batch_Xc)
                 per_sample_loss = per_feature_loss.mean(dim=1)
                 loss = per_sample_loss.mean()
 
-                running_val += loss.item() * batch_X.size(0)
-                n_val += batch_X.size(0)
+                running_val += loss.item() * batch_Xc.size(0)
+                n_val += batch_Xc.size(0)
 
         val_loss = running_val / max(n_val, 1)
 
@@ -195,7 +210,7 @@ def train_autoencoder(
         # -----------------------------
         # Early stopping
         # -----------------------------
-        if val_loss < best_val_loss - 1e-6:
+        if val_loss < best_val_loss - 1e-8:
             best_val_loss = val_loss
             best_state = model.state_dict()
             history["best_epoch"] = epoch + 1
@@ -207,7 +222,7 @@ def train_autoencoder(
                 break
 
     # restore best weights
-    if best_state is not None:
+    if best_state:
         model.load_state_dict(best_state)
 
     return model, history
@@ -235,13 +250,14 @@ def save_autoencoder(
 
 
 def load_autoencoder(path: Path) -> tuple[TabularAutoencoder, AEConfig]:
-    """Load model + config from a .pt file created by save_autoencoder()."""
+    """Load model + config from a .pt file."""
     path = Path(path)
     payload = torch.load(path, map_location="cpu")
 
     cfg = AEConfig(**payload["config"])
     model = TabularAutoencoder(
-        input_dim=cfg.input_dim,
+        num_cont=cfg.num_cont,
+        cat_dims=cfg.cat_dims,
         latent_dim=cfg.latent_dim,
         hidden_dims=cfg.hidden_dims,
         dropout=cfg.dropout,
