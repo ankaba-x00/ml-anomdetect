@@ -47,11 +47,11 @@ def validate_single(country: str):
 
 
     if not model_path.exists():
-        raise FileNotFoundError(f"Model not found: {model_path}")
+        raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
     if not scaler_path.exists():
-        raise FileNotFoundError(f"Scaler not found: {scaler_path}")
+        raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
     if not num_path.exists():
-        raise FileNotFoundError(f"Num_cont not found: {num_path}")
+        raise FileNotFoundError(f"[ERROR] Num_cont not found: {num_path}")
     
     # --------------------
     # Load model + config, scaler, num_cont
@@ -70,7 +70,7 @@ def validate_single(country: str):
 
     # Consistency check
     if num_cont != num_cont_check:
-        raise ValueError("num_cont mismatch between scaler and feature matrix")
+        raise ValueError("[ERROR] num_cont mismatch between scaler and feature matrix")
 
     # scale continuous features using training scaler
     Xc_np = X_cont_df.values.astype(np.float32)
@@ -121,7 +121,7 @@ def validate_single(country: str):
     out_path = OUTPUT_DIR / f"{country}_validation.csv"
     df_out.to_csv(out_path, index=False)
 
-    print(f"[OK] Validation CSV saved: {out_path}")
+    print(f"[DONE] Validation CSV saved: {out_path}")
 
 def validate_all():
     for c in COUNTRIES:

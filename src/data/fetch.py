@@ -27,7 +27,7 @@ env_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(env_path)
 API_TOKEN = os.getenv("API_TOKEN")
 if not API_TOKEN:
-    raise EnvironmentError("API_TOKEN not found in environment (.env)")
+    raise EnvironmentError("[ERROR] API_TOKEN not found in environment (.env)")
 
 
 #########################################
@@ -75,7 +75,7 @@ def _requests_session():
     return session
 
 def _print_range():
-    print(f"\nData will be fetched \n\t FROM incl. {DATE_FROM.strftime('%m/%d/%Y')} \n\t TO incl. {DATE_TO.strftime('%m/%d/%Y')}\n")
+    print(f"[INFO] Data will be fetched \n\t FROM incl. {DATE_FROM.strftime('%m/%d/%Y')} \n\t TO incl. {DATE_TO.strftime('%m/%d/%Y')}\n")
 
 
 #########################################
@@ -126,7 +126,7 @@ def pull_notime_data(TITLE, URL, BASE_PARAMS):
                     }
                 })
             except Exception as e:
-                print(f"JSON decode error for {params['dateStart']}: {e}")
+                print(f"[ERROR] JSON decode error for {params['dateStart']}: {e}")
         else:
             print(f"HTTP {resp.status_code} for {params['dateStart']}")
 
@@ -136,7 +136,7 @@ def pull_notime_data(TITLE, URL, BASE_PARAMS):
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
-    print(f"\nDone! Saved {len(results)} days to {output_path}")
+    print(f"[DONE] Saved {len(results)} days to {output_path}")
 
 
 def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2):
@@ -155,7 +155,7 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
     session = _requests_session()
 
     def fetch_for_region(region_name, params_base):
-        print(f"\nFetching {region_name} ...")
+        print(f"[INFO] Fetching {region_name}...")
         region_results = []
         current_start = DATE_MIN
         idx = 1
@@ -171,7 +171,7 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
             try:
                 resp = session.get(URL, headers=_headers(), params=params, timeout=30)
             except Exception as e:
-                print("Request error:", e)
+                print("[ERROR] Request error:", e)
                 break
             
             print(f"  [{idx:02}] {params['dateStart']} → {params['dateEnd']} | status = {resp.status_code}")
@@ -201,7 +201,7 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
             idx += 1
 
         results_all[region_name] = region_results
-        print(f"{region_name}: saved {len(region_results)} days")
+        print(f"[OK] {region_name}: saved {len(region_results)} days")
 
     fetch_for_region("worldwide", dict(BASE_PARAMS))
 
@@ -213,7 +213,7 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
     with open(output_path, "w") as f:
         json.dump(results_all, f, indent=2, ensure_ascii=False)
 
-    print(f"\nAll done! Saved worldwide + {len(COUNTRIES)} countries to {output_path}")
+    print(f"[DONE] Saved worldwide + {len(COUNTRIES)} countries to {output_path}")
 
 
 def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2):
@@ -232,7 +232,7 @@ def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2)
     session = _requests_session()
 
     def fetch_region(region_name, params_base):
-        print(f"\nFetching {region_name} ...")
+        print(f"[INFO] Fetching {region_name} ...")
         region_results = []
         current_start = DATE_MIN
         idx = 1
@@ -272,7 +272,7 @@ def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2)
                         }
                     })
                 except Exception as e:
-                    print(f"JSON decode error for {params['dateStart']}:", e)
+                    print(f"[ERROR] JSON decode error for {params['dateStart']}:", e)
             else:
                 print(f"HTTP {resp.status_code} for {params['dateStart']}")
                 break
@@ -282,7 +282,7 @@ def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2)
 
         region_results.sort(key=lambda x: x["fetch"]["start"])
         results_all[region_name] = region_results
-        print(f"{region_name}: saved {len(region_results)} windows")
+        print(f"[OK] {region_name}: saved {len(region_results)} windows")
 
     fetch_region("worldwide", dict(BASE_PARAMS))
 
@@ -294,7 +294,7 @@ def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2)
     with open(output_path, "w") as f:
         json.dump(results_all, f, indent=2, ensure_ascii=False)
 
-    print("\nAll done! Saved worldwide +", len(COUNTRIES), "countries to", output_path)
+    print("[DONE] Saved worldwide +", len(COUNTRIES), "countries to", output_path)
 
 
 if __name__ == "__main__":
@@ -303,13 +303,13 @@ if __name__ == "__main__":
     TITLE = "httpreq"
     URL = "https://api.cloudflare.com/client/v4/radar/http/top/locations"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_data(TITLE, URL, params)
 
     TITLE = "httpreq_time"
     URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
     params = {"name": "main"}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
     BOT_CLASS = ["Likely_Automated", "Likely_Human"]
@@ -317,34 +317,34 @@ if __name__ == "__main__":
     for botcl in BOT_CLASS:
         TITLE = f"httpreq_{botcl.replace('Likely_', '').lower()}_time"
         params = {"name": "main", "botClass": botcl}
-        print(f"Fetching data {TITLE}...")
+        print(f"[INFO] Fetching data {TITLE}...")
         pull_time_datapercountry(TITLE, URL, params)
 
     #--- Netflow traffic
     TITLE = "traffic"
     URL = "https://api.cloudflare.com/client/v4/radar/netflows/top/locations"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_data(TITLE, URL, params)
 
     TITLE = "traffic_time"
     URL="https://api.cloudflare.com/client/v4/radar/netflows/timeseries"
     params = {"name": "main"}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
     #--- AI bots and crawlers
     TITLE = "aibots_crawlers_time"
     URL = "https://api.cloudflare.com/client/v4/radar/ai/bots/timeseries"
     params = {"name": "main"}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
     #--- Bots
     TITLE = "bots_time"
     URL = "https://api.cloudflare.com/client/v4/radar/bots/timeseries"
     params = {"name": "main"}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
     #--- Internet quality
@@ -353,20 +353,20 @@ if __name__ == "__main__":
     for metric in METRICS:
         TITLE = f"inetqal_{metric}_time"
         params = {"name": "main", "metric": metric}
-        print(f"Fetching data {TITLE}...")
+        print(f"[INFO] Fetching data {TITLE}...")
         pull_time_datapercountry(TITLE, URL, params)
 
     #--- Nework L3 attacks
     TITLE = "l3attack_origin"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/origin"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_datapercountry(TITLE, URL, params)
 
     TITLE = "l3attack_target"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/target"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_datapercountry(TITLE, URL, params)
 
     DIRECTION = ["Origin", "Target"]
@@ -374,49 +374,49 @@ if __name__ == "__main__":
         params = {"name": "main", "direction": dir}
         TITLE = f"l3attack_{dir.lower()}_time"
         URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries"
-        print(f"Fetching data {TITLE}...")
+        print(f"[INFO] Fetching data {TITLE}...")
         pull_time_datapercountry(TITLE, URL, params)
         TITLE = f"l3attack_{dir.lower()}_bitrate_time"
         URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/bitrate"
-        print(f"Fetching data {TITLE}...")
+        print(f"[INFO] Fetching data {TITLE}...")
         pull_time_datapercountry(TITLE, URL, params)
         TITLE = f"l3attack_{dir.lower()}_duration_time"
         URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/duration"
-        print(f"Fetching data {TITLE}...")
+        print(f"[INFO] Fetching data {TITLE}...")
         pull_time_datapercountry(TITLE, URL, params)
         TITLE = f"l3attack_{dir.lower()}_protocol_time"
         URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/protocol"
-        print(f"Fetching data {TITLE}...")
+        print(f"[INFO] Fetching data {TITLE}...")
         pull_time_datapercountry(TITLE, URL, params)
     
     #--- WAF L7 attacks
     TITLE = "l7attack_origin"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top/locations/origin"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_datapercountry(TITLE, URL, params)
 
     TITLE = "l7attack_target"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/top/locations/target"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_datapercountry(TITLE, URL, params)
 
     TITLE = f"l7attack_time"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries"
     params = {"name": "main"}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
     TITLE = f"l7attack_mitigations_time"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries_groups/mitigation_product"
     params = {"name": "main"}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_time_datapercountry(TITLE, URL, params)
 
     #--- Traffic anomalies
     TITLE = "anomalies"
     URL = "https://api.cloudflare.com/client/v4/radar/traffic_anomalies"
     params = {"name": "main", "limit": 200}
-    print(f"Fetching data {TITLE}...")
+    print(f"[INFO] Fetching data {TITLE}...")
     pull_notime_data(TITLE, URL, params)

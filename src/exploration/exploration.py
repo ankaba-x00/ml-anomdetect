@@ -45,7 +45,7 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str):
         colpal1 = ["#A0C684", "#31800C"]
         colpal2 = ["#ADE287", "#84AF64", "#537737", "#31800C", "#244D05"]
     else:
-        raise ValueError("Filename not recognized, aborting explorarion run!")
+        raise ValueError("[ERROR] Filename not recognized, aborting explorarion run!")
     
     df = conv_pkltodf(f"{typ}", in_folder)
     boxplot_valdist(
@@ -97,7 +97,7 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str):
         color = "#8DB76F"
         colpal = "Greens"
     else:
-        raise ValueError("Filename not recognized, aborting explorarion run!")
+        raise ValueError("[ERROR] Filename not recognized, aborting explorarion run!")
 
     for category in ["daytype", "daytime"]:
         if category == "daytype":
@@ -175,9 +175,9 @@ def _ask_for_k():
             if 2 <= k <= 15:
                 return k
             else:
-                print("Please enter a number between 2 and 15.")
+                print("[INFO] Enter a number between 2 and 15.")
         except ValueError:
-            print("Invalid input — please enter an integer.")
+            print("[ERROR] Invalid input — please enter an integer.")
 
 def _run_kmeans_analysis(
         df: pd.DataFrame, 
@@ -201,7 +201,7 @@ def _run_kmeans_analysis(
     if final_k is None:
         best_k = eval_df["silhouette"].idxmax()
         sugg_k = eval_df.loc[best_k, "k"]
-        print(f">>> Best k acc to Silhouette: {sugg_k}")
+        print(f"[INFO] Best k acc to Silhouette: {sugg_k}")
         if interactive:
             final_k = _ask_for_k()
         else:
@@ -288,6 +288,6 @@ if __name__ == "__main__":
     OUTDIR = PROJECT_ROOT / "results" / "exploration"
     OUTDIR.mkdir(parents=True, exist_ok=True)
     
-    print("Starting data exploration...")
+    print("[INFO] Starting data exploration...")
     result = run_exploration(INDIR, OUTDIR)
-    print("Data exploration completed!")
+    print("[DONE] Data exploration completed!")

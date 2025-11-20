@@ -60,7 +60,7 @@ def _load_nonperiod_csplit(key: str, country: str, rename: str) -> pd.Series:
     df = _load_df(key)
 
     if "regions" not in df.columns:
-        raise ValueError(f"{key}: unexpected structure (no region column).")
+        raise ValueError(f"[ERROR] {key}: unexpected structure (no region column).")
 
     df = df[(df["regions"] == country)]
 
@@ -170,7 +170,7 @@ def load_protocol_features(key: str, country: str):
 ########################################################
 
 def build_country_dataframe(country: str) -> pd.DataFrame:
-    print(f"Building base merged DF for country={country}")
+    print(f"[INFO] Building base merged DF for country={country}")
 
     # ============================
     # 1. load all base series
