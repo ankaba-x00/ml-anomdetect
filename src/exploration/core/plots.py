@@ -97,6 +97,7 @@ def boxplot_valdist(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close(fig)
     # plt.show()
 
@@ -162,6 +163,7 @@ def boxplot_valdist_daytypes(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close(fig)
     # plt.show()
 
@@ -242,6 +244,7 @@ def boxplot_valdist_daytimes(
         pad_inches=0.4, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close(fig)
     # plt.show()
 
@@ -295,6 +298,7 @@ def heatmap_activity_fluctuations(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close()
     # plt.show()
 
@@ -393,6 +397,7 @@ def heatmap_anomalies(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close(fig)
     # plt.show()
 
@@ -445,6 +450,7 @@ def heatmap_log10_attack_profile(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close()
     # plt.show()
 
@@ -495,6 +501,7 @@ def barplot_activity_fluctuations(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close()
     # plt.show()
 
@@ -537,6 +544,7 @@ def barplot_top_attackers(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close()
     # plt.show()
 
@@ -591,6 +599,7 @@ def lineplot_clustering_eval_curves(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close(fig)
     # plt.show()
 
@@ -633,6 +642,7 @@ def pca_clusterplot(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close()
     # plt.show()
 
@@ -695,5 +705,6 @@ def radarchart_attack_fingerprint(
         pad_inches=0.2, 
         dpi=300
     )
+    print(f"[OK] Saved to {fname}")
     plt.close(fig)
     # plt.show()

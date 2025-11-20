@@ -46,7 +46,7 @@ DSFILE_MAP = {
 def check_dsfiles_exist(file: str, folder: str) -> str:
     path = os.path.join(folder, file)
     if not os.path.isfile(path):
-        raise FileNotFoundError(f"FileNotFound: {file}")
+        raise FileNotFoundError(f"[ERROR] FileNotFound: {file}")
     return path
 
 
@@ -56,7 +56,7 @@ def check_dsfiles_exist(file: str, folder: str) -> str:
 
 def conv_maxlayer_3(data: dict) -> pd.DataFrame:
     """
-    Flattens 3-layered data dictionary into dataframe. 
+    Vectorized flattening of 3-layered data dictionary into dataframe. 
         Outer layer: regions -> regions
         Middle layer: dates -> dates
         Inner layer: timestamps, ..., values -> timestamps, metric, values
@@ -65,48 +65,57 @@ def conv_maxlayer_3(data: dict) -> pd.DataFrame:
     records = []
     for region, region_data in data.items():
         for date, details in region_data.items():
-            timestamps = details.get("timestamps", None)
-            if timestamps:
-                for metric_name, value_list in details.items():
+            if "timestamps" in details:
+                ts = pd.to_datetime(details["timestamps"], errors="coerce")
+                base = pd.DataFrame({
+                    "regions": region,
+                    "dates": date,
+                    "timestamps": ts
+                })
+                for metric_name, metric_values in details.items():
                     if metric_name == "timestamps":
                         continue
-                    for ts, val in zip(timestamps, value_list):
-                        records.append({
-                            "regions": region,
-                            "dates": date,
-                            "timestamps": ts,
-                            "metric": metric_name,
-                            "values": val
-                        })
+                    if len(metric_values) != len(ts):
+                        raise ValueError(
+                            f"[ERROR] Length mismatch: metric '{metric_name}' in region={region}, date={date}"
+                        )
+                    base[metric_name] = pd.to_numeric(metric_values, errors="coerce")
+                long_df = base.melt(
+                    id_vars=["regions", "dates", "timestamps"],
+                    var_name="metric",
+                    value_name="value"
+                )
+                records.append(long_df)
             else:
                 countries = details.get("countries", [])
                 values = details.get("values", [])
-                ranks = details.get("ranks", [np.nan * len(countries)])
-                for c, v, r in zip(countries, values, ranks):
-                    records.append({
-                        "regions": region,
-                        "dates": date,
-                        "countries": c,
-                        "values": v,
-                        "ranks": r
-                    })
+                ranks = details.get("ranks", [])
+                if not ranks or len(ranks) != len(countries):
+                    ranks = [np.nan] * len(countries)
+                records.append(pd.DataFrame({
+                    "regions": region,
+                    "dates": date,
+                    "countries": countries,
+                    "values": values,
+                    "ranks": ranks
+                }))
 
-    return pd.DataFrame(records)
+    return pd.concat(records, ignore_index=True)
 
 def conv_maxlayer_2(data: dict) -> pd.DataFrame:
     """
-    Flattens 2-layered data dictionary into dataframe. 
+    Vectorized flattening of 2-layered data dictionary into dataframe. 
         Outer layer: dates -> dates
         Inner layer: countries, values, types, ... -> countries, values, types, ...
     """
 
     records = []
     for date, details in data.items():
-        for row in zip(*details.values()):
-            record = dict(zip(details.keys(), row))
-            record['dates'] = date
-            records.append(record)
-    return pd.DataFrame(records)
+        df = pd.DataFrame(details)
+        df["dates"] = date
+        records.append(df)
+        
+    return pd.concat(records, ignore_index=True)
 
 
 #########################################
@@ -118,6 +127,8 @@ def _detect_nesting_level(data):
         return 1
     
     first_val = next(iter(data.values()))
+    if not first_val:
+        return 2
     if isinstance(first_val, dict):
         inner_val = next(iter(first_val.values()), None)
         if isinstance(inner_val, dict):
@@ -146,7 +157,7 @@ def conv_pkltodf(file: str, folder: str) -> pd.DataFrame:
     elif max_layer == 2:
         return conv_maxlayer_2(data)
     else:
-        raise ValueError("Data dict layering not valid. Aborting dataframe conversion!")
+        raise ValueError("[ERROR] Data dict layering not valid. Aborting dataframe conversion!")
 
 
 if __name__=="__main__":
@@ -178,6 +189,7 @@ if __name__=="__main__":
         exit(0)
 
     if not args.file_key:
+        print(f"[ERROR] file_key {args.file_key} cannot be processed.\n")
         parser.print_help()
         exit(1)
 

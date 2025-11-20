@@ -68,7 +68,7 @@ def _dsfile_exists(value: list):
 def check_dsfiles_exist(file_map: dict):
     for name in file_map:
         _dsfile_exists(file_map[name])
-    print("All dataset prefixes validated. Starting preprocessing stage...")
+    print("[INFO] All dataset prefixes validated. Starting preprocessing stage...")
 
 def find_latest_pull(prefix: str) -> Path:
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
@@ -171,7 +171,7 @@ def _read_file(file: Path) -> dict:
         return json.load(f)
 
 def read_json_notime(data: dict, name: str) -> dict:
-    print(f"{name}\t processed as non-temporal data...")
+    print(f"[INFO] {name}\t processed as non-temporal data...")
     
     if name == "anomalies":
         data_dict = nontemp_extraction(
@@ -203,7 +203,7 @@ def read_json_notime(data: dict, name: str) -> dict:
     return data_dict
 
 def read_json_notime_csplit(data: dict, name: str) -> dict:
-    print(f"{name}\t processed as non-temporal, country-resolved data...")
+    print(f"[INFO] {name}\t processed as non-temporal, country-resolved data...")
         
     if "target" in name:
         country_field = "targetCountryAlpha2"
@@ -222,7 +222,7 @@ def read_json_notime_csplit(data: dict, name: str) -> dict:
     return data_dict
 
 def read_json_time_csplit(data: dict, name: str) -> dict:
-    print(f"{name}\t processed as temporal, country-resolved data...")
+    print(f"[INFO] {name}\t processed as temporal, country-resolved data...")
     
     if name.startswith("iq"):
         data_dict = temp_csplit_extraction(
@@ -290,7 +290,7 @@ def save_data(data: dict, name: str):
     outfile = PROCESSED_DIR / f"{name}.pkl"
     with open(outfile, "wb") as f:
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
-    print(f"{name}\t saved to {outfile}!")
+    print(f"[DONE] {name}\t saved to {outfile}!")
 
 
 #########################################
@@ -359,6 +359,7 @@ if __name__=='__main__':
         exit(0)
 
     if not args.file_key:
+        print(f"[Error] file_key {args.file_key} cannot be processed.\n")
         parser.print_help()
         exit(1)
 

@@ -61,7 +61,7 @@ def _pullversions_exist(value: list):
 def check_pullversions_exist(file_map: dict):
     for name in file_map:
         _pullversions_exist(file_map[name])
-    print("All dataset prefix pull versions validated. Starting merging stage...")
+    print("[INFO] All dataset prefix pull versions validated. Starting merging stage...")
 
 def check_ts_order(l1: list, l2: list):
     ts1 = l1[-1]["fetch"]["value"]["result"]["main"]["timestamps"][-1]
@@ -95,7 +95,7 @@ def save_merged_data(data: dict, name: str):
     outfile = RAW_DIR / f"{name}_merged.json"
     with open(outfile, "w") as f:
         json.dump(data, f, indent=2)
-    print(f"{name}\t saved to {outfile}!")
+    print(f"[DONE] {name}\t saved to {outfile}!")
 
 def preprocess_merged_data(data: dict, name: str):
     conv_data = read_json_time_csplit(data, name)
@@ -132,7 +132,7 @@ def merge_single(name: str, dir: int, save_only: bool = False, check: bool = Tru
         
         merged[region] = combined
     
-    print(f"{name}\t successfully merged!")
+    print(f"[OK] {name}\t successfully merged!")
     if save_only:
         save_merged_data(merged, name)
     else:

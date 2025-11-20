@@ -112,7 +112,7 @@ def evaluate_autoencoder(
     elif method == "mad":
         threshold = threshold_mad(errors)
     else:
-        raise ValueError(f"Unknown threshold method: {method}")
+        raise ValueError(f"[Error] Unknown threshold method: {method}")
     # 3) mask
     mask = anomaly_mask(errors, threshold)
     # 4) group anomalies
