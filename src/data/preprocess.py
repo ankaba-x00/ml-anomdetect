@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+"""
+Converts raw datasets as fetched from Cloudflare to internal df structure
+- converts raw datasets as defined in DSFILE_MAP
+- outputs pkl files
+
+Outputs:
+    pkl files : datasets/processed/<dataset>.pkl
+
+Usage: 
+    python -m src.data.preprocess
+"""
 
 import os, json
 import numpy as np
@@ -30,8 +41,8 @@ DSFILE_MAP = {
     "l3_origin": [False, True, "l3attack_origin_pull"],
     "l3_origin_time": [True, None, "l3attack_origin_time_pull"],
     "l3_origin_bitrate_time": [True, None, "l3attack_origin_bitrate_time_pull"],
-    "l3_origin_duration_time": [True, None, "l3attack_origin_duration_time_pull"],
     "l3_origin_protocol_time": [True, None, "l3attack_origin_protocol_time_pull"],
+    "l3_origin_duration_time": [True, None, "l3attack_origin_duration_time_pull"],
     "l3_target": [False, True, "l3attack_target_pull"],
     "l3_target_time": [True, None, "l3attack_target_time_pull"],
     "l3_target_bitrate_time": [True, None, "l3attack_target_bitrate_time_pull"],

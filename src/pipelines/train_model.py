@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+"""
+Train a autoencoder for one or all countries.
+- produces continuous + categorical feature matrices
+- applies scaling to continuous features
+- builds autoencoder configuration (AEConfig)
+- trains TabularAutoencoder with early stopping
+
+Outputs:
+    model weights : results/models/trained/<COUNTRY_CODE>_autoencoder.pt
+    continuous scaler : results/models/trained/<COUNTRY_CODE>_scaler_cont.pkl
+    mapping of categorical cols : results/models/trained/<COUNTRY_CODE>_cat_dims.json
+    continuous feature sizes : results/models/trained/<COUNTRY_CODE>_num_cont.json
+    training history : results/models/trained/<COUNTRY_CODE>_training_history.json
+
+Usage (required in <...>, optional in [...]):
+    python -m src.pipelines.train_model <COUNTRY_CODE|all> [>> stdout_train.txt]
+"""
 
 import json, pickle
 from pathlib import Path
@@ -27,12 +44,14 @@ def train_single(country: str):
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
 
-    X, scaler = build_feature_matrix(country)
-    X_np = X.values.astype(np.float32)
-    input_dim = X_np.shape[1]
+    X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(country)
+
+    Xc_np = X_cont.values.astype(np.float32)
+    Xk_np = X_cat.values.astype(np.int64)
 
     cfg = AEConfig(
-        input_dim=input_dim,
+        num_cont=num_cont,
+        cat_dims=cat_dims,
         latent_dim=16,
         hidden_dims=(128, 64),
         dropout=0.1,
@@ -42,20 +61,30 @@ def train_single(country: str):
         num_epochs=60,
         patience=6,
         val_split=0.2,
-        time_series_split=True,
         gradient_clip=1.0,
         use_lr_scheduler=True,
+        time_series_split=True,
     )
 
-    model, history = train_autoencoder(X_np, cfg)
+    model, history = train_autoencoder(Xc_np, Xk_np, cfg)
 
     model_path = MODELS_DIR / f"{country}_autoencoder.pt"
     save_autoencoder(model, cfg, model_path)
 
-    scaler_path = MODELS_DIR / f"{country}_scaler.pkl"
+    scaler_path = MODELS_DIR / f"{country}_scaler_cont.pkl"
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
-    print(f"[OK] Saved scaler to {scaler_path}")
+    print(f"[OK] Saved continuous scaler → {scaler_path}")
+    
+    cat_path = MODELS_DIR / f"{country}_cat_dims.json"
+    with open(cat_path, "w") as f:
+        json.dump(cat_dims, f, indent=2)
+    print(f"[OK] Saved categorical vocab sizes → {cat_path}")
+
+    num_path = MODELS_DIR / f"{country}_num_cont.json"
+    with open(num_path, "w") as f:
+        json.dump({"num_cont": num_cont}, f, indent=2)
+    print(f"[OK] Saved num_cont → {num_path}")
 
     history_path = MODELS_DIR / f"{country}_training_history.json"
     with open(history_path, "w") as f:

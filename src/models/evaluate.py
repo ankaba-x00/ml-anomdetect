@@ -10,7 +10,8 @@ from src.models.autoencoder import TabularAutoencoder
 
 def reconstruction_error(
     model: TabularAutoencoder,
-    X: np.ndarray,
+    X_cont: np.ndarray,
+    X_cat: np.ndarray,
     device: str = None,
 ) -> np.ndarray:
     """Per-row reconstruction MSE."""
@@ -20,13 +21,15 @@ def reconstruction_error(
         device = torch.device(device)
 
     model.eval()
-    X_tensor = torch.from_numpy(X.astype(np.float32)).to(device)
+    Xc = torch.from_numpy(X_cont.astype(np.float32)).to(device)
+    Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
 
     with torch.no_grad():
-        recon = model(X_tensor)
-        mse = ((recon - X_tensor) ** 2).mean(dim=1)
+        recon_cont = model(Xc, Xk)
+        mse = ((recon_cont - Xc) ** 2).mean(dim=1)
 
     return mse.cpu().numpy()
+
 
 
 #########################################
@@ -80,9 +83,11 @@ def group_anomalies(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 #########################################
 
 def evaluate_autoencoder(
-    model,
-    X: np.ndarray,
+    model: TabularAutoencoder,
+    X_cont: np.ndarray,
+    X_cat: np.ndarray,
     method: str = "p99",
+    device: str = None,
 ) -> dict[str, Any]:
     """
     Full evaluation pipeline:
@@ -93,7 +98,12 @@ def evaluate_autoencoder(
     """
 
     # 1) errors
-    errors = reconstruction_error(model, X)
+    errors = reconstruction_error(
+        model,
+        X_cont,
+        X_cat,
+        device=device,
+    )
     # 2) threshold
     if method == "p99":
         threshold = threshold_percentile(errors, p=99)
