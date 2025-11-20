@@ -1,4 +1,5 @@
 .DS_Store
+.python-version
 __pycache__/
 
 .env
@@ -6,6 +7,11 @@ __pycache__/
 requirements.txt
 
 datasets/raw/*
-datasets/processed/*
+datasets/processed/* 
 datasets/featured/*
 datasets/scalers/*
+
+results/models/trained/*
+results/models/validated/*
+
+stdout_*
