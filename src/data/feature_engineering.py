@@ -3,9 +3,10 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from functools import lru_cache
 from sklearn.preprocessing import RobustScaler
 from src.data.io_utils import conv_pkltodf
-from src.exploration.core.time_utils import conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
+from src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
 from src.exploration.core.params import timezones
 
 
@@ -26,25 +27,24 @@ COUNTRIES = [
 ##            LOADING + NORMALIZATION HELPERS         ##
 ########################################################
 
+@lru_cache(None)
 def _load_df(key: str) -> pd.DataFrame:
-    """Load processed pkl → dataframe using conv_pkltodf()."""
-    return conv_pkltodf(key, PROCESSED_DIR)
+    """Load processed pkl as df, convert timestamps once and cache copy."""
+    df = conv_pkltodf(key, PROCESSED_DIR).copy()
+    if "timestamps" in df.columns:
+        df["timestamps"] = pd.to_datetime(df["timestamps"], errors="coerce")
+    if "dates" in df.columns:
+        df["dates"] = pd.to_datetime(df["dates"], errors="coerce")
+    return df
 
 
 def _load_time_series(key: str, country: str, rename: str) -> pd.Series:
-    """
-    Load any *_time dataset (level 3 structure).
-    Returns hourly series indexed by timestamp.
-    """
+    """Load any timeseries and returns hourly series indexed by timestamp."""
     df = _load_df(key)
-
     if "regions" in df.columns:
         df = df[df["regions"] == country]
-
-    df["ts"] = pd.to_datetime(df["timestamps"])
-    df = df.sort_values("ts")
-
-    s = df.set_index("ts")["values"].astype(float)
+    df = df.sort_values("timestamps")
+    s = df.set_index("timestamps")["values"].astype("float64")
     s.name = rename
     return s
 
@@ -58,15 +58,11 @@ def _load_nonperiod_csplit(key: str, country: str, rename: str) -> pd.Series:
     --> !! currently dead code residue from playing with feature matrix, might use or delete later !!
     """
     df = _load_df(key)
-
     if "regions" not in df.columns:
         raise ValueError(f"[ERROR] {key}: unexpected structure (no region column).")
-
     df = df[(df["regions"] == country)]
-
     # "dates" as timestamp index for X indexing
-    df["ts"] = pd.to_datetime(df["dates"])
-    s = df.set_index("ts")["values"].astype(float)
+    s = df.set_index("dates")["values"].astype("float64")
     s.name = rename
     return s
 
@@ -75,80 +71,50 @@ def _load_nonperiod_csplit(key: str, country: str, rename: str) -> pd.Series:
 ## BITRATE + DURATION AVG HELPERS (weighted averages) ##
 ########################################################
 
-def weighted_avg(values: dict, mids: dict) -> float:
-    """
-    values: dict like {"UNDER_500_MBPS": 94.6, "_500_MBPS_TO_1_GBPS": 3.2, ...}
-    mids:   dict with the bucket midpoints for the same keys.
-    Returns a single weighted average.
-    """
-    cleaned = {
-        k: float(v)
-        for k, v in values.items()
-        if k in mids and pd.notna(v)
-    }
-
-    if not cleaned:
-        return 0.0
-
-    arr_v = np.array(list(cleaned.values()), dtype=float)
-    arr_m = np.array([mids[k] for k in cleaned.keys()], dtype=float)
-
-    denom = arr_v.sum()
-    if denom <= 0:
-        return 0.0
-
-    return float((arr_v * arr_m).sum() / denom)
-
-
 def _load_weighted_dist(key: str, country: str, rename: str, mids: dict) -> pd.Series:
     """
     Convert multi-bucket distributions (bitrate, duration) into a series
     of weighted averages.
     """
     df = _load_df(key)
-
-    df = df[df["regions"] == country]
-    df["ts"] = pd.to_datetime(df["timestamps"])
-    df = df.sort_values("ts")
+    if "regions" in df.columns:
+        df = df[df["regions"] == country]
+    df = df.sort_values("timestamps")
 
     # pivot such that columns = bucket categories
-    df_p = df.pivot_table(index="ts", columns="metric", values="values", aggfunc="first")
+    df_p = df.pivot_table(index="timestamps", columns="metric", values="values", aggfunc="first").astype(float)
 
-    out = []
-    for ts, row in df_p.iterrows():
-        vals = {col: row[col] for col in df_p.columns if not pd.isna(row[col])}
-        out.append((ts, weighted_avg(vals, mids)))
+    cols = [c for c in df_p.columns if c in mids]
+    if not cols:
+        return pd.Series(name=rename, dtype="float64")
 
-    s = pd.Series({ts: v for ts, v in out})
-    s.name = rename
-    return s
+    W = np.array([mids[c] for c in cols], dtype=float)
+    X = df_p[cols].to_numpy()
+
+    den = X.sum(axis=1)
+    den = np.where(den <= 0, np.nan, den)
+    weighted = (X * W).sum(axis=1) / den
+    weighted = np.nan_to_num(weighted, nan=0.0)
+
+    return pd.Series(weighted, index=df_p.index, name=rename).astype("float64")
 
 
 ########################################################
 ##           PROTOCOL FRACTIONS + ENTROPY             ##
 ########################################################
 
-def shannon_entropy(p):
-    p = np.array(p)
-    p = p[p > 0]
-    return float(-(p * np.log2(p)).sum()) if len(p) else 0.0
-
-
 def load_protocol_features(key: str, country: str):
     df = _load_df(key)
-    df = df[df["regions"] == country]
+    if "regions" in df.columns:
+        df = df[df["regions"] == country]
+    df = df.sort_values("timestamps")
 
-    df["ts"] = pd.to_datetime(df["timestamps"])
-    df = df.sort_values("ts")
-
-    df_p = df.pivot_table(index="ts", columns="metric", values="values", aggfunc="first")
-
-    df_p = df_p.rename(columns={
+    df_p = df.pivot_table(index="timestamps", columns="metric", values="values", aggfunc="first").rename(columns={
         "UDP": "udp",
         "TCP": "tcp",
         "ICMP": "icmp",
         "GRE": "gre"
-    })
+    }).astype(float)
 
     pcols = ["udp", "tcp", "icmp", "gre"]
     df_p["total"] = df_p[pcols].sum(axis=1).replace(0, 1e-6)
@@ -156,13 +122,19 @@ def load_protocol_features(key: str, country: str):
     for c in pcols:
         df_p[f"{c}_frac"] = df_p[c] / df_p["total"]
 
-    df_p["protocol_entropy"] = df_p.apply(
-        lambda r: shannon_entropy([r["udp_frac"], r["tcp_frac"], r["icmp_frac"], r["gre_frac"]]),
-        axis=1
-    )
+    # shannon entropy : H(p) = -sum_i(p_i * log_2(p_i)) with 0 * log(0) = 0
+    P = df_p[[f"{c}_frac" for c in pcols]].to_numpy()
+    P = np.clip(P, 1e-12, 1) # removes zeros to avoid log(0) as not computable
+    P = P / P.sum(axis=1, keepdims=True) # normalizes each row to 1
+    entropy = -(P * np.log2(P)).sum(axis=1)
 
-    keep = ["udp_frac", "tcp_frac", "icmp_frac", "gre_frac", "protocol_entropy"]
-    return df_p[keep]
+    return pd.DataFrame({
+        "udp_frac": df_p["udp_frac"],
+        "tcp_frac": df_p["tcp_frac"],
+        "icmp_frac": df_p["icmp_frac"],
+        "gre_frac": df_p["gre_frac"],
+        "protocol_entropy": entropy
+    }, index=df_p.index).astype("float64")
 
 
 ########################################################
@@ -217,54 +189,35 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # 2. merge everything
     # ============================
 
-    df = pd.concat(
-        [
+    df = pd.concat([
             s_l3o, s_l3t, s_l7,
             s_http, s_http_auto, s_http_human,
             s_netflow,
             s_bots, s_ai,
             s_l3_bitrate, s_l3_duration,
-        ],
-        axis=1
-    )
-
+        ], axis=1)
     df = df.join(df_protocol, how="outer")
-    df = df.sort_index()
-    df = df.interpolate().ffill().bfill()
+    df = df.sort_index().interpolate().ffill().bfill()
 
     # ============================
-    # 3. derived Ratios
+    # 3. derived ratios
     # ============================
-
-    df["ratio_l3_l7"] = df["l3_origin"] / df["l7_traffic"].replace(0, 1e-6)
-    df["ratio_auto_human"] = df["http_auto"] / df["http_human"].replace(0, 1e-6)
-    df["ratio_bots_http"] = df["bots_total"] / df["http"].replace(0, 1e-6)
-    df["ratio_ai_bots_bots"] = df["ai_bots"] / df["bots_total"].replace(0, 1e-6)
-    df["ratio_netflow_http"] = df["netflow"] / df["http"].replace(0, 1e-6)
-
-    # ============================
-    # 4a. time cyclic encoding
-    # ============================
-
-    df["hour"] = df.index.hour
-    df["dow"] = df.index.dayofweek
-
-    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
-    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
-    df["dow_sin"] = np.sin(2 * np.pi * df["dow"] / 7)
-    df["dow_cos"] = np.cos(2 * np.pi * df["dow"] / 7)
-
-    df = df.drop(columns=["hour", "dow"])
+    eps = 1e-6
+    df["ratio_l3_l7"] = df["l3_origin"] / (df["l7_traffic"] + eps)
+    df["ratio_auto_human"] = df["http_auto"] / (df["http_human"] + eps)
+    df["ratio_bots_http"] = df["bots_total"] / (df["http"] + eps)
+    df["ratio_ai_bots_bots"] = df["ai_bots"] / (df["bots_total"] + eps)
+    df["ratio_netflow_http"] = df["netflow"] / (df["http"] + eps)
 
     # ============================
-    # 4b. local-time daytype + daytime
+    # 4a. local-time daytype + daytime
     # ============================
 
     iso_series = df.index.to_series().dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Daytype / weekday
     dt_df = conv_iso_to_local_with_daytype(iso_series, country, timezones)
-    dt_df["daytype_bin"] = dt_df["daytype"].map({"Weekday": 0, "Weekend": 1}).astype(int)
+    dt_df["daytype_bin"] = dt_df["daytype"].map({"Weekday": 0, "Weekend": 1}).astype("int64")
 
     # Daytime buckets
     daytimes = conv_iso_to_local_with_daytimes(iso_series, country, timezones)
@@ -274,44 +227,58 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
         "Business hours": 2,
         "Evening": 3,
         "Early night": 4,
-        "Unknown": -1,
+        "Unknown": 5,
     }
-    daytimes["daytime_bin"] = daytimes["daytime"].map(daytime_map).astype(int)
+    daytimes["daytime_bin"] = daytimes["daytime"].map(daytime_map).astype("int64")
 
-    df["weekday_idx"] = dt_df["weekday"].astype(int)
-    df["daytype"] = dt_df["daytype_bin"]
-    df["daytime"] = daytimes["daytime_bin"]
+    df["weekday_idx"] = dt_df["weekday"].astype("int64")
+    df["daytype_idx"] = dt_df["daytype_bin"]
+    df["daytime_idx"] = daytimes["daytime_bin"]
 
     # ============================
-    # 4c. month + week periodic encodings
+    # 4b. month + week periodic encodings
     # ============================
 
-    # month of year 1–12
-    df["month"] = df.index.month
-    df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
-    df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+    idx_local = conv_iso_to_local(iso_series, country, timezones)
 
-    # week of year 1–52 (ISO week)
-    df["week"] = df.index.isocalendar().week.astype(int)
-    df["week_sin"] = np.sin(2 * np.pi * df["week"] / 52)
-    df["week_cos"] = np.cos(2 * np.pi * df["week"] / 52)
+    df["month_idx"] = idx_local.dt.month - 1
+    df["week_idx"] = idx_local.dt.isocalendar().week.astype(int) - 1
 
-    df = df.drop(columns=["month", "week"])
+    # ============================
+    # 4c. time cyclic encoding
+    # ============================
+
+    # local hour-of-day and weekday cyclic
+    df["hour_sin"] = np.sin(2 * np.pi * idx_local.dt.hour / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * idx_local.dt.hour / 24)
+
+    df["dow_sin"] = np.sin(2 * np.pi * df["weekday_idx"] / 7)
+    df["dow_cos"] = np.cos(2 * np.pi * df["weekday_idx"] / 7)
+
+    # month cyclic
+    df["month_sin"] = np.sin(2 * np.pi * df["month_idx"] / 12)
+    df["month_cos"] = np.cos(2 * np.pi * df["month_idx"] / 12)
+
+    # week cyclic
+    df["week_sin"] = np.sin(2 * np.pi * df["week_idx"] / 52)
+    df["week_cos"] = np.cos(2 * np.pi * df["week_idx"] / 52)
 
     # ============================
     # 5. rolling aggregates
     # ============================
+    
+    df = df.sort_index()
+    df = df.asfreq("h")
 
     roll_cols = ["l3_origin", "l3_target", "l7_traffic",
                  "http", "http_auto", "http_human",
                  "netflow", "bots_total", "ai_bots"]
 
     for col in roll_cols:
-        df[f"{col}_roll3h"] = df[col].rolling("3h").mean()
-        df[f"{col}_roll24h"] = df[col].rolling("24h").mean()
+        df[f"{col}_roll3h"] = df[col].rolling(3).mean()
+        df[f"{col}_roll24h"] = df[col].rolling(24).mean()
 
     df = df.bfill()
-
     return df
 
 
@@ -325,9 +292,9 @@ def build_feature_matrix(country: str):
     Returns
     -------
     X_cont : pd.DataFrame
-        Scaled continuous features (float32)
+        Scaled continuous features (float64)
     X_cat : pd.DataFrame
-        Categorical index features (int64), columns in a FIXED order.
+        Categorical index features (int64 as required for embeddings in pytorch), columns in a FIXED order.
     num_cont : int
         Number of continuous features.
     cat_dims : dict[str, int]
@@ -337,28 +304,6 @@ def build_feature_matrix(country: str):
         Fitted scaler for continuous features.
     """
     df = build_country_dataframe(country).copy()
-
-    # ==========================================
-    # Add categorical index features
-    # ==========================================
-
-    # 1. weekday (0–6)
-    df["weekday_idx"] = df.index.dayofweek
-    # 2. daytype (0 = weekday, 1 = weekend)
-    df["daytype_idx"] = (df["weekday_idx"] >= 5).astype(int)
-    # 3. daytime buckets (0–4)
-    hour = df.index.hour
-    df["daytime_idx"] = (
-        hour.map(lambda h:
-                 0 if h < 6 else
-                 1 if h < 9 else
-                 2 if h < 17 else
-                 3 if h < 22 else 4)
-    )
-    # 4. month (0–11)
-    df["month_idx"] = df.index.month - 1
-    # 5. week of year (0–52)
-    df["week_idx"] = df.index.isocalendar().week.astype(int) - 1
 
     # ==========================================
     # Separate categorical vs continuous
@@ -374,7 +319,7 @@ def build_feature_matrix(country: str):
 
     continuous_cols = [c for c in df.columns if c not in categorical_cols]
 
-    df_cont = df[continuous_cols].astype(np.float32)
+    df_cont = df[continuous_cols].astype("float64")
     df_cat = df[categorical_cols].astype("int64")
 
     # ==========================================
@@ -386,7 +331,7 @@ def build_feature_matrix(country: str):
         scaler.fit_transform(df_cont),
         index=df_cont.index,
         columns=df_cont.columns
-    )
+    ).astype("float64")
 
     # ==========================================
     # Generate embedding metadata
