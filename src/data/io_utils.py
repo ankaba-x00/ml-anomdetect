@@ -83,8 +83,9 @@ def conv_maxlayer_3(data: dict) -> pd.DataFrame:
                 long_df = base.melt(
                     id_vars=["regions", "dates", "timestamps"],
                     var_name="metric",
-                    value_name="value"
+                    value_name="_tmp_value"
                 )
+                long_df = long_df.rename(columns={"_tmp_value": "values"})
                 records.append(long_df)
             else:
                 countries = details.get("countries", [])
