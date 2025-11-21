@@ -48,24 +48,6 @@ def _load_time_series(key: str, country: str, rename: str) -> pd.Series:
     s.name = rename
     return s
 
-# TODO: only timeseries data for now use or delete later
-def _load_nonperiod_csplit(key: str, country: str, rename: str) -> pd.Series:
-    """
-    For files like l3_origin / l3_target / l7_origin / l7_target:
-    These are NOT timestamps but per-date aggregated values.
-    Value for each date and assign that to the date.
-
-    --> !! currently dead code residue from playing with feature matrix, might use or delete later !!
-    """
-    df = _load_df(key)
-    if "regions" not in df.columns:
-        raise ValueError(f"[ERROR] {key}: unexpected structure (no region column).")
-    df = df[(df["regions"] == country)]
-    # "dates" as timestamp index for X indexing
-    s = df.set_index("dates")["values"].astype("float64")
-    s.name = rename
-    return s
-
 
 ########################################################
 ## BITRATE + DURATION AVG HELPERS (weighted averages) ##
