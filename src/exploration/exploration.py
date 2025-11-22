@@ -8,13 +8,12 @@ Visually and numerically explores datasets as pulled from Cloudflare
 - attack profiles : heatmaps log10 normalized daily shares per country L3, L7 resolved
 - attack profiles : lineplots cluster eval and scatter plots PCA on specified final_k cluster L3, L7 resolved
 - attack profiles : radar plots with attack fingerprint for specified countries origin, target resolved
-- 
 
 Outputs:
     png files : results/exploration/<figure_type>.png
 
 Usage: 
-    python -m src.data.exploration
+    python -m src.exploration.exploration
 """
 
 from typing import Optional
