@@ -87,6 +87,7 @@ def build_all_countries():
         except Exception as e:
             print(f"[ERROR] Could not build {c}: {e}")
             continue
+    print("[DONE] All feature matrices and scaler build")
 
 if __name__ == "__main__":
     build_all_countries()

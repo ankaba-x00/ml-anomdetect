@@ -568,26 +568,26 @@ def lineplot_clustering_eval_curves(
     xticks = list(range(2, 16, 2))
 
     # SSE (Elbow)
-    ax[0].plot(df["k"], df["SSE"], marker="o", color=col)
+    ax[0].plot(df["k"], df["SSE"], color=col)
     ax[0].set_title("SSE (Elbow Method)")
     ax[0].set_xlabel("k")
     ax[0].set_ylabel("SSE")
     ax[0].set_xticks(xticks)
 
     # Silhouette
-    ax[1].plot(df["k"], df["silhouette"], marker="o", color=col)
+    ax[1].plot(df["k"], df["silhouette"], color=col)
     ax[1].set_title("Silhouette Score")
     ax[1].set_xlabel("k")
     ax[1].set_xticks(xticks)
 
     # Calinski–Harabasz
-    ax[2].plot(df["k"], df["calinski"], marker="o", color=col)
+    ax[2].plot(df["k"], df["calinski"], color=col)
     ax[2].set_title("Calinski–Harabasz Index")
     ax[2].set_xlabel("k")
     ax[2].set_xticks(xticks)
 
     # Davies–Bouldin (lower is better)
-    ax[3].plot(df["k"], df["davies"], marker="o", color=col)
+    ax[3].plot(df["k"], df["davies"], color=col)
     ax[3].set_title("Davies–Bouldin Index")
     ax[3].set_xlabel("k")
     ax[3].set_xticks(xticks)
