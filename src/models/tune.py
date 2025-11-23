@@ -16,6 +16,8 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 RESULTS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+TRIAL_HIST_DIR = RESULTS_DIR / "trial_history"
+TRIAL_HIST_DIR.mkdir(parents=True, exist_ok=True)
 
 
 #########################################
@@ -89,6 +91,11 @@ def objective(trial: optuna.Trial, country: str) -> float:
     # Train model
     # ------------------------------------
     model, history = train_autoencoder(Xc_np, Xk_np, cfg)
+
+    # save per-trial history (optional)
+    trial_history_path = TRIAL_HIST_DIR / f"{country}_trial_{trial.number}_history.json"
+    with open(trial_history_path, "w") as f:
+        json.dump(history, f, indent=2)
 
     final_val_loss = history["val_loss"][-1]
 
