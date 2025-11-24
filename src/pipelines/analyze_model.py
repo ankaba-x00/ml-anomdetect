@@ -37,6 +37,7 @@ ANALYSIS_TRAIN_DIR.mkdir(parents=True, exist_ok=True)
 ANALYSIS_VAL_DIR = VALIDATED_DIR / "analysis"
 ANALYSIS_VAL_DIR.mkdir(parents=True, exist_ok=True)
 
+
 #########################################
 ##               LOAD DATA             ##
 #########################################
