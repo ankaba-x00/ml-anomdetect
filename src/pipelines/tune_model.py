@@ -34,12 +34,17 @@ from src.data.feature_engineering import COUNTRIES
 from src.models.tune import tune_country
 
 
+#########################################
+##                 RUN                 ##
+#########################################
+
 def tune_all(trials: int, pruner: str):
     for c in COUNTRIES:
         try:
             tune_country(c, n_trials=trials, pruner=pruner)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+    print(f"\n[DONE] All model tunings completed!")
 
 
 if __name__ == "__main__":

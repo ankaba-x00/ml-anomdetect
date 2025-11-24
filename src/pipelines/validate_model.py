@@ -19,6 +19,7 @@ from pathlib import Path
 from src.data.feature_engineering import build_feature_matrix, COUNTRIES
 from src.models.evaluate import reconstruction_error
 from src.models.train import load_autoencoder
+from src.data.split import timeseries_seq_split
 
 
 #########################################
@@ -36,7 +37,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def validate_single(country: str):
+def validate_country(country: str):
     print(f"\n==============================")
     print(f"  VALIDATE MODEL ({country})")
     print(f"==============================")
@@ -64,39 +65,31 @@ def validate_single(country: str):
     num_cont = json.load(open(num_path))["num_cont"]
 
     # --------------------
-    # Load feature matrix (unscaled)
+    # Load feature matrix
     # --------------------
-    X_cont_df, X_cat_df, num_cont_check, cat_dims, _ = build_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont_check, cat_dims, _ = build_feature_matrix(country, scaler=scaler)
 
     # Consistency check
     if num_cont != num_cont_check:
         raise ValueError("[ERROR] num_cont mismatch between scaler and feature matrix")
 
-    # scale continuous features using training scaler
     Xc_np = X_cont_df.values.astype(np.float32)
     Xk_np = X_cat_df.values.astype(np.int64)
-
-    # -------------------------
-    # APPLY SAME SPLIT AS TRAIN
-    # -------------------------
-    # TODO: random sampling not implemented
     ts = X_cont_df.index
-    n_total = len(ts)
-    
-    n_train = int(n_total * (1 - cfg.val_split))
-    n_val = n_total - n_train
 
-    Xc_val = Xc_np[n_train:]
-    Xk_val = Xk_np[n_train:]
-    ts_val = ts[n_train:]
+    # --------------------
+    # Split dataset
+    # --------------------
+    (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
+        Xc_np, Xk_np,
+        train_ratio=0.75,
+        val_ratio=0.15
+    )
+    ts_val = ts[len(Xc_train): len(Xc_train) + len(Xc_val)]
 
-    print(f"Total samples: {n_total}")
-    print(f"Train samples: {n_train}")
-    print(f"Val samples:   {n_val}")
-
-    # -------------------------
+    # --------------------
     # Compute reconstruction error
-    # -------------------------
+    # --------------------
     errors = reconstruction_error(
         model=model,
         X_cont=Xc_val,
@@ -104,9 +97,9 @@ def validate_single(country: str):
         device=cfg.device,
     )
 
-    # -------------------------
+    # --------------------
     # Print summary
-    # -------------------------
+    # --------------------
     print("\n--- Validation Error Summary ---")
     print(f"Min error:  {errors.min():.6f}")
     print(f"Mean error: {errors.mean():.6f}")
@@ -120,22 +113,22 @@ def validate_single(country: str):
     })
     out_path = OUTPUT_DIR / f"{country}_validation.csv"
     df_out.to_csv(out_path, index=False)
-
     print(f"[DONE] Validation CSV saved: {out_path}")
 
 def validate_all():
     for c in COUNTRIES:
         try:
-            validate_single(c)
+            validate_country(c)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+    print(f"\n[DONE] All model validations completed!")
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Validate model predictions for single country or all countries."
+        description="Validate model for single country or all countries."
     )
 
     parser.add_argument(
@@ -155,4 +148,4 @@ if __name__ == "__main__":
     if target.lower() == "all":
         validate_all()
     else:
-        validate_single(target.upper())
+        validate_country(target.upper())

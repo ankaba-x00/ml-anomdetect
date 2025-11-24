@@ -48,8 +48,8 @@ def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame,
     Save:
       - continuous scaled features (float32)
       - categorical index features (int)
-      - scaler for inference
       - metadata: num_cont and cat_dims
+      - scaler for validation and testing
     """
     fpath = FEATURE_DIR / f"features_{country}.pkl"
     with open(fpath, "wb") as f:
@@ -87,7 +87,7 @@ def build_all_countries():
         except Exception as e:
             print(f"[ERROR] Could not build {c}: {e}")
             continue
-    print("[DONE] All feature matrices and scaler build")
+    print("[DONE] All feature matrices and scaler build!")
 
 if __name__ == "__main__":
     build_all_countries()

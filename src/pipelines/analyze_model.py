@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze training and validation performance for one or all countries.
+Analyze training and validation performance for one or all countries:
 - loads training history
 - loads validation errors
 - generates plots (loss curves, LR schedules, error histograms, error time series) and validation summary
@@ -63,7 +63,7 @@ def load_validation_errors(country: str, validated_dir: Path) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
-def analyze_single(country: str, show_plots: bool):
+def analyze_country(country: str, show_plots: bool):
     """Runs full analysis pipeline of a country model."""
     print(f"[INFO] Analyzing {country}...")
 
@@ -105,8 +105,8 @@ def analyze_single(country: str, show_plots: bool):
 def analyze_all(show_plots: bool):
     """Runs full analysis pipeline of all country models."""
     for c in COUNTRIES:
-        analyze_single(c, show_plots)
-    print(f"\n[DONE] Analysis of all models completed!")
+        analyze_country(c, show_plots)
+    print(f"\n[DONE] Analysis of all model trainings and validations completed!")
 
 
 if __name__ == "__main__":
@@ -119,13 +119,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s", "--show",
         action="store_true",
-        help="Show plots interactively when generated."
+        help="show plots interactively when generated"
     )
 
     parser.add_argument(
         "target",
         nargs="?",
-        help="<COUNTRY|all> e.g. 'US' to analyse US model, or 'all' to evaluate all country models."
+        help="<COUNTRY|all> e.g. 'US' to analyse US model, or 'all' to evaluate all country models"
     )
 
     args = parser.parse_args()
@@ -139,4 +139,4 @@ if __name__ == "__main__":
     if target == "all":
         analyze_all(show_plots=args.show)
     else:
-        analyze_single(target.upper(), show_plots=args.show)
+        analyze_country(target.upper(), show_plots=args.show)

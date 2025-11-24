@@ -6,6 +6,7 @@ from dataclasses import asdict
 from src.data.feature_engineering import build_feature_matrix
 from src.models.autoencoder import AEConfig
 from src.models.train import train_autoencoder, save_autoencoder
+from src.data.split import timeseries_seq_split
 
 
 #########################################
@@ -44,9 +45,18 @@ def objective(trial: optuna.Trial, country: str) -> float:
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
-    X_cont_df, X_cat_df, num_cont, cat_dims, scaler = build_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont, cat_dims, _ = build_feature_matrix(country)
     Xc_np = X_cont_df.values.astype(np.float32)
     Xk_np = X_cat_df.values.astype(np.int64)
+
+    # ------------------------------------
+    # Split dataset
+    # ------------------------------------
+    (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
+        Xc_np, Xk_np,
+        train_ratio=0.75,
+        val_ratio=0.15
+    )
 
     # ------------------------------------
     # Hyperparameter search space
@@ -71,10 +81,9 @@ def objective(trial: optuna.Trial, country: str) -> float:
         ["none", "plateau", "cosine", "onecycle"]
     )
 
-    # ============================================================
+    # ------------------------------------
     # AEConfig object
-    # ============================================================
-
+    # ------------------------------------
     cfg = AEConfig(
         num_cont=num_cont,
         cat_dims=cat_dims,
@@ -86,10 +95,8 @@ def objective(trial: optuna.Trial, country: str) -> float:
         batch_size=batch_size,
         num_epochs=45,
         patience=patience,
-        val_split=0.2,
         gradient_clip=1.0,
         use_lr_scheduler=True,
-        time_series_split=True,
         embedding_dim=embedding_dim,
         continuous_noise_std=noise_std,
         residual_strength=residual_strength,
@@ -101,7 +108,11 @@ def objective(trial: optuna.Trial, country: str) -> float:
     # ------------------------------------
     # Train model
     # ------------------------------------
-    model, history = train_autoencoder(Xc_np, Xk_np, cfg)
+    _, history = train_autoencoder(
+        Xc_train, Xk_train,
+        Xc_val, Xk_val, 
+        cfg
+    )
 
     # save per-trial history (optional)
     trial_history_path = TRIAL_HIST_DIR / f"{country}_trial_{trial.number:04d}_history.json" # TODO: added :04d so that the studies do not overwrite themselves. Maybe use f"{country}_study_{study_name}_trial_{trial.number}.json" instead?!?
@@ -148,7 +159,6 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
         study_name=f"ae_tuning_{country}",
         load_if_exists=True,
     )
-
     study.optimize(
         lambda t: objective(t, country),
         n_trials=n_trials,
@@ -167,6 +177,12 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
     Xc_np = X_cont_df.values.astype(np.float32)
     Xk_np = X_cat_df.values.astype(np.int64)
 
+    (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
+        Xc_np, Xk_np,
+        train_ratio=0.75,
+        val_ratio=0.15
+    )
+
     p = study.best_trial.params
     depth = p["depth"]
     hidden_dims = [p[f"h{i}"] for i in range(depth)]
@@ -182,10 +198,8 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
         batch_size=p["batch_size"],
         num_epochs=90,
         patience=p["patience"],
-        val_split=0.2,
         gradient_clip=1.0,
         use_lr_scheduler=True,
-        time_series_split=True,
         embedding_dim=p["embedding_dim"],
         continuous_noise_std=p["noise_std"],
         residual_strength=p["residual_strength"],
@@ -194,7 +208,11 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
-    best_model, best_history = train_autoencoder(Xc_np, Xk_np, best_cfg)
+    best_model, best_history = train_autoencoder(
+        Xc_train, Xk_train, 
+        Xc_val, Xk_val, 
+        best_cfg
+    )
 
     # ------------------------------------
     # Save output

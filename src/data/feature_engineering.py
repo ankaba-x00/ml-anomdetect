@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from functools import lru_cache
+from typing import Optional
+from sklearn.base import TransformerMixin
 from sklearn.preprocessing import RobustScaler
 from src.data.io_utils import conv_pkltodf
 from src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
@@ -126,9 +128,9 @@ def load_protocol_features(key: str, country: str):
 def build_country_dataframe(country: str) -> pd.DataFrame:
     print(f"[INFO] Building base merged DF for country={country}")
 
-    # ============================
+    # ------------------------------------
     # 1. load all base series
-    # ============================
+    # ------------------------------------
 
     s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")
     s_l3t = _load_time_series("l3_target_time", country, "l3_target")
@@ -167,9 +169,9 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # protocol + entropy
     df_protocol = load_protocol_features("l3_origin_protocol_time", country)
 
-    # ============================
+    # ------------------------------------
     # 2. merge everything
-    # ============================
+    # ------------------------------------
 
     df = pd.concat([
             s_l3o, s_l3t, s_l7,
@@ -181,9 +183,9 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     df = df.join(df_protocol, how="outer")
     df = df.sort_index().interpolate().ffill().bfill()
 
-    # ============================
+    # ------------------------------------
     # 3. derived ratios
-    # ============================
+    # ------------------------------------
     eps = 1e-6
     df["ratio_l3_l7"] = df["l3_origin"] / (df["l7_traffic"] + eps)
     df["ratio_auto_human"] = df["http_auto"] / (df["http_human"] + eps)
@@ -191,9 +193,9 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     df["ratio_ai_bots_bots"] = df["ai_bots"] / (df["bots_total"] + eps)
     df["ratio_netflow_http"] = df["netflow"] / (df["http"] + eps)
 
-    # ============================
+    # ------------------------------------
     # 4a. local-time daytype + daytime
-    # ============================
+    # ------------------------------------
 
     iso_series = df.index.to_series().dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -217,18 +219,18 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     df["daytype_idx"] = dt_df["daytype_bin"]
     df["daytime_idx"] = daytimes["daytime_bin"]
 
-    # ============================
+    # ------------------------------------
     # 4b. month + week periodic encodings
-    # ============================
+    # ------------------------------------
 
     idx_local = conv_iso_to_local(iso_series, country, timezones)
 
     df["month_idx"] = idx_local.dt.month - 1
     df["week_idx"] = idx_local.dt.isocalendar().week.astype(int) - 1
 
-    # ============================
+    # ------------------------------------
     # 4c. time cyclic encoding
-    # ============================
+    # ------------------------------------
 
     # local hour-of-day and weekday cyclic
     df["hour_sin"] = np.sin(2 * np.pi * idx_local.dt.hour / 24)
@@ -245,9 +247,9 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     df["week_sin"] = np.sin(2 * np.pi * df["week_idx"] / 52)
     df["week_cos"] = np.cos(2 * np.pi * df["week_idx"] / 52)
 
-    # ============================
+    # ------------------------------------
     # 5. rolling aggregates
-    # ============================
+    # ------------------------------------
     
     df = df.sort_index()
     df = df.asfreq("h")
@@ -268,7 +270,10 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 ##             SCALING + FINAL X MATRIX               ##
 ########################################################
 
-def build_feature_matrix(country: str):
+def build_feature_matrix(
+    country: str, 
+    scaler: Optional[TransformerMixin] = None
+) -> tuple[pd.DataFrame, pd.DataFrame, int, dict, TransformerMixin]:
     """
     Build feature matrix for a given country.
     Returns
@@ -287,9 +292,9 @@ def build_feature_matrix(country: str):
     """
     df = build_country_dataframe(country).copy()
 
-    # ==========================================
+    # ------------------------------------
     # Separate categorical vs continuous
-    # ==========================================
+    # ------------------------------------
 
     categorical_cols = [
         "weekday_idx",
@@ -304,36 +309,29 @@ def build_feature_matrix(country: str):
     df_cont = df[continuous_cols].astype("float64")
     df_cat = df[categorical_cols].astype("int64")
 
-    # ==========================================
-    # Fit scaler ONLY on continuous features
-    # ==========================================
+    # ------------------------------------
+    # Fit scaler on continuous features
+    # ------------------------------------
+    if scaler is None:
+        scaler = RobustScaler()
+        X_cont_scaled = scaler.fit_transform(df_cont)
+    else:
+        X_cont_scaled = scaler.transform(df_cont)
 
-    scaler = RobustScaler()
     X_cont_scaled = pd.DataFrame(
-        scaler.fit_transform(df_cont),
+        X_cont_scaled,
         index=df_cont.index,
         columns=df_cont.columns
-    ).astype("float64")
+    )
 
-    # ==========================================
+    # ------------------------------------
     # Generate embedding metadata
-    # ==========================================
-
+    # ------------------------------------
     num_cont = X_cont_scaled.shape[1]
-
     # category cardinalities as a dict[col_name: cardinality]
     cat_dims = {
         col: int(df_cat[col].max()) + 1 for col in categorical_cols
     }
-
-    # ==========================================
-    # Return 5 components:
-    # - scaled continuous features
-    # - integer categorical features
-    # - number of continuous dims (for autoencoder)
-    # - embedding cardinalities (for embedding layers)
-    # - scaler
-    # ==========================================
 
     return X_cont_scaled, df_cat, num_cont, cat_dims, scaler
  
