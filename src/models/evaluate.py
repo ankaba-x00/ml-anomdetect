@@ -31,21 +31,29 @@ def reconstruction_error(
     return mse.cpu().numpy()
 
 
-
 #########################################
 ##          THRESHOLD METHODS          ##
 #########################################
 
 def threshold_percentile(errors: np.ndarray, p: float = 99.0) -> float:
-    """P-th percentile threshold."""
+    """Computes p-th percentile threshold."""
     return float(np.percentile(errors, p))
 
 
+# TODO: test how k = 3.5, 5, 6 differ!
+# TODO: clip threshold to 99.9 (or 99.5) percentile to avoid ridiculous MAD inflation if necessary
 def threshold_mad(errors: np.ndarray, k: float = 6.0) -> float:
-    """Median Absolute Deviation threshold. (typically k≈6–8 is good)"""
+    """
+    Computes median Absolute Deviation threshold. Scaling factor 
+        k = 3-3.5 : used for mododerately heavy-tailed dist
+        k = 6-8 : used for rare anomaly detection
+        k = >10 : conservative (almost nothing flagged)
+    """
     med = np.median(errors)
-    mad = np.median(np.abs(errors - med))
-    return float(med + k * mad)
+    mad = np.median(np.abs(errors - med)) + 1e-12
+    thr = med + k * mad
+    # thr = min(thr, np.percentile(errors, 99.9))
+    return float(thr)
 
 
 #########################################
@@ -53,58 +61,84 @@ def threshold_mad(errors: np.ndarray, k: float = 6.0) -> float:
 #########################################
 
 def anomaly_mask(errors: np.ndarray, threshold: float) -> np.ndarray:
-    """Boolean mask."""
+    """Creates boolean mask."""
     return errors > threshold
 
 
-def group_anomalies(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Convert a boolean mask [F,F,T,T,T,F,F,T] into (start_indices, end_indices)."""
+def find_anomalies(mask: np.ndarray, 
+    min_length: int = 1,
+    merge_gap: int = 0,
+) -> list[tuple[int, int]]:
+    """
+    Converts bool mask [F,F,T,T,T,F,F,T] into list of anomalous sample intervals [(start, end), ...]; end is exclusive. 
+    min_length : min anomaly sample length to be considered
+    merge_gap : sample interval gap to merge 2 adjacent anomalies into one
+    """
     mask = mask.astype(bool)
-    if len(mask) == 0:
-        return np.array([]), np.array([])
+    N = len(mask)
+    if N == 0:
+        return []
 
-    # rising edges
-    starts = np.where((~mask[:-1] & mask[1:]))[0] + 1
-    # falling edges
-    ends = np.where((mask[:-1] & ~mask[1:]))[0] + 1
+    intervals = []
+    in_anom = False
+    start = None
 
-    # handle anomaly at index 0
-    if mask[0]:
-        starts = np.insert(starts, 0, 0)
-    # handle anomaly ending at final sample
-    if mask[-1]:
-        ends = np.append(ends, len(mask))
+    # identify raw intervals
+    for i, is_anom in enumerate(mask):
+        if is_anom and not in_anom:
+            in_anom = True
+            start = i
+        elif not is_anom and in_anom:
+            intervals.append((start, i))
+            in_anom = False
 
-    return starts, ends
+    if in_anom:
+        intervals.append((start, N))
+
+    # filter by minimum length
+    if min_length > 1:
+        intervals = [
+            (s, e) for (s, e) in intervals if (e - s) >= min_length
+        ]
+
+    # merge intervals close to each other (gap < merge_gap)
+    if merge_gap > 0 and len(intervals) > 1:
+        merged = []
+        cur_s, cur_e = intervals[0]
+
+        for s, e in intervals[1:]:
+            if s - cur_e <= merge_gap:
+                cur_e = e  # extend
+            else:
+                merged.append((cur_s, cur_e))
+                cur_s, cur_e = s, e
+
+        merged.append((cur_s, cur_e))
+        intervals = merged
+
+    return intervals
 
 
 #########################################
 ##      FULL EVALUATION PIPELINE       ##
 #########################################
 
-def evaluate_autoencoder(
+def apply_model(
     model: TabularAutoencoder,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     method: str = "p99",
     device: str = None,
+    min_length: int = 1,
+    merge_gap: int = 0,
 ) -> dict[str, Any]:
-    """
-    Full evaluation pipeline:
-    - compute reconstruction errors
-    - compute threshold
-    - compute anomaly mask
-    - compute anomaly intervals
-    """
-
-    # 1) errors
+    """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
     errors = reconstruction_error(
         model,
         X_cont,
         X_cat,
         device=device,
     )
-    # 2) threshold
     if method == "p99":
         threshold = threshold_percentile(errors, p=99)
     elif method == "p995":
@@ -113,11 +147,14 @@ def evaluate_autoencoder(
         threshold = threshold_mad(errors)
     else:
         raise ValueError(f"[Error] Unknown threshold method: {method}")
-    # 3) mask
     mask = anomaly_mask(errors, threshold)
-    # 4) group anomalies
-    starts, ends = group_anomalies(mask)
-
+    intervals = find_anomalies(
+        mask,
+        min_length=min_length,
+        merge_gap=merge_gap,
+    )    
+    starts = np.array([s for s, _ in intervals])
+    ends   = np.array([e for _, e in intervals])
     return {
         "errors": errors,
         "threshold": threshold,
