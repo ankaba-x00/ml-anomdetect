@@ -25,7 +25,7 @@ Outputs:
               results/models/tuned/analysis/multi/best_losses.json
 
 Usage:
-    python -m src.pipelines.analyze_tuning [--multi] [--show] <COUNTRY|all>
+    python -m src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
 """
 
 import json, optuna
@@ -85,7 +85,7 @@ def analyze_multi_country(countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
     summary = {}
-    #countries = ["US","DE","GB","FR","JP","SG","NL","CA","AU","AT","BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL"]
+    countries = ["US","DE","GB","FR","JP","SG","NL","CA","AU","AT","BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL"]
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{c}_study.db"
@@ -93,7 +93,7 @@ def analyze_multi_country(countries: list = COUNTRIES, show: bool = False):
             continue
         study = load_study(c, study_path)
         summary[c] = study.best_value
-    out_dir = ANALYSIS_TUNE_DIR / "multi"
+    out_dir = ANALYSIS_TUNE_DIR / "_multi"
     out_dir.mkdir(parents=True, exist_ok=True)
     plot_multi_country_overview(summary, out_dir / "best_losses.png", show)
     with open(out_dir / "best_losses.json", "w") as f:
@@ -152,21 +152,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "target",
-        nargs="?",
-        help="<COUNTRY|all> e.g. 'US' to analyse US model, or 'all' to evaluate all country models."
+        "-s", "--show",
+        action="store_true",
+        help="Show plots interactively when generated."
     )
 
     parser.add_argument(
-        "--multi",
+        "-M", "--multi",
         action="store_true",
         help="Perform multi country analysis."
     )
 
     parser.add_argument(
-        "--show",
-        action="store_true",
-        help="Show plots interactively when generated."
+        "target",
+        nargs="?",
+        help="<COUNTRY|all|none> e.g. 'US' to analyse US model, or 'all' to evaluate all country models, or 'none' for switching off single-country analysis."
     )
 
     args = parser.parse_args()
@@ -179,6 +179,8 @@ if __name__ == "__main__":
 
     if target.lower() == "all":
         analyze_all(args.multi, args.show)
+    elif target.lower() == "none":
+        analyze_multi_country(show=args.show)
     else:
         analyze_single(
             country=target.upper(), 

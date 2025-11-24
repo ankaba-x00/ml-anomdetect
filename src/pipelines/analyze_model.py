@@ -13,7 +13,7 @@ Outputs:
     summary : results/models/validated/<COUNTRY_CODE>_summary.json
 
 Usage:
-    python -m src.pipelines.analyze_model [--show] <COUNTRY_CODE|all>
+    python -m src.pipelines.analyze_model [-s] <COUNTRY_CODE|all>
 """
 import json
 from pathlib import Path
@@ -116,15 +116,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "target",
-        nargs="?",
-        help="<COUNTRY|all> e.g. 'US' to analyse US model, or 'all' to evaluate all country models."
+        "-s", "--show",
+        action="store_true",
+        help="Show plots interactively when generated."
     )
 
     parser.add_argument(
-        "--show",
-        action="store_true",
-        help="Show plots interactively when generated."
+        "target",
+        nargs="?",
+        help="<COUNTRY|all> e.g. 'US' to analyse US model, or 'all' to evaluate all country models."
     )
 
     args = parser.parse_args()

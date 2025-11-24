@@ -27,6 +27,10 @@ def _make_dataloaders(
     Xk = torch.from_numpy(X_cat.astype(np.int64))
     n_total = len(Xc)
 
+    g = torch.Generator()
+    g.manual_seed(42)
+
+
     if time_series_split: 
         # chronological split: FIRST segment train, LAST segment validation: TODO: random sampling better?
         n_train = int(n_total * (1 - val_split))
@@ -37,19 +41,21 @@ def _make_dataloaders(
         full_ds = TensorDataset(Xc, Xk)
         n_val = max(1, int(n_total * val_split))
         n_train = n_total - n_val
-        train_ds, val_ds = random_split(full_ds, [n_train, n_val])
+        train_ds, val_ds = random_split(full_ds, [n_train, n_val], generator=g)
 
     train_loader = DataLoader(
         train_ds, 
         batch_size=batch_size, 
         shuffle=not time_series_split, # no shuffle for timeseries
-        drop_last=False
+        drop_last=False,
+        generator=g
     )
     val_loader = DataLoader(
         val_ds, 
         batch_size=batch_size, 
         shuffle=False, 
-        drop_last=False
+        drop_last=False,
+        generator=g
     )
 
     return train_loader, val_loader
@@ -93,23 +99,46 @@ def train_autoencoder(
         latent_dim=config.latent_dim,
         hidden_dims=config.hidden_dims,
         dropout=config.dropout,
+        embedding_dim=config.embedding_dim,
+        continuous_noise_std=config.continuous_noise_std,
+        residual_strength=config.residual_strength,
     ).to(device)
 
-    optimizer = torch.optim.Adam(
-        model.parameters(), 
-        lr=config.lr, 
-        weight_decay=config.weight_decay
-    )
+    if config.optimizer == "adam":
+        optimizer = torch.optim.Adam(
+            model.parameters(), 
+            lr=config.lr, 
+            weight_decay=config.weight_decay
+        )
+    elif config.optimizer == "adamw":
+        optimizer = torch.optim.AdamW(
+            model.parameters(), 
+            lr=config.lr, 
+            weight_decay=config.weight_decay
+        )
+    else:
+        raise ValueError("Unknown optimizer")
 
     scheduler = None
     if config.use_lr_scheduler:
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, 
-            mode='min', # monitor validation loss going down
-            factor=0.5, # reduce LR by half when plateau
-            patience=3, # wait 3 epochs without improvement
-            min_lr=1e-6 # minimum learning rate
-        )
+        if config.lr_scheduler == "plateau":
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, 
+                factor=0.5,
+                patience=3,
+                min_lr=1e-6
+            )
+        elif config.lr_scheduler == "cosine":
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, 
+                T_max=config.num_epochs
+            )
+        elif config.lr_scheduler == "onecycle":
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=config.lr,
+                total_steps=config.num_epochs * len(train_loader)
+            )
 
     criterion = torch.nn.MSELoss(reduction="none") #weighted loss that emphasizes rare feature patterns TODO: best here?
 
@@ -139,10 +168,9 @@ def train_autoencoder(
             optimizer.zero_grad()
             recon = model(batch_Xc, batch_Xk)
             
-            # criterion returns (batch, feature_dim)
-            per_feature_loss = criterion(recon, batch_Xc)
-            per_sample_loss = per_feature_loss.mean(dim=1)
-            loss = per_sample_loss.mean()
+            # criterion returns (batch, feature_dim) and loss=mean over all elements
+            per_feature = criterion(recon, batch_Xc)
+            loss = per_feature.mean()
             
             loss.backward()
 
@@ -151,6 +179,9 @@ def train_autoencoder(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
             
             optimizer.step()
+
+            if scheduler is not None and config.lr_scheduler == "onecycle":
+                scheduler.step()
 
             running_train += loss.item() * batch_Xc.size(0)
             n_train += batch_Xc.size(0)
@@ -171,17 +202,19 @@ def train_autoencoder(
                 batch_Xk = batch_Xk.to(device)
                 recon = model(batch_Xc, batch_Xk)
 
-                per_feature_loss = criterion(recon, batch_Xc)
-                per_sample_loss = per_feature_loss.mean(dim=1)
-                loss = per_sample_loss.mean()
+                per_feature = criterion(recon, batch_Xc)
+                loss = per_feature.mean()
 
                 running_val += loss.item() * batch_Xc.size(0)
                 n_val += batch_Xc.size(0)
 
         val_loss = running_val / max(n_val, 1)
 
-        if scheduler is not None:
-            scheduler.step(val_loss)
+        if scheduler is not None and config.lr_scheduler != "onecycle":
+            if config.lr_scheduler == "plateau":
+                scheduler.step(val_loss)
+            else:  # cosine or onecycle
+                scheduler.step()
         
         current_lr = optimizer.param_groups[0]['lr']
 
@@ -210,7 +243,7 @@ def train_autoencoder(
         # -----------------------------
         # Early stopping
         # -----------------------------
-        if val_loss < best_val_loss - 1e-8:
+        if val_loss < best_val_loss - 1e-9:
             best_val_loss = val_loss
             best_state = model.state_dict()
             history["best_epoch"] = epoch + 1
@@ -261,6 +294,9 @@ def load_autoencoder(path: Path) -> tuple[TabularAutoencoder, AEConfig]:
         latent_dim=cfg.latent_dim,
         hidden_dims=cfg.hidden_dims,
         dropout=cfg.dropout,
+        embedding_dim=cfg.embedding_dim,
+        continuous_noise_std=cfg.continuous_noise_std,
+        residual_strength=cfg.residual_strength,
     )
     model.load_state_dict(payload["state_dict"])
     model.eval()

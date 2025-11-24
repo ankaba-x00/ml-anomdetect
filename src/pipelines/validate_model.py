@@ -9,7 +9,7 @@ Outputs:
     error per ts : results/models/validate/<COUNTRY_CODE>_validation.csv
 
 Usage (required in <...>, optional in [...]):
-    python -m src.pipelines.validate_model <COUNTRY_CODE|all> [>> stdout_val.txt]
+    python -m src.pipelines.validate_model <COUNTRY_CODE|all> [| tee stdout_val.txt]
 """
 
 import pickle, json
