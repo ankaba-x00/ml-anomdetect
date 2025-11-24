@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tune AE hyperparameters for single or for all countries.")
 
     parser.add_argument(
-        "-n" "--ntrials",
+        "-n", "--ntrials",
         nargs="?",
         type=int, 
         default=40, 
@@ -85,10 +85,10 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        tune_all(args.trials, args.pruner)
+        tune_all(args.ntrials, args.pruner)
     else:
         tune_country(
             country=target.upper(),
-            n_trials=args.trials,
+            n_trials=args.ntrials,
             pruner=args.pruner
         )
