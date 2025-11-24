@@ -9,5 +9,6 @@ this package provides core utilities for data processing and feature extraction 
 - preprocess : 
 """
 from .io_utils import conv_pkltodf
+from .split import timeseries_seq_split, timeseries_cv_splits
 
-__all__ = ["conv_pkltodf"]
+__all__ = ["conv_pkltodf", "timeseries_seq_split", "timeseries_cv_splits"]

@@ -81,7 +81,7 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
-def analyze_multi_country(countries: list = COUNTRIES, show: bool = False):
+def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
     summary = {}
@@ -100,7 +100,7 @@ def analyze_multi_country(countries: list = COUNTRIES, show: bool = False):
         json.dump(summary, f, indent=2)
     print(f"[OK] Multi-country comparison completed!")
 
-def analyze_single(country: str, multi: bool = True, all: bool = False, show: bool = False):
+def analyze_country(country: str, multi: bool = True, all: bool = False, show: bool = False):
     """Runs full analysis pipeline of a country model tuning."""
     print(f"\n[INFO] Analyzing {country}...")
     
@@ -131,19 +131,18 @@ def analyze_single(country: str, multi: bool = True, all: bool = False, show: bo
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:
-        analyze_multi_country(show=show)
+        multi_analyze(show=show)
 
 def analyze_all(multi: bool = True, show_plots: bool = False):
     """Runs full analysis pipeline of all country model tunings."""
     print(f"\n[INFO] Analysis of all models starting...")
 
     for c in COUNTRIES:
-        analyze_single(country=c, multi=False, all=True, show=show_plots)
+        analyze_country(country=c, multi=False, all=True, show=show_plots)
 
     if multi:
-        analyze_multi_country(show=show_plots)
-
-    print(f"\n[DONE] Analysis of all models completed!")
+        multi_analyze(show=show_plots)
+    print(f"\n[DONE] Analysis of all model tunings completed!")
 
 
 if __name__ == "__main__":
@@ -154,19 +153,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s", "--show",
         action="store_true",
-        help="Show plots interactively when generated."
+        help="show plots interactively when generated"
     )
 
     parser.add_argument(
         "-M", "--multi",
         action="store_true",
-        help="Perform multi country analysis."
+        help="perform multi country analysis"
     )
 
     parser.add_argument(
         "target",
         nargs="?",
-        help="<COUNTRY|all|none> e.g. 'US' to analyse US model, or 'all' to evaluate all country models, or 'none' for switching off single-country analysis."
+        help="<COUNTRY|all|none> e.g. 'US' to analyse US model, or 'all' to evaluate all country models, or 'none' for switching off single-country analysis"
     )
 
     args = parser.parse_args()
@@ -180,9 +179,9 @@ if __name__ == "__main__":
     if target.lower() == "all":
         analyze_all(args.multi, args.show)
     elif target.lower() == "none":
-        analyze_multi_country(show=args.show)
+        multi_analyze(show=args.show)
     else:
-        analyze_single(
+        analyze_country(
             country=target.upper(), 
             multi=args.multi, 
             all=False, 

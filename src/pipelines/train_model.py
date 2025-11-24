@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Train a autoencoder for one or all countries.
+Train a autoencoder for one or all countries:
 - produces continuous + categorical feature matrices
 - applies scaling to continuous features
 - builds autoencoder configuration (AEConfig)
@@ -20,6 +20,7 @@ Usage (required in <...>, optional in [...]):
 import json, pickle
 from pathlib import Path
 import numpy as np
+from src.data import timeseries_seq_split
 from src.data.feature_engineering import COUNTRIES, build_feature_matrix
 from src.models.autoencoder import AEConfig
 from src.models.train import train_autoencoder, save_autoencoder
@@ -39,16 +40,30 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def train_single(country: str):
+def train_country(country: str):
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
 
+    # ------------------------------------
+    # Load feature matrix
+    # ------------------------------------
     X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(country)
-
     Xc_np = X_cont.values.astype(np.float32)
     Xk_np = X_cat.values.astype(np.int64)
 
+    # ------------------------------------
+    # Split dataset
+    # ------------------------------------
+    (train_cont, train_cat), (val_cont, val_cat), _ = timeseries_seq_split(
+        Xc_np, Xk_np,
+        train_ratio=0.75,
+        val_ratio=0.15,
+    )
+
+    # ------------------------------------
+    # AEConfig object
+    # ------------------------------------
     cfg = AEConfig(
         num_cont=num_cont,
         cat_dims=cat_dims,
@@ -63,15 +78,20 @@ def train_single(country: str):
         batch_size=256,
         num_epochs=60,
         patience=6,
-        val_split=0.2,
         gradient_clip=1.0,
         optimizer="adam",
         lr_scheduler="plateau",
         use_lr_scheduler=True,
-        time_series_split=True,
     )
 
-    model, history = train_autoencoder(Xc_np, Xk_np, cfg)
+    # ------------------------------------
+    # Train model
+    # ------------------------------------
+    model, history = train_autoencoder(
+        train_cont, train_cat, 
+        val_cont, val_cat, 
+        cfg
+    )
 
     model_path = MODELS_DIR / f"{country}_autoencoder.pt"
     save_autoencoder(model, cfg, model_path)
@@ -101,16 +121,17 @@ def train_single(country: str):
 def train_all():
     for c in COUNTRIES:
         try:
-            train_single(c)
+            train_country(c)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+    print(f"\n[DONE] All model trainings completed!")
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Train model for single country only or for all countries."
+        description="Train model for single country or all countries."
     )
 
     parser.add_argument(
@@ -130,4 +151,4 @@ if __name__ == "__main__":
     if target.lower() == "all":
         train_all()
     else:
-        train_single(target.upper())
+        train_country(target.upper())

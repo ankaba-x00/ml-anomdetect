@@ -1,10 +1,10 @@
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
-from src.models.autoencoder import AEConfig, TabularAutoencoder
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader, TensorDataset
+from src.models.autoencoder import AEConfig, TabularAutoencoder
 
 
 #########################################
@@ -12,58 +12,45 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 #########################################
 
 def _make_dataloaders(
-    X_cont: np.ndarray,
-    X_cat: np.ndarray,
+    train_cont: np.ndarray, 
+    train_cat: np.ndarray,
+    val_cont: np.ndarray, 
+    val_cat: np.ndarray,
     batch_size: int,
-    val_split: float,
-    time_series_split: bool,
 ) -> tuple[DataLoader, DataLoader]:
     """
     Build DataLoaders for:
        X_cont : continuous scaled features (float32)
        X_cat  : categorical integer features (int64)
     """
-    Xc = torch.from_numpy(X_cont.astype(np.float32))
-    Xk = torch.from_numpy(X_cat.astype(np.int64))
-    n_total = len(Xc)
+    Xc_train = torch.from_numpy(train_cont.astype(np.float32))
+    Xk_train = torch.from_numpy(train_cat.astype(np.int64))
 
-    g = torch.Generator()
-    g.manual_seed(42)
-
-
-    if time_series_split: 
-        # chronological split: FIRST segment train, LAST segment validation: TODO: random sampling better?
-        n_train = int(n_total * (1 - val_split))
-        train_ds = TensorDataset(Xc[:n_train], Xk[:n_train])
-        val_ds = TensorDataset(Xc[n_train:], Xk[n_train:])
-    else:
-        # random split
-        full_ds = TensorDataset(Xc, Xk)
-        n_val = max(1, int(n_total * val_split))
-        n_train = n_total - n_val
-        train_ds, val_ds = random_split(full_ds, [n_train, n_val], generator=g)
+    Xc_val = torch.from_numpy(val_cont.astype(np.float32))
+    Xk_val = torch.from_numpy(val_cat.astype(np.int64))
+   
+    train_ds = TensorDataset(Xc_train, Xk_train)
+    val_ds   = TensorDataset(Xc_val, Xk_val)
 
     train_loader = DataLoader(
         train_ds, 
         batch_size=batch_size, 
-        shuffle=not time_series_split, # no shuffle for timeseries
-        drop_last=False,
-        generator=g
+        shuffle=True,
     )
     val_loader = DataLoader(
         val_ds, 
         batch_size=batch_size, 
-        shuffle=False, 
-        drop_last=False,
-        generator=g
+        shuffle=False,
     )
 
     return train_loader, val_loader
 
 
 def train_autoencoder(
-    X_cont: np.ndarray,
-    X_cat: np.ndarray,
+    train_cont: np.ndarray,
+    train_cat: np.ndarray,
+    val_cont: np.ndarray,
+    val_cat: np.ndarray,
     config: AEConfig,
 ) -> tuple[TabularAutoencoder, dict[str, Any]]:
     """
@@ -81,15 +68,15 @@ def train_autoencoder(
 
     device = torch.device(config.device)
 
-    assert X_cat.shape[1] == len(config.cat_dims), f"Mismatch: X_cat has {X_cat.shape[1]} cols, but cat_dims defines {len(config.cat_dims)} categories"
+    # assert X_cat.shape[1] == len(config.cat_dims), f"Mismatch: X_cat has {X_cat.shape[1]} cols, but cat_dims defines {len(config.cat_dims)} categories"
 
     # DataLoaders
     train_loader, val_loader = _make_dataloaders(
-        X_cont=X_cont,
-        X_cat=X_cat,
+        train_cont, 
+        train_cat,
+        val_cont, 
+        val_cat,
         batch_size=config.batch_size, 
-        val_split=config.val_split,
-        time_series_split=config.time_series_split,
     )
 
     # Model

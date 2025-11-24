@@ -1,7 +1,6 @@
-import json
+import json, torch
 from dataclasses import dataclass, asdict
 from typing import Sequence, Optional
-import torch
 import torch.nn as nn
 
 
@@ -13,31 +12,22 @@ import torch.nn as nn
 class AEConfig:
     num_cont: int
     cat_dims: dict[str, int]
-    
     latent_dim: int = 8 # bottleneck size
     hidden_dims: Sequence[int] = (64, 32)
     dropout: float = 0.1
     embedding_dim: Optional[int] = None
     continuous_noise_std: float = 0.0
     residual_strength: float = 0.0
-
     lr: float = 1e-3
     weight_decay: float = 1e-5
     batch_size: int = 256
     num_epochs: int = 50
     patience: int = 5
-    val_split: float = 0.2
     gradient_clip: float = 1.0
-
     optimizer: str = "adam"
     lr_scheduler: str = "none"
-
     use_lr_scheduler: bool = True
-    time_series_split: bool = True # remove random and this bool?
-    
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # anomaly detection threshold (filled after training)
     anomaly_threshold: Optional[float] = None
 
     def to_json(self) -> str:
