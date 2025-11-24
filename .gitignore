@@ -14,5 +14,6 @@ datasets/scalers/*
 results/models/trained/*
 results/models/validated/*
 results/models/tuned/*
+results/models/tested/*
 
 stdout_*
