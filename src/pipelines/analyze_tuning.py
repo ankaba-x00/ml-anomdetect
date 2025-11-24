@@ -85,7 +85,7 @@ def analyze_multi_country(countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
     summary = {}
-    countries = ["US","DE","GB","FR","JP","SG","NL","CA","AU","AT","BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL"]
+    #countries = ["US","DE","GB","FR","JP","SG","NL","CA","AU","AT","BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL"]
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{c}_study.db"
