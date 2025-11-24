@@ -14,7 +14,7 @@ Outputs:
     training history : results/models/trained/<COUNTRY_CODE>_training_history.json
 
 Usage (required in <...>, optional in [...]):
-    python -m src.pipelines.train_model <COUNTRY_CODE|all> [>> stdout_train.txt]
+    python -m src.pipelines.train_model <COUNTRY_CODE|all> [| tee stdout_train.txt]
 """
 
 import json, pickle
@@ -55,6 +55,9 @@ def train_single(country: str):
         latent_dim=16,
         hidden_dims=(128, 64),
         dropout=0.1,
+        embedding_dim=12,
+        continuous_noise_std=0.01,
+        residual_strength=0.10,
         lr=1e-3,
         weight_decay=1e-5,
         batch_size=256,
@@ -62,6 +65,8 @@ def train_single(country: str):
         patience=6,
         val_split=0.2,
         gradient_clip=1.0,
+        optimizer="adam",
+        lr_scheduler="plateau",
         use_lr_scheduler=True,
         time_series_split=True,
     )

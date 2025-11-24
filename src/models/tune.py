@@ -51,19 +51,25 @@ def objective(trial: optuna.Trial, country: str) -> float:
     # ------------------------------------
     # Hyperparameter search space
     # ------------------------------------
-    latent_dim = trial.suggest_categorical("latent_dim", [8, 12, 16, 24, 32])
-
-    depth = trial.suggest_int("depth", 1, 3)
+    latent_dim = trial.suggest_categorical("latent_dim", [4, 8, 12, 16, 24, 32, 48, 64])
+    depth = trial.suggest_int("depth", 1, 4)
     hidden_dims = [
-        trial.suggest_categorical(f"h{i}", [64, 128, 256])
+        trial.suggest_categorical(f"h{i}", [64, 128, 256, 384, 512, 768])
         for i in range(depth)
     ]
-
-    dropout = trial.suggest_float("dropout", 0.05, 0.3)
+    dropout = trial.suggest_float("dropout", 0.0, 0.35)
     lr = trial.suggest_float("lr", 1e-5, 3e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-4, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [128, 256, 512])
+    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512])
     patience = trial.suggest_int("patience", 4, 10)
+    embedding_dim = trial.suggest_categorical("embedding_dim", [4, 8, 12, 16, 24])
+    noise_std = trial.suggest_float("noise_std", 0.0, 0.10)
+    residual_strength = trial.suggest_float("residual_strength", 0.0, 0.3)
+    optimizer = trial.suggest_categorical("optimizer", ["adam", "adamw"])
+    lr_scheduler = trial.suggest_categorical(
+        "lr_scheduler",
+        ["none", "plateau", "cosine", "onecycle"]
+    )
 
     # ============================================================
     # AEConfig object
@@ -84,6 +90,11 @@ def objective(trial: optuna.Trial, country: str) -> float:
         gradient_clip=1.0,
         use_lr_scheduler=True,
         time_series_split=True,
+        embedding_dim=embedding_dim,
+        continuous_noise_std=noise_std,
+        residual_strength=residual_strength,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -93,11 +104,12 @@ def objective(trial: optuna.Trial, country: str) -> float:
     model, history = train_autoencoder(Xc_np, Xk_np, cfg)
 
     # save per-trial history (optional)
-    trial_history_path = TRIAL_HIST_DIR / f"{country}_trial_{trial.number}_history.json"
+    trial_history_path = TRIAL_HIST_DIR / f"{country}_trial_{trial.number:04d}_history.json" # TODO: added :04d so that the studies do not overwrite themselves. Maybe use f"{country}_study_{study_name}_trial_{trial.number}.json" instead?!?
     with open(trial_history_path, "w") as f:
         json.dump(history, f, indent=2)
 
-    final_val_loss = history["val_loss"][-1]
+    #final_val_loss = history["val_loss"][-1]
+    final_val_loss = min(history["val_loss"])
 
     trial.report(final_val_loss, step=0)
     if trial.should_prune():
@@ -168,12 +180,17 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
         lr=p["lr"],
         weight_decay=p["weight_decay"],
         batch_size=p["batch_size"],
-        num_epochs=120,
+        num_epochs=90,
         patience=p["patience"],
         val_split=0.2,
         gradient_clip=1.0,
         use_lr_scheduler=True,
         time_series_split=True,
+        embedding_dim=p["embedding_dim"],
+        continuous_noise_std=p["noise_std"],
+        residual_strength=p["residual_strength"],
+        optimizer=p["optimizer"],
+        lr_scheduler=p["lr_scheduler"],
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 

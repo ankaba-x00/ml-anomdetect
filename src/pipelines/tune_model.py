@@ -10,6 +10,11 @@ Search space:
 - batch size
 - weight decay
 - patience
+- embedding_dim
+- continuous noise_std
+- residual_strength
+- optimizer (Adam / AdamW)
+- lr scheduler type
 
 Outputs:
     study db : results/models/tuned/<COUNTRY>_study.db
@@ -21,7 +26,7 @@ Outputs:
     categorical dims : results/models/tuned/<COUNTRY>_cat_dims.json
 
 Usage:
-    python -m src.pipelines.tune_model <COUNTRY|all> <trail_no> <median|halving|hyperband> [>> stdout_tune.txt]
+    python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 import argparse
@@ -41,13 +46,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tune AE hyperparameters for single or for all countries.")
 
     parser.add_argument(
-        "target",
-        nargs="?",
-        help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
-    )
-
-    parser.add_argument(
-        "trials",
+        "-n" "--ntrials",
         nargs="?",
         type=int, 
         default=40, 
@@ -55,11 +54,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "pruner",
+        "-p", "--pruner",
         nargs="?",
         type=str, 
         default="median",
         help="<median|halving|hyperband> Optuna pruner strategy [default: median]"
+    )
+
+    parser.add_argument(
+        "target",
+        nargs="?",
+        help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
     )
 
     args = parser.parse_args()

@@ -17,16 +17,23 @@ class AEConfig:
     latent_dim: int = 8 # bottleneck size
     hidden_dims: Sequence[int] = (64, 32)
     dropout: float = 0.1
+    embedding_dim: Optional[int] = None
+    continuous_noise_std: float = 0.0
+    residual_strength: float = 0.0
 
     lr: float = 1e-3
     weight_decay: float = 1e-5
     batch_size: int = 256
     num_epochs: int = 50
-    patience: int = 5 # early stopping patience (epochs) TODO: best?
+    patience: int = 5
     val_split: float = 0.2
     gradient_clip: float = 1.0
+
+    optimizer: str = "adam"
+    lr_scheduler: str = "none"
+
     use_lr_scheduler: bool = True
-    time_series_split: bool = True  # use time-aware split not random
+    time_series_split: bool = True # remove random and this bool?
     
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -54,12 +61,18 @@ class TabularAutoencoder(nn.Module):
         latent_dim: int = 8,
         hidden_dims: Sequence[int] = (64, 32),
         dropout: float = 0.1,
+        embedding_dim: Optional[int] = None, 
+        continuous_noise_std: float = 0.0,
+        residual_strength: float = 0.0
     ):
         super().__init__()
 
         self.num_cont = num_cont
         self.cat_dims = cat_dims
         self.latent_dim = latent_dim
+        self.embedding_dim = embedding_dim
+        self.continuous_noise_std = continuous_noise_std
+        self.residual_strength = residual_strength
 
         # -------------------------------
         # Categorical embedding dynamically
@@ -75,11 +88,14 @@ class TabularAutoencoder(nn.Module):
         self.emb_sizes: dict[str, int] = {}
 
         for name, card in cat_dims.items():
-            d = emb_dim(card)
+            d = embedding_dim if embedding_dim is not None else emb_dim(card)
             self.embeddings[name] = nn.Embedding(card, d)
             self.emb_sizes[name] = d
 
         total_emb_dim = sum(self.emb_sizes.values())
+
+        if residual_strength > 0:
+            self.residual_proj = nn.Linear(num_cont + total_emb_dim, latent_dim)
 
         # -------------------------------
         # Encoder
@@ -149,10 +165,14 @@ class TabularAutoencoder(nn.Module):
         x = torch.cat([x_cont, x_emb], dim=1)
 
         # optional denoising in training only
-        if self.training:
-            x = x + 0.01 * torch.randn_like(x)
+        if self.training and self.continuous_noise_std > 0.:
+            x = x + self.continuous_noise_std * torch.randn_like(x)
 
         z = self.encoder(x)
+        
+        if self.residual_strength > 0:
+            z = z + self.residual_strength * self.residual_proj(x)
+
         recon = self.decoder(z)
 
         return recon
