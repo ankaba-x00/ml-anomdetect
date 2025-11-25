@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -34,6 +34,7 @@ custom_rc = {
 def apply_custom_theme() -> None:
     """Apply consistent Matplotlib styling."""
     mpl.rcParams.update(custom_rc)
+    sns.set_style("whitegrid")
 
 
 #########################################
@@ -43,7 +44,8 @@ def apply_custom_theme() -> None:
 def plot_training_curves(
     country: str,
     history: dict,
-    out_dir: Path,
+    folder: Path = Path.cwd(),
+    fnames: list[str] = ["loss_curve.png", "lr_schedule.png"],
     show: bool = False,
 ):
     """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
@@ -71,8 +73,8 @@ def plot_training_curves(
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
-    fpath = out_dir / f"{country}_loss_curve.png"
-    fig.savefig(fpath, dpi=160)
+    fig.savefig(folder / fnames[0], dpi=160)
+    print(f"[OK] Saved to {fnames[0]}")
     if show: plt.show()
     plt.close(fig)
 
@@ -88,8 +90,8 @@ def plot_training_curves(
     ax.set_yscale("log")
     ax.grid(True)
     plt.tight_layout()
-    fpath = out_dir / f"{country}_lr_schedule.png"
-    fig.savefig(fpath, dpi=160)
+    fig.savefig(folder / fnames[1], dpi=160)
+    print(f"[OK] Saved to {fnames[1]}")
     if show: plt.show()
     plt.close(fig)
 
@@ -101,7 +103,8 @@ def plot_training_curves(
 def plot_error_histogram(
     country: str,
     df: pd.DataFrame,
-    out_dir: Path,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_error_histogram.png",
     show: bool = False,
 ):
     """Histogram of log errors with percentile lines."""
@@ -125,8 +128,8 @@ def plot_error_histogram(
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
-    fpath = out_dir / f"{country}_error_hist.png"
-    fig.savefig(fpath, dpi=160)
+    fig.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
 
@@ -134,7 +137,8 @@ def plot_error_timeseries(
     country: str,
     df: pd.DataFrame,
     threshold: Optional[float],
-    out_dir: Path,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_error_timeseries.png",
     show: bool = False,
 ):
     """Lineplot error over time with optional threshold line."""
@@ -150,15 +154,16 @@ def plot_error_timeseries(
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
-    fpath = out_dir / f"{country}_error_timeseries.png"
-    fig.savefig(fpath, dpi=160)
+    fig.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
 
 def summarize_validation(
     country: str,
     df: pd.DataFrame,
-    out_dir: Path,
+    folder: Path = Path.cwd(),
+    fname: str = "summarize_validation.png",
 ) -> dict:
     """Summary statistics for validation error distribution as json."""
     errors = df["error"].values
@@ -173,8 +178,7 @@ def summarize_validation(
         "p99": float(np.percentile(errors, 99)),
         "p995": float(np.percentile(errors, 99.5)),
     }
-    path = out_dir / f"{country}_summary.json"
-    with open(path, "w") as f:
+    with open(folder / fname, "w") as f:
         json.dump(summary, f, indent=2)
     return summary
 
@@ -183,7 +187,7 @@ def summarize_validation(
 ##             TUNING PLOTS            ##
 #########################################
 
-def save_optuna_plots(study, out_dir: Path):
+def save_optuna_plots(study, folder: Path):
     """Save Optuna-provided visualizations as png if kaleido is installed and/or html file which requires no add package and has nicer formatting."""
 
     figs = {
@@ -194,15 +198,20 @@ def save_optuna_plots(study, out_dir: Path):
         "contour": plot_contour(study),
     }
     for fname, fig in figs.items():
-        png_path = out_dir / f"{fname}.png"
-        html_path = out_dir / f"{fname}.html"
+        png_fname = folder / f"{fname}.png"
+        html_fname = folder / f"{fname}.html"
         try:
-            fig.write_html(str(html_path))
-            fig.write_image(str(png_path), scale=2)
+            fig.write_html(str(html_fname))
+            fig.write_image(str(png_fname), scale=2)
         except Exception:
             pass
 
-def plot_correlation_heatmap(df: pd.DataFrame, out_path: Path, show: bool):
+def plot_correlation_heatmap(
+        df: pd.DataFrame, 
+        folder: Path = Path.cwd(), 
+        fname: str = "plot_correlation_heatmap.png",
+        show: bool = False
+    ):
     """Heatmaps to show correlation between hyperparameters and val loss."""
     apply_custom_theme()
 
@@ -211,11 +220,19 @@ def plot_correlation_heatmap(df: pd.DataFrame, out_path: Path, show: bool):
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
     plt.title("Hyperparameter Correlations")
     plt.tight_layout()
-    plt.savefig(out_path, dpi=160)
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
 
-def plot_loss_curves_all_trials(study, country: str, history_dir: Path, out_path: Path, show: bool):
+def plot_loss_curves_all_trials(
+        study, 
+        country: str, 
+        history_dir: Path, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_loss_curves_all_trials.png", 
+        show: bool = False
+    ):
     """Lineplot train/val loss curves for each finished trial. Skipped if not saved during tuning."""
     apply_custom_theme()
 
@@ -248,11 +265,17 @@ def plot_loss_curves_all_trials(study, country: str, history_dir: Path, out_path
     plt.grid(True)
     plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.tight_layout()
-    plt.savefig(out_path, dpi=160)
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
 
-def plot_best_trial_learning_curve(best_history: dict, out_path: Path, show: bool):
+def plot_best_trial_learning_curve(
+        best_history: dict, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_best_trial_learning_curve.png",
+        show: bool = False
+    ):
     """Lineplot train/val learning curves of best trial."""
     apply_custom_theme()
 
@@ -273,11 +296,17 @@ def plot_best_trial_learning_curve(best_history: dict, out_path: Path, show: boo
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(out_path, dpi=160)
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
 
-def plot_3d_scatter(df: pd.DataFrame, out_path: Path, show: bool):
+def plot_3d_scatter(
+        df: pd.DataFrame, 
+        folder: Path = Path.cwd(), 
+        fname: str = "plot_3d_scatter.png",
+        show: bool = False
+    ):
     """Scatter plot 3D (dropout, lr, val_loss) of hyperparameter landscape with annotated marking of best trial in red."""
     apply_custom_theme()
 
@@ -329,11 +358,17 @@ def plot_3d_scatter(df: pd.DataFrame, out_path: Path, show: bool):
     ax.set_zlabel("Val Loss", labelpad=12)
     ax.set_title("3D Hyperparameter Landscape")
     plt.tight_layout()
-    plt.savefig(out_path, dpi=160)
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
 
-def plot_multi_country_overview(best_losses: dict, out_path: Path, show: bool):
+def plot_multi_country_overview(
+        best_losses: dict, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_multi_country_overview.png",
+        show: bool = False
+    ):
     """Barplot comparing best val losses across countries."""
     apply_custom_theme()
 
@@ -347,6 +382,122 @@ def plot_multi_country_overview(best_losses: dict, out_path: Path, show: bool):
     plt.xlabel("Country")
     plt.grid(True, axis="y", alpha=0.4)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=160)
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close()
+
+
+#########################################
+##             TESTING PLOTS           ##
+#########################################
+
+def plot_error_curve(
+        country: str, 
+        df_err: pd.DataFrame, 
+        threshold: float, 
+        method: str, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_error_curve.png", 
+        show: bool = False
+    ):
+    """Lineplot reconstruction error over timestamps with color-coded error predictions, smoothed error curve, threshold and detected anomalies."""
+    apply_custom_theme()
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    ax.plot(df_err["ts"], df_err["error"], label="Error", alpha=0.6)
+    # smoothed error
+    df_err["smooth"] = df_err["error"].rolling(48, min_periods=1).mean()
+    ax.plot(df_err["ts"], df_err["smooth"], label="Smoothed", linewidth=2)
+    # threshold
+    ax.axhline(threshold, color="red", linestyle="--", label=f"Threshold ({method})")
+    # anomalies
+    anomalies = df_err[df_err["is_anomaly"] == 1]
+    ax.scatter(anomalies["ts"], anomalies["error"], color="red", s=12, label="Detected")
+    ax.set_title(f"{country} – Test Error Curve ({method})")
+    ax.set_ylabel("Reconstruction Error")
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=150)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_intervals(
+        country: str, 
+        df_err: pd.DataFrame, 
+        df_int: pd.DataFrame, 
+        method: str, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_intervals.png", 
+        show: bool = False
+    ):
+    """Lineplot with detected anomalies over timestamps."""
+    apply_custom_theme()
+
+    fig, ax = plt.subplots(figsize=(14, 2))
+    ax.plot(df_err["ts"], np.zeros_like(df_err["ts"]), alpha=0)  # invisible anchor
+    for _, row in df_int.iterrows():
+        ax.axvspan(row["start_ts"], row["end_ts"], color="red", alpha=0.3)
+    ax.set_title(f"{country} – Anomaly Intervals ({method})")
+    ax.set_yticks([])
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=150)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_error_hist(
+        country: str, 
+        df_err: pd.DataFrame, 
+        threshold: float, 
+        method: str, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_error_hist.png", 
+        show: bool = False
+    ):
+    """Histogram showing error counts and threshold."""
+    apply_custom_theme()
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    sns.histplot(df_err["error"], bins=60, ax=ax)
+    ax.axvline(threshold, color="red", linestyle="--", label="Threshold")
+    ax.legend()
+    ax.set_yscale("log")
+    ax.set_ylabel("Log(counts)")
+    ax.set_title(f"{country} – Error Histogram ({method})")
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=150)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_raw_with_errors(
+        signal_name: str,
+        ts: Union[np.ndarray, pd.Index, pd.Series], 
+        raw_signal: np.ndarray, 
+        errors: np.ndarray, 
+        mask: np.ndarray, 
+        folder: Path = Path.cwd(),
+        fname: str = "plot_error_hist.png", 
+        show: bool = False
+    ):
+    """Lineplot showing raw target signal with smoothed error scaled on same range and detected anomalies."""
+    apply_custom_theme()
+
+    # normalize errors to same scale as raw signal
+    err_norm = errors / np.max(errors) * (raw_signal.max() - raw_signal.min()) * 0.4
+    err_norm = err_norm + raw_signal.min()  # shift upward
+
+    plt.figure(figsize=(16, 6))
+    plt.plot(ts, raw_signal, label=f"Raw {signal_name} signal", color='black', linewidth=1.4)
+    plt.plot(ts, err_norm, label="Scaled error", color='orange', alpha=0.7)
+    # annotate anomalies
+    plt.scatter(ts[mask], raw_signal[mask], color='red', label='Detected snomalies', s=25)
+    plt.title("Raw Signal with Scaled Reconstruction Error Overlay")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(folder / fname, dpi=150)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()

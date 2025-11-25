@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """
-Pipeline for analyzing Optuna tuning results.
-
-Generates:
-- Optuna standard plots
-- trial correlation heatmap
-- best trial learning curves
-- loss curves for all trials
-- 3D hyperparam landscape
-- CSV + JSON reports
-- (optional) multi-country comparison
+Analyze Optuna tuning resultse for one or all countries:
+- loads tuning history
+- loads training error with best model
+- performs multi-country comparison if chosen
+- generates plots (Optuna standard plots as html and png, trial correlation heatmap, best trial learning curves, loss curves for all trials, 3D hyperparam landscape, csv and json reports, multi-country comparison)
 
 Outputs:
     plots : results/models/tuned/analysis/<COUNTRY>/optimization_history.png + .html
@@ -85,7 +80,10 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
     summary = {}
-    #countries = ["US","DE","GB","FR","JP","SG","NL","CA","AU","AT","BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL"]
+    #countries.remove("KR")
+    #countries.remove("TW")
+    #countries.remove("AT")
+    #countries.remove("CH")
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{c}_study.db"
@@ -95,7 +93,7 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
         summary[c] = study.best_value
     out_dir = ANALYSIS_TUNE_DIR / "_multi"
     out_dir.mkdir(parents=True, exist_ok=True)
-    plot_multi_country_overview(summary, out_dir / "best_losses.png", show)
+    plot_multi_country_overview(summary, out_dir, "best_losses.png", show)
     with open(out_dir / "best_losses.json", "w") as f:
         json.dump(summary, f, indent=2)
     print(f"[OK] Multi-country comparison completed!")
@@ -114,20 +112,21 @@ def analyze_country(country: str, multi: bool = True, all: bool = False, show: b
 
     df = trial_dataframe(study)
     df.to_csv(out_dir / "trial_results.csv", index=False)
-    plot_correlation_heatmap(df, out_dir / "correlation_heatmap.png", show)
-    plot_3d_scatter(df, out_dir / "3d_scatter.png", show)
+    plot_correlation_heatmap(df, out_dir, "correlation_heatmap.png", show)
+    plot_3d_scatter(df, out_dir, "3d_scatter.png", show)
     plot_loss_curves_all_trials(
         study,
         country,
         history_dir=TUNED_DIR / "trial_history",
-        out_path=out_dir / "losses_all_trials.png",
+        folder=out_dir,
+        fname="losses_all_trials.png",
         show=show
     )
     best_hist_path = TUNED_DIR / f"{country}_best_history.json"
     if best_hist_path.exists():
         with open(best_hist_path, "r") as f:
             best_history = json.load(f)
-        plot_best_trial_learning_curve(best_history, out_dir / "best_learning_curve.png", show)
+        plot_best_trial_learning_curve(best_history, out_dir, "best_learning_curve.png", show)
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:
@@ -148,7 +147,9 @@ def analyze_all(multi: bool = True, show_plots: bool = False):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Analyze model tuning performance."
+    )
 
     parser.add_argument(
         "-s", "--show",
