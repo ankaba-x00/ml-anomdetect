@@ -69,27 +69,67 @@ def check_ts_order(l1: list, l2: list):
     if ts1 >= ts2:
         raise ValueError(
             "[Error] Timestamp continuity error" \
-            f"  last timestamp in file1:  {ts1}\n" \
-            f"  first timestamp in file2: {ts2}\n" \
-            "Expected: last_ts_file1 < first_ts_file2. Use different merge dir."
+            f"\n   last timestamp in file1:  {ts1}" \
+            f"\n   first timestamp in file2: {ts2}" \
+            "\nExpected: last_ts_file1 < first_ts_file2. Use different merge dir."
         )
 
 #########################################
-##               HELPER                ##
+##             MERGE HELPER            ##
 #########################################
 
-def find_latest_pulls(prefix: str, dir: int) -> tuple[Path, Path]:
+def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not matches:
         raise FileNotFoundError(f"[Error] No files found starting with: {prefix}")
     matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    if dir:
-        return matches[0], matches[1]
-    return matches[1], matches[0]
+    return matches[i], matches[j]
 
 def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
+
+def _merge_dicts(d1: dict, d2: dict) -> dict:
+    merged = {}
+    for region in d1.keys():
+        if region not in d2.keys():
+            raise ValueError(f"[Error] Region {region} missing; files do not match. Aborting merge.")
+        
+        list1, list2 = d1[region], d2[region]
+        if region == "worldwide":
+            check_ts_order(list1, list2)
+        
+        combined = list1 + list2
+        for i, entry in enumerate(combined, start=1):
+            entry["idx"] = i
+        
+        merged[region] = combined
+    return merged
+
+def run_merger(prefix: str, dir: int, n: int, d: dict = None) -> dict:
+        if n == 1:
+            if dir:
+                p1, p2 = _find_latest_pulls(prefix, n-1, n)
+            else:
+                p1, p2 = _find_latest_pulls(prefix, n, n-1)
+            d1, d2 = _read_file(p1), _read_file(p2)
+            return _merge_dicts(d1, d2)
+        
+        if d is None:
+            raise ValueError("[ERROR] Multi-pull merger failed. Merge dictionary is of NoneType!")
+        if dir:
+            _, p2 = _find_latest_pulls(prefix, n-1, n)
+            d2 = _read_file(p2)
+            return _merge_dicts(d, d2)
+        else:
+            p1, _ = _find_latest_pulls(prefix, n, n-1)
+            d1 = _read_file(p1)
+            return _merge_dicts(d1, d)
+            
+
+#########################################
+##          POST MERGE HELPER          ##
+#########################################
 
 def save_merged_data(data: dict, name: str):
     outfile = RAW_DIR / f"{name}_merged.json"
@@ -104,47 +144,39 @@ def preprocess_merged_data(data: dict, name: str):
     else:
         print(f"[Error] No data extracted for {name}, skipping save.")
 
+
 #########################################
 ##                MERGE                ##
 #########################################
 
-def merge_single(name: str, dir: int, save_only: bool = False, check: bool = True):
+def merge_single(name: str, dir: int, n_pulls: int, save_only: bool = False, check: bool = True):
     value = TIME_DSFILE_MAP[name]
     if check:
         _pullversions_exist(value)
 
-    p1, p2 = find_latest_pulls(value[-1], dir)
-    f1, f2 = _read_file(p1), _read_file(p2)
-
-    merged = {}
-
-    for region in f1.keys():
-        if region not in f2.keys():
-            raise ValueError(f"[Error] Region {region} missing; files do not match. Aborting merge.")
-        
-        list1, list2 = f1[region], f2[region]
-        if region == "worldwide":
-            check_ts_order(list1, list2)
-        
-        combined = list1 + list2
-        for i, entry in enumerate(combined, start=1):
-            entry["idx"] = i
-        
-        merged[region] = combined
+    for n in range(1, n_pulls):
+        print(f"[INFO] {name}\t merge round {n}...")
+        merged = run_merger(
+            prefix=value[-1],
+            dir=dir,
+            n=n,
+            d=merged if n > 1 else None
+        )
     
-    print(f"[OK] {name}\t successfully merged!")
+    print(f"[OK]   {name}\t successfully merged!")
     if save_only:
         save_merged_data(merged, name)
     else:
         preprocess_merged_data(merged, name)
 
 
-def merge_all(dir: int, save_only: bool = False):
+def merge_all(dir: int, save_only: bool = False, n_pulls: int = 2):
+    print(f"[INFO] Multi-pull merger starting...")
     check_pullversions_exist(TIME_DSFILE_MAP)
 
     for key in TIME_DSFILE_MAP:
-        merge_single(name=key, dir=dir, save_only=save_only, check=False)
-
+        merge_single(name=key, dir=dir, n_pulls=n_pulls, save_only=save_only, check=False)
+    print(f"[DONE] Multi-pull merger for all file keys completed!")
 
 if __name__=='__main__':
     import argparse
@@ -164,11 +196,18 @@ if __name__=='__main__':
         action="store_true",
         help="show available merge directions and exit"
     )
-
+    
     parser.add_argument(
         "-S", "--save",
         action="store_true",
         help="save-only mode; merged data will be stored and not further preprocessed"
+    )
+
+    parser.add_argument(
+        "-N",
+        type=int,
+        default=2,
+        help="number of pulls [default: 2] e.g. 3 merges 3 files"
     )
 
     parser.add_argument(
@@ -199,7 +238,8 @@ if __name__=='__main__':
         exit(0)
 
     if args.file_key is None or args.file_key not in ["all", *TIME_DSFILE_MAP.keys()]:
-        print(f"[Error] file_key {args.file_key} cannot be processed.\n")
+        if args.file_key != None:
+            print(f"[Error] file_key {args.file_key} cannot be processed.\n")
         parser.print_help()
         exit(1)
 
@@ -211,6 +251,6 @@ if __name__=='__main__':
     key, dir, save_only = args.file_key, int(args.merge_dir), args.save
 
     if key.lower() == "all":
-        merge_all(dir, save_only)
+        merge_all(dir, save_only, args.N)
     else:
-        merge_single(key, dir, save_only)
+        merge_single(key, dir, args.N, save_only)
