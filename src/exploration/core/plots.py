@@ -1,7 +1,8 @@
-import os, warnings
+import warnings
 import pandas as pd
 import numpy as np
 import seaborn as sns
+from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Patch
@@ -51,8 +52,9 @@ def boxplot_valdist(
     title: str = "",
     xlabel: str = "", 
     ylabel: str = "",
-    folder: str = "./",
-    fname: str = "boxplot_valdist.png"
+    folder: Path = Path.cwd(),
+    fname: str = "boxplot_valdist.png",
+    show: bool = False
 ):
     """Boxplot showing value distribution by country."""
     apply_custom_theme()
@@ -90,16 +92,15 @@ def boxplot_valdist(
     # print(sns.plotting_context())
     # print(plt.rcParams)
     plt.tight_layout()
-    os.makedirs(folder, exist_ok=True)
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close(fig)
-    # plt.show()
+    if show: plt.show()
 
 def boxplot_valdist_daytypes(
     df: pd.DataFrame,
@@ -111,8 +112,9 @@ def boxplot_valdist_daytypes(
     title: str = "", 
     xlabel: str = "", 
     ylabel: str = "",
-    folder: str = "./",
-    fname: str = "boxplot_valdist_daytypes.png"
+    folder: Path = Path.cwd(),
+    fname: str = "boxplot_valdist_daytypes.png",
+    show: bool = False
 ):
     """Boxplot showing value distribution by country split into the following day types: 
         - weekdays: Mon-Fri
@@ -158,14 +160,14 @@ def boxplot_valdist_daytypes(
     )
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close(fig)
-    # plt.show()
+    if show: plt.show()
 
 def boxplot_valdist_daytimes(
     df: pd.DataFrame,
@@ -183,8 +185,9 @@ def boxplot_valdist_daytimes(
     title: str = "",
     xlabel: str = "",
     ylabel: str = "",
-    folder: str = "./",
-    fname: str = "boxplot_valdist_daytimes.png"
+    folder: Path = Path.cwd(),
+    fname: str = "boxplot_valdist_daytimes.png",
+    show: bool = False
 ):
     """Boxplot showing value distribution by country split into the following local daytimes:
         - Deep night: 00-06
@@ -239,14 +242,14 @@ def boxplot_valdist_daytimes(
     )
     plt.tight_layout(rect=[0.05, 0.05, 0.98, 0.95])
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.4, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close(fig)
-    # plt.show()
+    if show: plt.show()
 
 
 #########################################
@@ -263,8 +266,9 @@ def heatmap_activity_fluctuations(
     title: str = "",
     xlabel: str = "Daytime",
     ylabel: str = "Countries",
-    folder: str = "./",
-    fname: str = "heatmap_activity_fluctuations.png"
+    folder: Path = Path.cwd(),
+    fname: str = "heatmap_activity_fluctuations.png",
+    show: bool = False
 ):
     """
     Plot heatmap of median activity per country across daytimes.
@@ -293,14 +297,14 @@ def heatmap_activity_fluctuations(
     plt.ylabel(ylabel)
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close()
-    # plt.show()
+    if show: plt.show()
 
 def heatmap_anomalies(
         df: pd.DataFrame,
@@ -311,8 +315,9 @@ def heatmap_anomalies(
         palette1: list = ["#C9F89E", "#46AD62", "#2F8F4B", "#1E603A"],
         col2: str = "#3EA25A",
         palette2: list = ["#F9A506", "#E86B3F", "#C53B2A", "#A9282E"],
-        folder: str = "./",
-        fname: str = "heatmap_anomalies.png"
+        folder: Path = Path.cwd(),
+        fname: str = "heatmap_anomalies.png",
+        show: bool = False
     ):
     """Heatmap with anomalies by location and date. Color coding differentiates between type (Location vs. AS) and duration."""
     apply_custom_theme()
@@ -341,7 +346,7 @@ def heatmap_anomalies(
         "orange", palette2
     )
 
-    fig, ax = plt.subplots(figsize=(30, 20))
+    fig, ax = plt.subplots(figsize=(30,35))
     for i, (loc, row) in enumerate(D.iterrows()):
         for j, (date, dur) in enumerate(row.items()):
             if np.isnan(dur):
@@ -351,7 +356,6 @@ def heatmap_anomalies(
             color = cmap(norm(dur))
             rect = mpl.patches.Rectangle((j, i), 1, 1, facecolor=color, edgecolor="gray", lw=0.3)
             ax.add_patch(rect)
-
             if ongoing:
                 ax.add_patch(
                     mpl.patches.Rectangle((j, i), 1, 1, facecolor="none", edgecolor="black",
@@ -361,12 +365,16 @@ def heatmap_anomalies(
     ax.set_ylim(0, len(D.index))
     ax.set_xticks(np.arange(len(D.columns)) + 0.5)
     ax.set_yticks(np.arange(len(D.index)) + 0.5)
-    ax.set_xticklabels([d.strftime("%m/%d") for d in D.columns], rotation=90)
+    labels = [d.strftime("%m/%d") for d in D.columns]
+    for i, label in enumerate(labels):
+        if i % 3 != 0:
+            labels[i] = ""    
+    ax.set_xticklabels(labels, rotation=90)
     ax.set_yticklabels(D.index)
     ax.invert_yaxis()
     ax.set_title(title, fontsize=30, pad=20)
-    ax.set_xlabel(xlabel, fontsize=25)
-    ax.set_ylabel(ylabel, fontsize=25)
+    ax.set_xlabel(xlabel, fontsize=22)
+    ax.set_ylabel(ylabel, fontsize=20)
     
     cb_ax1 = fig.add_axes([0.15, 0.05, 0.35, 0.02])
     cb_ax2 = fig.add_axes([0.55, 0.05, 0.35, 0.02])
@@ -389,17 +397,16 @@ def heatmap_anomalies(
         ncol=3,
         frameon=True
     )
-
     plt.tight_layout(rect=[0, 0.12, 1, 1])
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close(fig)
-    # plt.show()
+    if show: plt.show()
 
 def heatmap_log10_attack_profile(
         norm_matrix: pd.DataFrame,
@@ -407,8 +414,9 @@ def heatmap_log10_attack_profile(
         xlabel: str = "Dates",
         ylabel: str = "Countries",
         cmap: str = "viridis",
-        folder: str = "./",
-        fname: str = "heatmap_log10_attack_profile.png"
+        folder: Path = Path.cwd(),
+        fname: str = "heatmap_log10_attack_profile.png",
+        show: bool = False
     ):
     """"""
     apply_custom_theme()
@@ -445,14 +453,14 @@ def heatmap_log10_attack_profile(
     plt.ylabel(ylabel)
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close()
-    # plt.show()
+    if show: plt.show()
 
 
 #########################################
@@ -468,8 +476,9 @@ def barplot_activity_fluctuations(
     xlabel: str = "Countries",
     ylabel: str = "Median activity range (max - min)",
     col: str = "lightblue",
-    folder: str = "./",
-    fname: str = "barplot_activity_fluctuations.png"
+    folder: Path = Path.cwd(),
+    fname: str = "barplot_activity_fluctuations.png",
+    show: bool = False
 ):
     """
     Plot bar chart of top countries by daytime fluctuation metric (range/std/ratio).
@@ -496,14 +505,14 @@ def barplot_activity_fluctuations(
     plt.grid(axis="y", linestyle="--", alpha=0.4)
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close()
-    # plt.show()
+    if show: plt.show()
 
 def barplot_top_attackers(
     df: pd.DataFrame,
@@ -512,8 +521,9 @@ def barplot_top_attackers(
     xlabel: str = "Total L3 Attack Volume",
     ylabel: str = "Countries",
     palette: str = "Blues_r",
-    folder: str = "./",
-    fname: str = "barplot_top_attackers.png"
+    folder: Path = Path.cwd(),
+    fname: str = "barplot_top_attackers.png",
+    show: bool = False
 ):
     """Plot barplot with top attack countries worldwide."""
     apply_custom_theme()
@@ -539,14 +549,14 @@ def barplot_top_attackers(
     plt.ylabel(ylabel)
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close()
-    # plt.show()
+    if show: plt.show()
 
 
 #########################################
@@ -556,8 +566,9 @@ def barplot_top_attackers(
 def lineplot_clustering_eval_curves(
         df: pd.DataFrame,
         col: str = "blue",
-        folder: str = "./",
-        fname: str = "lineplot_clustering_eval_curves.png"
+        folder: Path = Path.cwd(),
+        fname: str = "lineplot_clustering_eval_curves.png",
+        show: bool = False
     ):
     """Plot clustering eval curves to determine ideal k value."""
     apply_custom_theme()
@@ -594,14 +605,14 @@ def lineplot_clustering_eval_curves(
 
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close(fig)
-    # plt.show()
+    if show: plt.show()
 
 
 #########################################
@@ -614,8 +625,9 @@ def pca_clusterplot(
         countries: list[str],
         k: int,
         name: str = "l3_origin",
-        folder: str = "./",
-        fname: str = "pca_clusterplot.png"
+        folder: Path = Path.cwd(),
+        fname: str = "pca_clusterplot.png",
+        show: bool = False
     ):
     apply_custom_theme()
 
@@ -637,14 +649,14 @@ def pca_clusterplot(
     plt.ylabel("PC2")
     plt.legend(title="Cluster")
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close()
-    # plt.show()
+    if show: plt.show()
 
 
 #########################################
@@ -659,8 +671,9 @@ def radarchart_attack_fingerprint(
         top_n: int = 30,
         col1= "#133a88",
         col2= "#971613",
-        folder: str = "./",
-        fname: str = "radarchart_attack_fingerprint.png"
+        folder: Path = Path.cwd(),
+        fname: str = "radarchart_attack_fingerprint.png",
+        show: bool = False
     ):
     """
     Plot attack fingerprint for a given country based on L3 and L3 normalized share for the top_n attacking countries.
@@ -700,11 +713,11 @@ def radarchart_attack_fingerprint(
     plt.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
     plt.tight_layout()
     plt.savefig(
-        os.path.join(folder, fname), 
+        folder / fname, 
         bbox_inches="tight", 
         pad_inches=0.2, 
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
     plt.close(fig)
-    # plt.show()
+    if show: plt.show()

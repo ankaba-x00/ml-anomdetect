@@ -28,7 +28,7 @@ from .core import (
 ##        VALUE DISTRIBUTIONS          ##
 #########################################
 
-def gen_valdist(typ: str, in_folder: str, out_folder: str):
+def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool):
     if typ == "traffic":
         name = "NetFlow traffic"
         shortname = "traffic"
@@ -50,22 +50,24 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str):
     boxplot_valdist(
         df,
         col=color1,
-        title=f"{name} volume distribution by country across 126 days [from 07/02 to 11/04]",
+        title=f"{name} volume distribution by country",
         xlabel="Most active countries (acc. to median)",
         ylabel=f"Absolute {yname}",
         folder=out_folder,
-        fname=f"{typ}_dist.png"
+        fname=f"{typ}_dist.png",
+        show=show
     )
 
     df_with_days = add_local_daytypes(df, timezones)
     boxplot_valdist_daytypes(
         df_with_days,
-        title=f"{name} volume distribution by country across 126 days [from 07/02 to 11/04]: weekdays vs weekends",
+        title=f"{name} volume distribution by country: weekdays vs weekends",
         xlabel="Most active countries (acc. to median)",
         ylabel=f"Absolute {yname}",
         palette={"Weekday": colpal1[0], "Weekend": colpal1[1]},
         folder=out_folder,
-        fname=f"{typ}_dist_daytypes.png"
+        fname=f"{typ}_dist_daytypes.png",
+        show=show
     )
 
     df = conv_pkltodf(f"{typ}_time", in_folder)
@@ -73,12 +75,13 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str):
     df_with_times = add_local_daytimes(df_countries, timezones)
     boxplot_valdist_daytimes(
         df_with_times,
-        title=f"{name} volume distribution by country across 126 days [from 07/02 to 11/04]: daytimes",
+        title=f"{name} volume distribution by country: daytimes",
         xlabel="Most active countries (acc. to median)",
         ylabel=f"Relative {shortname} per hour to busiest hour of day",
         palette={"Deep night": colpal2[0], "Morning": colpal2[1], "Business hours": colpal2[2], "Evening": colpal2[3], "Early night": colpal2[4]},
         folder=out_folder,
-        fname=f"{typ}_dist_daytimes.png"
+        fname=f"{typ}_dist_daytimes.png",
+        show=show
     )
 
 
@@ -86,7 +89,7 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str):
 ##        ACTIVITY FLUCTUATIONS        ##
 #########################################
 
-def gen_actfluct(typ: str, in_folder: str, out_folder: str):
+def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool):
     if typ == "traffic":
         name = "traffic"
         color = "#5EA7E3"
@@ -116,7 +119,8 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str):
             title=f"Countries with strongest {category} activity fluctuations for {name} intensity",
             col=color,
             folder=out_folder,
-            fname=f"{typ}_{category}_top30_fluctuation.png"
+            fname=f"{typ}_{category}_top30_fluctuation.png",
+            show=show
         )
 
         barplot_activity_fluctuations(
@@ -125,7 +129,8 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str):
             title=f"Countries with lowest {category} activity fluctuations for {name} intensity",
             col=color,
             folder=out_folder,
-            fname=f"{typ}_{category}_tail30_fluctuation.png"
+            fname=f"{typ}_{category}_tail30_fluctuation.png",
+            show=show
         )
 
         heatmap_activity_fluctuations(
@@ -135,7 +140,8 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str):
             cmap=colpal,
             title=f"Median {name} activity fluctuations by {category}",
             folder=out_folder,
-            fname=f"{typ}_{category}_fluctuations"
+            fname=f"{typ}_{category}_fluctuations",
+            show=show
         )
 
 
@@ -143,7 +149,7 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str):
 ##              ANOMALIES              ##
 #########################################
 
-def gen_anomheatmap(in_folder: str, out_folder: str):
+def gen_anomheatmap(in_folder: str, out_folder: str, show: bool = False):
     df = conv_pkltodf("anomalies", in_folder)
     heatmap_anomalies(
         df,
@@ -151,7 +157,8 @@ def gen_anomheatmap(in_folder: str, out_folder: str):
         xlabel="Date",
         ylabel="Location",
         folder=out_folder,
-        fname="anomalies_heatmap.png"
+        fname="anomalies_heatmap.png",
+        show=show
 )
 
 
@@ -186,7 +193,8 @@ def _run_kmeans_analysis(
         k_min: int = 2, 
         k_max: int = 15, 
         final_k: Optional[int] = None,
-        interactive: bool = False
+        interactive: bool = False,
+        show: bool = False
     ) -> int:
     countries, X = preprocess_matrix(df)
     eval_df = evaluate_kmeans_over_k(X, k_min=k_min, k_max=k_max)
@@ -194,7 +202,8 @@ def _run_kmeans_analysis(
         eval_df,
         col=col, 
         folder=folder, 
-        fname=f"{name}_cluster_eval_curves"
+        fname=f"{name}_cluster_eval_curves",
+        show=show
     )
     
     if final_k is None:
@@ -217,12 +226,18 @@ def _run_kmeans_analysis(
         k=final_k, 
         name=name, 
         folder=folder, 
-        fname=f"{name}_finalk_cluster_pca"
+        fname=f"{name}_finalk_cluster_pca",
+        show=show
     )
 
     return final_k
 
-def gen_attackprofile(in_folder: str, out_folder: str, interactive: str =False):
+def gen_attackprofile(
+        in_folder: str, 
+        out_folder: str, 
+        interactive: str = False,
+        show: bool = False
+    ):
     for key in ["l3_origin", "l7_origin"]:
         if key == "l3_origin":
             col = "#01205f"
@@ -237,17 +252,19 @@ def gen_attackprofile(in_folder: str, out_folder: str, interactive: str =False):
             name=key, 
             palette=colpal,
             folder=out_folder, 
-            fname=f"{key[:2]}_top_attackers"
+            fname=f"{key[:2]}_top_attackers",
+            show=show
         )
         df_norm = normalize_per_date(df)
         
-        final_k = _run_kmeans_analysis(df_norm, out_folder, key, col, interactive=interactive)
+        final_k = _run_kmeans_analysis(df_norm, out_folder, key, col, interactive=interactive, show=show)
 
         heatmap_log10_attack_profile(
             df_norm, 
             name=key,
             folder=out_folder, 
-            fname=f"{key[:2]}_log10_attack_profile"
+            fname=f"{key[:2]}_log10_attack_profile",
+            show=show
         )
        
     for c in ["US", "DE", "CN", "BR", "IN"]:
@@ -262,7 +279,8 @@ def gen_attackprofile(in_folder: str, out_folder: str, interactive: str =False):
                 col1= "#133a88",
                 col2= "#971613",
                 folder=out_folder,
-                fname=f"fingerprint_{c}_{dir}.png"
+                fname=f"fingerprint_{c}_{dir}.png",
+                show=show
             )
 
 
@@ -270,12 +288,12 @@ def gen_attackprofile(in_folder: str, out_folder: str, interactive: str =False):
 ##                 RUN                 ##
 #########################################
 
-def run_exploration(in_folder: str, out_folder: str):
+def run_exploration(in_folder: str, out_folder: str , show: bool = False):
     for typ in ["traffic", "httpreq"]:
-        gen_valdist(typ, in_folder, out_folder)
-        gen_actfluct(typ, in_folder, out_folder)
-    gen_anomheatmap(in_folder, out_folder)
-    gen_attackprofile(in_folder, out_folder, interactive=False)
+        gen_valdist(typ, in_folder, out_folder, show)
+        gen_actfluct(typ, in_folder, out_folder, show)
+    gen_anomheatmap(in_folder, out_folder, show)
+    gen_attackprofile(in_folder, out_folder, interactive=False, show=show)
 
 
 if __name__ == "__main__":
@@ -287,6 +305,8 @@ if __name__ == "__main__":
     OUTDIR = PROJECT_ROOT / "results" / "exploration"
     OUTDIR.mkdir(parents=True, exist_ok=True)
     
+    SHOW = False
+
     print("[INFO] Starting data exploration...")
-    result = run_exploration(INDIR, OUTDIR)
+    result = run_exploration(INDIR, OUTDIR, SHOW)
     print("[DONE] Data exploration completed!")
