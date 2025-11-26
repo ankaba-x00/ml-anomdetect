@@ -80,6 +80,7 @@ def train_country(country: str, tr: int, vr: int, full: bool):
     # Full OR Split : Train model
     # ------------------------------------
     if full or tr == 100:
+        print(f"[INFO] Dataset not split: 100% train")
         model, history = train_autoencoder(
             Xc_np, Xk_np,
             None, None,

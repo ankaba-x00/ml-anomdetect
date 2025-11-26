@@ -11,9 +11,12 @@ datasets/processed/*
 datasets/featured/*
 datasets/scalers/*
 
+results/exploration/y2022-2023
 results/models/trained/*
 results/models/validated/*
 results/models/tuned/*
 results/models/tested/*
+
+deployment/models/*
 
 stdout_*
