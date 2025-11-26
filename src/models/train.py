@@ -1,6 +1,6 @@
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -11,75 +11,68 @@ from src.models.autoencoder import AEConfig, TabularAutoencoder
 ##           TRAINING HELPERS          ##
 #########################################
 
-def _make_dataloaders(
-    train_cont: np.ndarray, 
-    train_cat: np.ndarray,
-    val_cont: np.ndarray, 
-    val_cat: np.ndarray,
+def _make_dataloader(
+    X_f: np.ndarray, 
+    X_i: np.ndarray,
     batch_size: int,
-) -> tuple[DataLoader, DataLoader]:
+    shuffle: bool,
+) -> DataLoader:
     """
-    Build DataLoaders for:
-       X_cont : continuous scaled features (float32)
-       X_cat  : categorical integer features (int64)
+    Build DataLoader with
+       X_f : FloatType (float32) features
+       X_i : IntegerType (int64) features 
     """
-    Xc_train = torch.from_numpy(train_cont.astype(np.float32))
-    Xk_train = torch.from_numpy(train_cat.astype(np.int64))
+    Xc_f = torch.from_numpy(X_f.astype(np.float32))
+    Xk_i = torch.from_numpy(X_i.astype(np.int64))
 
-    Xc_val = torch.from_numpy(val_cont.astype(np.float32))
-    Xk_val = torch.from_numpy(val_cat.astype(np.int64))
-   
-    train_ds = TensorDataset(Xc_train, Xk_train)
-    val_ds   = TensorDataset(Xc_val, Xk_val)
+    Tds = TensorDataset(Xc_f, Xk_i)
 
-    train_loader = DataLoader(
-        train_ds, 
+    return DataLoader(
+        Tds, 
         batch_size=batch_size, 
-        shuffle=True,
+        shuffle=shuffle,
     )
-    val_loader = DataLoader(
-        val_ds, 
-        batch_size=batch_size, 
-        shuffle=False,
-    )
-
-    return train_loader, val_loader
-
 
 def train_autoencoder(
     train_cont: np.ndarray,
     train_cat: np.ndarray,
-    val_cont: np.ndarray,
-    val_cat: np.ndarray,
+    val_cont: Optional[np.ndarray],
+    val_cat: Optional[np.ndarray],
     config: AEConfig,
 ) -> tuple[TabularAutoencoder, dict[str, Any]]:
     """
-    Train autoencoder with continuous + categorical inputs.
-
-    X_cont : (T, D_cont) float32 scaled features
-    X_cat  : (T, 3) int64 categorical indices
-
+    Train autoencoder with continuous + categorical input features on split dataset with early stopping and val metrics OR full dataset with no early stopping.
+   
     Returns
     -------
     model : TabularAutoencoder
     history : dict
-        Contains train/val loss curves and best_epoch.
     """
 
     device = torch.device(config.device)
 
-    # assert X_cat.shape[1] == len(config.cat_dims), f"Mismatch: X_cat has {X_cat.shape[1]} cols, but cat_dims defines {len(config.cat_dims)} categories"
-
+    # -------------------------
     # DataLoaders
-    train_loader, val_loader = _make_dataloaders(
+    # -------------------------
+    train_loader = _make_dataloader(
         train_cont, 
-        train_cat,
-        val_cont, 
-        val_cat,
-        batch_size=config.batch_size, 
-    )
+        train_cat, 
+        config.batch_size, 
+        True, 
+    ) 
+    val_loader = (
+        _make_dataloader(
+            val_cont, 
+            val_cat, 
+            config.batch_size, 
+            False)
+        if val_cont is not None
+        else None        
+    ) 
 
-    # Model
+    # -------------------------
+    # Build model
+    # -------------------------
     model = TabularAutoencoder(
         num_cont=config.num_cont,
         cat_dims=config.cat_dims,
@@ -91,6 +84,9 @@ def train_autoencoder(
         residual_strength=config.residual_strength,
     ).to(device)
 
+    # -------------------------
+    # Optimizer
+    # -------------------------
     if config.optimizer == "adam":
         optimizer = torch.optim.Adam(
             model.parameters(), 
@@ -106,6 +102,9 @@ def train_autoencoder(
     else:
         raise ValueError("Unknown optimizer")
 
+    # -------------------------
+    # LR scheduler
+    # -------------------------
     scheduler = None
     if config.use_lr_scheduler:
         if config.lr_scheduler == "plateau":
@@ -127,23 +126,26 @@ def train_autoencoder(
                 total_steps=config.num_epochs * len(train_loader)
             )
 
-    criterion = torch.nn.MSELoss(reduction="none") #weighted loss that emphasizes rare feature patterns TODO: best here?
+    # -------------------------
+    # Loss
+    # -------------------------
+    criterion = torch.nn.MSELoss(reduction="none") 
 
-    best_val_loss = float("inf")
-    best_state = None
-    epochs_no_improve = 0
-
-    history: dict[str, Any] = {
+    history = {
         "train_loss": [],
-        "val_loss": [],
+        "val_loss": [] if val_loader else None,
         "learning_rates": [],
         "best_epoch": None,
     }
 
+    best_metric = float("inf")
+    best_state = None
+    no_improve = 0
+
+    # -----------------------------
+    # Training
+    # -----------------------------
     for epoch in range(config.num_epochs):
-        # -----------------------------
-        # Training
-        # -----------------------------
         model.train()
         running_train = 0.0
         n_train = 0
@@ -153,15 +155,13 @@ def train_autoencoder(
             batch_Xk = batch_Xk.to(device)
 
             optimizer.zero_grad()
+
             recon = model(batch_Xc, batch_Xk)
-            
             # criterion returns (batch, feature_dim) and loss=mean over all elements
             per_feature = criterion(recon, batch_Xc)
             loss = per_feature.mean()
-            
             loss.backward()
 
-            # gradient clipping (optional)
             if config.gradient_clip and config.gradient_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
             
@@ -174,46 +174,77 @@ def train_autoencoder(
             n_train += batch_Xc.size(0)
 
         train_loss = running_train / max(n_train, 1)
+        history["train_loss"].append(train_loss)
 
         # -----------------------------
         # Validation
         # -----------------------------
-        model.eval()
-        running_val = 0.0
-        n_val = 0
-        with torch.no_grad():
-            for batch_Xc, batch_Xk in val_loader:
-                assert batch_Xk.shape[1] == len(config.cat_dims), "Batch categorical shape mismatch!"
-                
-                batch_Xc = batch_Xc.to(device)
-                batch_Xk = batch_Xk.to(device)
-                recon = model(batch_Xc, batch_Xk)
+        if val_loader:
+            model.eval()
+            running_val = 0.0
+            n_val = 0
+            with torch.no_grad():
+                for batch_Xc, batch_Xk in val_loader:
+                    assert batch_Xk.shape[1] == len(config.cat_dims), "Batch categorical shape mismatch!"
+                    
+                    batch_Xc = batch_Xc.to(device)
+                    batch_Xk = batch_Xk.to(device)
+                    
+                    recon = model(batch_Xc, batch_Xk)
+                    per_feature = criterion(recon, batch_Xc)
+                    v_loss = per_feature.mean()
 
-                per_feature = criterion(recon, batch_Xc)
-                loss = per_feature.mean()
+                    running_val += v_loss.item() * batch_Xc.size(0)
+                    n_val += batch_Xc.size(0)
 
-                running_val += loss.item() * batch_Xc.size(0)
-                n_val += batch_Xc.size(0)
+            val_loss = running_val / max(n_val, 1)
+            history["val_loss"].append(val_loss)
 
-        val_loss = running_val / max(n_val, 1)
+            if scheduler is not None and config.lr_scheduler != "onecycle":
+                if config.lr_scheduler == "plateau":
+                    scheduler.step(val_loss)
+                else:  # cosine or onecycle
+                    scheduler.step()
 
-        if scheduler is not None and config.lr_scheduler != "onecycle":
-            if config.lr_scheduler == "plateau":
-                scheduler.step(val_loss)
-            else:  # cosine or onecycle
-                scheduler.step()
-        
+            # -----------------------------
+            # Early stopping
+            # -----------------------------
+            if val_loss < best_metric - 1e-9:
+                best_metric = val_loss
+                best_state = model.state_dict()
+                history["best_epoch"] = epoch + 1
+                no_improve = 0
+            else:
+                no_improve += 1
+                if no_improve >= config.patience:
+                    print(f"Early stopping at epoch {epoch+1}")
+                    break
+        # -----------------------------
+        # Full training / No Validation
+        # -----------------------------
+        else:
+            if scheduler is not None and config.lr_scheduler != "onecycle":
+                if config.lr_scheduler == "plateau":
+                    scheduler.step(train_loss)
+                else:  # cosine or onecycle
+                    scheduler.step()
+
+            # -----------------------------
+            # Track best loss
+            # -----------------------------
+            if train_loss < best_metric - 1e-9:
+                best_metric = train_loss
+                best_state = model.state_dict()
+                history["best_epoch"] = epoch + 1
+
         current_lr = optimizer.param_groups[0]['lr']
-
-        history["train_loss"].append(train_loss)
-        history["val_loss"].append(val_loss)
         history["learning_rates"].append(current_lr)
 
         print(
-            f"[Epoch {epoch+1:03d}/{config.num_epochs}] "
+            f"[Epoch {epoch+1}/{config.num_epochs}] "
             f"train_loss={train_loss:.6f} "
-            f"val_loss={val_loss:.6f} "
-            f"lr={current_lr:.2e} "
+            + (f" val_loss={val_loss:.6f} " if val_loader else "")
+            + f" lr={optimizer.param_groups[0]['lr']:.2e}"
         )
 
         # print extra info every 10 epochs
@@ -226,20 +257,6 @@ def train_autoencoder(
                     total_norm += param_norm.item() ** 2
             total_norm = total_norm ** 0.5
             print(f"Grad norm: {total_norm:.4f}")
-
-        # -----------------------------
-        # Early stopping
-        # -----------------------------
-        if val_loss < best_val_loss - 1e-9:
-            best_val_loss = val_loss
-            best_state = model.state_dict()
-            history["best_epoch"] = epoch + 1
-            epochs_no_improve = 0
-        else:
-            epochs_no_improve += 1
-            if epochs_no_improve >= config.patience:
-                print(f"Early stopping at epoch {epoch+1}")
-                break
 
     # restore best weights
     if best_state:

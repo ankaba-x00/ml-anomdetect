@@ -13,8 +13,8 @@ Outputs:
     continuous feature sizes : results/models/trained/<COUNTRY_CODE>_num_cont.json
     training history : results/models/trained/<COUNTRY_CODE>_training_history.json
 
-Usage (required in <...>, optional in [...]):
-    python -m src.pipelines.train_model <COUNTRY_CODE|all> [| tee stdout_train.txt]
+Usage:
+    python -m src.pipelines.train_model [-F] [-tr <int>] [-vr <int>] <COUNTRY_CODE|all> [| tee stdout_train.txt]
 """
 
 import json, pickle
@@ -32,35 +32,27 @@ from src.models.train import train_autoencoder, save_autoencoder
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
-MODELS_DIR = PROJECT_ROOT / "results" / "models" / "trained"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = PROJECT_ROOT / "results" / "models" / "trained"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+FULL_MODEL_DIR = PROJECT_ROOT / "deployment" / "models"
 
 
 #########################################
 ##                 RUN                 ##
 #########################################
 
-def train_country(country: str):
+def train_country(country: str, tr: int, vr: int, full: bool):
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
-
+    
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
     X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(country)
     Xc_np = X_cont.values.astype(np.float32)
     Xk_np = X_cat.values.astype(np.int64)
-
-    # ------------------------------------
-    # Split dataset
-    # ------------------------------------
-    (train_cont, train_cat), (val_cont, val_cat), _ = timeseries_seq_split(
-        Xc_np, Xk_np,
-        train_ratio=0.75,
-        val_ratio=0.15,
-    )
-
+      
     # ------------------------------------
     # AEConfig object
     # ------------------------------------
@@ -85,43 +77,58 @@ def train_country(country: str):
     )
 
     # ------------------------------------
-    # Train model
+    # Full OR Split : Train model
     # ------------------------------------
-    model, history = train_autoencoder(
-        train_cont, train_cat, 
-        val_cont, val_cat, 
-        cfg
-    )
+    if full or tr == 100:
+        model, history = train_autoencoder(
+            Xc_np, Xk_np,
+            None, None,
+            cfg
+        )
+        OUT_DIR = FULL_MODEL_DIR
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+    else:
+        print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
+        (train_cont, train_cat), (val_cont, val_cat), _ = timeseries_seq_split(
+            Xc_np, Xk_np,
+            train_ratio=tr/100,
+            val_ratio=vr/100,
+        )
+        model, history = train_autoencoder(
+            train_cont, train_cat, 
+            val_cont, val_cat, 
+            cfg
+        )
 
-    model_path = MODELS_DIR / f"{country}_autoencoder.pt"
+    model_path = OUT_DIR / f"{country}_autoencoder.pt"
     save_autoencoder(model, cfg, model_path)
 
-    scaler_path = MODELS_DIR / f"{country}_scaler_cont.pkl"
+    scaler_path = OUT_DIR / f"{country}_scaler_cont.pkl"
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
     print(f"[OK] Saved continuous scaler → {scaler_path}")
     
-    cat_path = MODELS_DIR / f"{country}_cat_dims.json"
+    cat_path = OUT_DIR / f"{country}_cat_dims.json"
     with open(cat_path, "w") as f:
         json.dump(cat_dims, f, indent=2)
     print(f"[OK] Saved categorical vocab sizes → {cat_path}")
 
-    num_path = MODELS_DIR / f"{country}_num_cont.json"
+    num_path = OUT_DIR / f"{country}_num_cont.json"
     with open(num_path, "w") as f:
         json.dump({"num_cont": num_cont}, f, indent=2)
     print(f"[OK] Saved num_cont → {num_path}")
 
-    history_path = MODELS_DIR / f"{country}_training_history.json"
+    history_path = OUT_DIR / f"{country}_training_history.json"
     with open(history_path, "w") as f:
         json.dump(history, f, indent=2)
     print(f"[OK] Saved training history to {history_path}")
 
     print(f"[DONE] Trained model for {country}")
 
-def train_all():
+def train_all(tr: int, vr: int, full: bool):
     for c in COUNTRIES:
         try:
-            train_country(c)
+            train_country(c, tr, vr, full)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model trainings completed!")
@@ -132,6 +139,28 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Train model for single country or all countries."
+    )
+
+    parser.add_argument(
+        "-tr",
+        nargs="?",
+        type=int,
+        default=75,
+        help="dataset ratio for training in %% [default: 75%%]"
+    )
+
+    parser.add_argument(
+        "-vr",
+        nargs="?",
+        type=int,
+        default=15,
+        help="dataset ratio for validation in %% [default: 15%%]"
+    )
+
+    parser.add_argument(
+        "-F", "--full",
+        action="store_true",
+        help="train on full dataset, no validation (for inference)"
     )
 
     parser.add_argument(
@@ -149,6 +178,6 @@ if __name__ == "__main__":
     target = args.target
 
     if target.lower() == "all":
-        train_all()
+        train_all(args.tr, args.vr, args.full)
     else:
-        train_country(target.upper())
+        train_country(target.upper(), args.tr, args.vr, args.full)

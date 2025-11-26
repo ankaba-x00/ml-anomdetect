@@ -26,7 +26,7 @@ Outputs:
     categorical dims : results/models/tuned/<COUNTRY>_cat_dims.json
 
 Usage:
-    python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] <COUNTRY|all> [| tee stdout_tune.txt]
+    python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 import argparse
@@ -38,10 +38,16 @@ from src.models.tune import tune_country
 ##                 RUN                 ##
 #########################################
 
-def tune_all(trials: int, pruner: str):
+def tune_all(trials: int, pruner: str, tr: int, vr: int):
     for c in COUNTRIES:
         try:
-            tune_country(c, n_trials=trials, pruner=pruner)
+            tune_country(
+                c, 
+                n_trials=trials, 
+                pruner=pruner, 
+                tr=tr, 
+                vr=vr
+            )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model tunings completed!")
@@ -67,6 +73,22 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-tr",
+        nargs="?",
+        type=int,
+        default=75,
+        help="dataset ratio for training in %% [default: 75%%]"
+    )
+
+    parser.add_argument(
+        "-vr",
+        nargs="?",
+        type=int,
+        default=15,
+        help="dataset ratio for validation in %% [default: 15%%]"
+    )
+
+    parser.add_argument(
         "target",
         nargs="?",
         help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
@@ -85,10 +107,12 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        tune_all(args.ntrials, args.pruner)
+        tune_all(args.ntrials, args.pruner, args.tr, args.vr)
     else:
         tune_country(
             country=target.upper(),
             n_trials=args.ntrials,
-            pruner=args.pruner
+            pruner=args.pruner,
+            tr=args.tr, 
+            vr=args.vr
         )

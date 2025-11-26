@@ -83,6 +83,7 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     #countries.remove("KR")
     #countries.remove("TW")
     #countries.remove("AT")
+    #countries.remove("GB")
     #countries.remove("CH")
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"

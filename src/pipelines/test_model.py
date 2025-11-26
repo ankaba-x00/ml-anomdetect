@@ -13,8 +13,7 @@ Outputs:
     anomalies : results/models/tested/<COUNTRY>_intervals_<method>.csv
 
 Usage:
-    python -m src.pipelines.detect_anomalies US --method p99
-    python -m src.pipelines.detect_anomalies all --method mad --full
+    python -m src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_test.txt]
 """
 
 import pickle, json, torch
@@ -44,11 +43,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def test_country(
-    country: str,
-    method: str = "p99",
-    use_full_data: bool = False,
-):
+def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
     print(f"\n==============================")
     print(f"  DETECT ANOMALIES ({country})")
     print(f"==============================")
@@ -90,23 +85,18 @@ def test_country(
     ts = X_cont_df.index
 
     # --------------------
-    # Split or full dataset
+    # Split dataset
     # --------------------
-    if use_full_data:
-        print(f"[INFO] Using FULL dataset ({len(X_cont)} samples).")
-        X_eval_cont = X_cont
-        X_eval_cat = X_cat
-        ts_eval = ts
-    else:
-        (Xc_train, _), (Xc_val, _), (Xc_test, Xk_test) = timeseries_seq_split(
-            X_cont, X_cat,
-            train_ratio=0.75,
-            val_ratio=0.15
-        )
-        X_eval_cont = Xc_test
-        X_eval_cat = Xk_test
-        ts_eval = ts[len(Xc_train)+len(Xc_val):]
-
+    print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
+    (Xc_train, _), (Xc_val, _), (Xc_test, Xk_test) = timeseries_seq_split(
+        X_cont, X_cat,
+        train_ratio=tr/100,
+        val_ratio=vr/100
+    )
+    X_eval_cont = Xc_test
+    X_eval_cat = Xk_test
+    ts_eval = ts[len(Xc_train)+len(Xc_val):]
+    
     # --------------------
     # Run anomaly detection
     # --------------------
@@ -169,10 +159,10 @@ def test_country(
     print(f"[OK] Saved threshold to {thr_path}")
 
 
-def test_all(method: str, use_full_data: bool):
+def test_all(method: str, tr: int, vr: int):
     for c in COUNTRIES:
         try:
-            test_country(c, method=method, use_full_data=use_full_data)
+            test_country(c, method=method, tr=tr, vr=vr)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model testings completed!")
@@ -186,12 +176,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "target",
-        nargs="?",
-        help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
-    )
-
-    parser.add_argument(
         "-M", "--method",
         choices=["p99", "p995", "mad"],
         default="p99",
@@ -199,9 +183,25 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-F", "--full",
-        action="store_true",
-        help="detect anomalies on full dataset instead of test split"
+        "-tr",
+        nargs="?",
+        type=int,
+        default=75,
+        help="dataset ratio for training in %% [default: 75%%]"
+    )
+
+    parser.add_argument(
+        "-vr",
+        nargs="?",
+        type=int,
+        default=15,
+        help="dataset ratio for validation in %% [default: 15%%]"
+    )
+
+    parser.add_argument(
+        "target",
+        nargs="?",
+        help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
 
     args = parser.parse_args()
@@ -211,6 +211,15 @@ if __name__ == "__main__":
         exit(1)
 
     if args.target.lower() == "all":
-        test_all(method=args.method, use_full_data=args.full)
+        test_all(
+            method=args.method, 
+            tr=args.tr,
+            vr=args.vr
+        )
     else:
-        test_country(args.target.upper(), method=args.method, use_full_data=args.full)
+        test_country(
+            args.target.upper(), 
+            method=args.method, 
+            tr=args.tr,
+            vr=args.vr
+        )

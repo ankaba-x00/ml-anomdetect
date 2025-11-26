@@ -15,9 +15,9 @@ from src.data.split import timeseries_seq_split
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
-RESULTS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-TRIAL_HIST_DIR = RESULTS_DIR / "trial_history"
+OUT_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+TRIAL_HIST_DIR = OUT_DIR / "trial_history"
 TRIAL_HIST_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -38,7 +38,12 @@ def set_global_seeds(seed: int = 42):
 ##          OPTUNA OBJECTIVE           ##
 #########################################
 
-def objective(trial: optuna.Trial, country: str) -> float:
+def objective(
+        trial: optuna.Trial, 
+        country: str, 
+        tr: int, 
+        vr: int
+    ) -> float:
     """Defines objective for Optuna incl. train AE with trial hyperparameters and return validation loss."""
     set_global_seeds(42)
 
@@ -52,10 +57,11 @@ def objective(trial: optuna.Trial, country: str) -> float:
     # ------------------------------------
     # Split dataset
     # ------------------------------------
+    print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
         Xc_np, Xk_np,
-        train_ratio=0.75,
-        val_ratio=0.15
+        train_ratio=tr/100,
+        val_ratio=vr/100
     )
 
     # ------------------------------------
@@ -133,7 +139,13 @@ def objective(trial: optuna.Trial, country: str) -> float:
 ##        TUNING WRAPPER (API)         ##
 #########################################
 
-def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
+def tune_country(
+        country: str, 
+        n_trials: int = 40, 
+        pruner: str = "median",
+        tr: int = 75,
+        vr: int = 15
+    ):
     """Full Optuna tuning incl. creating study, running optimization, retraining best model fully"""
     set_global_seeds(42)
 
@@ -150,7 +162,7 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
     if pr is None:
         raise ValueError(f"Unknown pruner: {pruner}")
 
-    db_path = RESULTS_DIR / f"{country}_study.db"
+    db_path = OUT_DIR / f"{country}_study.db"
 
     study = optuna.create_study(
         direction="minimize",
@@ -160,7 +172,7 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
         load_if_exists=True,
     )
     study.optimize(
-        lambda t: objective(t, country),
+        lambda t: objective(t, country, tr, vr),
         n_trials=n_trials,
         n_jobs=1,
     )
@@ -177,10 +189,11 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
     Xc_np = X_cont_df.values.astype(np.float32)
     Xk_np = X_cat_df.values.astype(np.int64)
 
+    print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
         Xc_np, Xk_np,
-        train_ratio=0.75,
-        val_ratio=0.15
+        train_ratio=tr/100,
+        val_ratio=vr/100
     )
 
     p = study.best_trial.params
@@ -217,23 +230,23 @@ def tune_country(country: str, n_trials: int = 40, pruner: str = "median"):
     # ------------------------------------
     # Save output
     # ------------------------------------
-    out_model_path = RESULTS_DIR / f"{country}_best_model.pt"
+    out_model_path = OUT_DIR / f"{country}_best_model.pt"
     save_autoencoder(best_model, best_cfg, out_model_path)
 
-    with open(RESULTS_DIR / f"{country}_best_params.json", "w") as f:
+    with open(OUT_DIR / f"{country}_best_params.json", "w") as f:
         json.dump(p, f, indent=2)
 
-    with open(RESULTS_DIR / f"{country}_best_config.json", "w") as f:
+    with open(OUT_DIR / f"{country}_best_config.json", "w") as f:
         cfg_for_save = asdict(best_cfg)
         json.dump(cfg_for_save, f, indent=2)
 
-    with open(RESULTS_DIR / f"{country}_best_history.json", "w") as f:
+    with open(OUT_DIR / f"{country}_best_history.json", "w") as f:
         json.dump(best_history, f, indent=2)
 
-    with open(RESULTS_DIR / f"{country}_scaler.pkl", "wb") as f:
+    with open(OUT_DIR / f"{country}_scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
 
-    with open(RESULTS_DIR / f"{country}_cat_dims.json", "w") as f:
+    with open(OUT_DIR / f"{country}_cat_dims.json", "w") as f:
         json.dump(cat_dims, f, indent=2)
 
     print(f"\n[OK] Finished tuning for {country}")

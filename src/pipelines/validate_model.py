@@ -8,8 +8,8 @@ Validate a trained autoencoder:
 Outputs: 
     error per ts : results/models/validate/<COUNTRY_CODE>_validation.csv
 
-Usage (required in <...>, optional in [...]):
-    python -m src.pipelines.validate_model <COUNTRY_CODE|all> [| tee stdout_val.txt]
+Usage:
+    python -m src.pipelines.validate_model [-tr <int>] [-vr <int>] <COUNTRY_CODE|all> [| tee stdout_val.txt]
 """
 
 import pickle, json
@@ -29,15 +29,15 @@ from src.data.split import timeseries_seq_split
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 MODELS_DIR = PROJECT_ROOT / "results" / "models" / "trained"
-OUTPUT_DIR = PROJECT_ROOT / "results" / "models" / "validated"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = PROJECT_ROOT / "results" / "models" / "validated"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 #########################################
 ##                 RUN                 ##
 #########################################
 
-def validate_country(country: str):
+def validate_country(country: str, tr: int, vr: int):
     print(f"\n==============================")
     print(f"  VALIDATE MODEL ({country})")
     print(f"==============================")
@@ -80,13 +80,14 @@ def validate_country(country: str):
     # --------------------
     # Split dataset
     # --------------------
+    print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
         Xc_np, Xk_np,
-        train_ratio=0.75,
-        val_ratio=0.15
+        train_ratio=tr/100,
+        val_ratio=vr/100
     )
     ts_val = ts[len(Xc_train): len(Xc_train) + len(Xc_val)]
-
+    
     # --------------------
     # Compute reconstruction error
     # --------------------
@@ -111,14 +112,14 @@ def validate_country(country: str):
         "ts": ts_val,
         "error": errors,
     })
-    out_path = OUTPUT_DIR / f"{country}_validation.csv"
+    out_path = OUT_DIR / f"{country}_validation.csv"
     df_out.to_csv(out_path, index=False)
     print(f"[DONE] Validation CSV saved: {out_path}")
 
-def validate_all():
+def validate_all(tr: int, vr: int):
     for c in COUNTRIES:
         try:
-            validate_country(c)
+            validate_country(c, tr, vr)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model validations completed!")
@@ -129,6 +130,22 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Validate model for single country or all countries."
+    )
+
+    parser.add_argument(
+        "-tr",
+        nargs="?",
+        type=int,
+        default=75,
+        help="dataset ratio for training in %% [default: 75%%]"
+    )
+
+    parser.add_argument(
+        "-vr",
+        nargs="?",
+        type=int,
+        default=15,
+        help="dataset ratio for validation in %% [default: 15%%]"
     )
 
     parser.add_argument(
@@ -146,6 +163,6 @@ if __name__ == "__main__":
     target = args.target
 
     if target.lower() == "all":
-        validate_all()
+        validate_all(args.tr, args.vr)
     else:
-        validate_country(target.upper())
+        validate_country(target.upper(), args.tr, args.vr)
