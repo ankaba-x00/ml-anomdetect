@@ -34,7 +34,8 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 OUT_DIR = PROJECT_ROOT / "results" / "models" / "trained"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-FULL_MODEL_DIR = PROJECT_ROOT / "deployment" / "models"
+BEST_MODELS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
+FULL_OUT_DIR = PROJECT_ROOT / "deployment" / "models"
 
 
 #########################################
@@ -54,42 +55,52 @@ def train_country(country: str, tr: int, vr: int, full: bool):
     Xk_np = X_cat.values.astype(np.int64)
       
     # ------------------------------------
-    # AEConfig object
+    # AEConfig object: Load or construct
     # ------------------------------------
-    cfg = AEConfig(
-        num_cont=num_cont,
-        cat_dims=cat_dims,
-        latent_dim=16,
-        hidden_dims=(128, 64),
-        dropout=0.1,
-        embedding_dim=12,
-        continuous_noise_std=0.01,
-        residual_strength=0.10,
-        lr=1e-3,
-        weight_decay=1e-5,
-        batch_size=256,
-        num_epochs=60,
-        patience=6,
-        gradient_clip=1.0,
-        optimizer="adam",
-        lr_scheduler="plateau",
-        use_lr_scheduler=True,
-    )
+    if full or tr == 100:
+        print(f"[INFO] Reading AEConfig from best tuning run.")
+        tuned_cfg_path = BEST_MODELS_DIR / f"{country}_best_config.json"
+        if not tuned_cfg_path.exists():
+            raise FileNotFoundError("[ERROR] Best config not found. Run tuning first.")
+        with open(tuned_cfg_path, "r") as f:
+            cfg_dict = json.load(f)
+            cfg = AEConfig(**cfg_dict)
+    else:
+        print(f"[INFO] Constructing AEConfig from inital params.")
+        cfg = AEConfig(
+            num_cont=num_cont,
+            cat_dims=cat_dims,
+            latent_dim=16,
+            hidden_dims=(128, 64),
+            dropout=0.1,
+            embedding_dim=12,
+            continuous_noise_std=0.01,
+            residual_strength=0.10,
+            lr=1e-3,
+            weight_decay=1e-5,
+            batch_size=256,
+            num_epochs=60,
+            patience=6,
+            gradient_clip=1.0,
+            optimizer="adam",
+            lr_scheduler="plateau",
+            use_lr_scheduler=True,
+        )
 
     # ------------------------------------
     # Full OR Split : Train model
     # ------------------------------------
     if full or tr == 100:
-        print(f"[INFO] Dataset not split: 100% train")
+        print(f"[INFO] Dataset not split: 100% train.")
         model, history = train_autoencoder(
             Xc_np, Xk_np,
             None, None,
             cfg
         )
-        OUT_DIR = FULL_MODEL_DIR
+        OUT_DIR = FULL_OUT_DIR
         OUT_DIR.mkdir(parents=True, exist_ok=True)
     else:
-        print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
+        print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test.")
         (train_cont, train_cat), (val_cont, val_cat), _ = timeseries_seq_split(
             Xc_np, Xk_np,
             train_ratio=tr/100,
