@@ -7,21 +7,29 @@ Train a autoencoder for one or all countries:
 - trains TabularAutoencoder with early stopping
 
 Outputs:
-    model weights : results/models/trained/<COUNTRY_CODE>_autoencoder.pt
-    continuous scaler : results/models/trained/<COUNTRY_CODE>_scaler_cont.pkl
-    mapping of categorical cols : results/models/trained/<COUNTRY_CODE>_cat_dims.json
-    continuous feature sizes : results/models/trained/<COUNTRY_CODE>_num_cont.json
-    training history : results/models/trained/<COUNTRY_CODE>_training_history.json
+    for tuning : results/models/trained/<COUNTRY_CODE>_autoencoder.pt
+                 results/models/trained/<COUNTRY_CODE>_scaler_cont.pkl
+                 results/models/trained/<COUNTRY_CODE>_cat_dims.json
+                 results/models/trained/<COUNTRY_CODE>_num_cont.json
+                 results/models/trained/<COUNTRY_CODE>_training_history.json
+    for inference: deployment/models/<COUNTRY_CODE>_autoencoder.pt
+                   deployment/models/<COUNTRY_CODE>_scaler_cont.pkl
+                   deployment/models/<COUNTRY_CODE>_cat_dims.json
+                   deployment/models/<COUNTRY_CODE>_num_cont.json
+                   deployment/models/<COUNTRY_CODE>_training_history.json
+                   deployment/models/<COUNTRY_CODE>_cal_threshold.json"
 
 Usage:
-    python -m src.pipelines.train_model [-F] [-tr <int>] [-vr <int>] <COUNTRY_CODE|all> [| tee stdout_train.txt]
+    python -m src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] <COUNTRY_CODE|all> [| tee stdout_train.txt]
 """
 
 import json, pickle
 from pathlib import Path
 import numpy as np
+import pandas as pd
 from src.data import timeseries_seq_split
 from src.data.feature_engineering import COUNTRIES, build_feature_matrix
+from src.models.calibrate import calibrate_threshold
 from src.models.autoencoder import AEConfig
 from src.models.train import train_autoencoder, save_autoencoder
 
@@ -42,7 +50,14 @@ FULL_OUT_DIR = PROJECT_ROOT / "deployment" / "models"
 ##                 RUN                 ##
 #########################################
 
-def train_country(country: str, tr: int, vr: int, full: bool):
+def train_country(
+        country: str, 
+        tr: int, 
+        vr: int, 
+        full: bool, 
+        method: str, 
+        cw: int
+    ):
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
@@ -110,7 +125,7 @@ def train_country(country: str, tr: int, vr: int, full: bool):
             train_cont, train_cat, 
             val_cont, val_cat, 
             cfg
-        )
+        )                 
 
     model_path = OUT_DIR / f"{country}_autoencoder.pt"
     save_autoencoder(model, cfg, model_path)
@@ -118,17 +133,17 @@ def train_country(country: str, tr: int, vr: int, full: bool):
     scaler_path = OUT_DIR / f"{country}_scaler_cont.pkl"
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
-    print(f"[OK] Saved continuous scaler → {scaler_path}")
+    print(f"[OK] Saved continuous scaler to {scaler_path}")
     
     cat_path = OUT_DIR / f"{country}_cat_dims.json"
     with open(cat_path, "w") as f:
         json.dump(cat_dims, f, indent=2)
-    print(f"[OK] Saved categorical vocab sizes → {cat_path}")
+    print(f"[OK] Saved categorical vocab sizes to {cat_path}")
 
     num_path = OUT_DIR / f"{country}_num_cont.json"
     with open(num_path, "w") as f:
         json.dump({"num_cont": num_cont}, f, indent=2)
-    print(f"[OK] Saved num_cont → {num_path}")
+    print(f"[OK] Saved num_cont to {num_path}")
 
     history_path = OUT_DIR / f"{country}_training_history.json"
     with open(history_path, "w") as f:
@@ -137,10 +152,28 @@ def train_country(country: str, tr: int, vr: int, full: bool):
 
     print(f"[DONE] Trained model for {country}")
 
-def train_all(tr: int, vr: int, full: bool):
+    # ------------------------------------
+    # Error and threshold on calibration window
+    # ------------------------------------
+    if full or tr == 100:
+        print(f"[INFO] Computing threshold on calibration window...")
+        
+        threshold = calibrate_threshold(
+            country, model, scaler, cfg.device, method, cw
+        )["threshold"]
+
+        thr_path = FULL_OUT_DIR / f"{country}_cal_threshold.json"
+        with open(thr_path, "w") as f:
+            json.dump({"threshold": threshold}, f, indent=2)
+        print(f"[OK] Saved threshold to {thr_path}")
+
+        print(f"[DONE] Preparation for inference model for {country}")
+
+
+def train_all(tr: int, vr: int, full: bool, method: str, cw: int):
     for c in COUNTRIES:
         try:
-            train_country(c, tr, vr, full)
+            train_country(c, tr, vr, full, method, cw)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model trainings completed!")
@@ -155,7 +188,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-tr",
-        nargs="?",
         type=int,
         default=75,
         help="dataset ratio for training in %% [default: 75%%]"
@@ -163,7 +195,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-vr",
-        nargs="?",
         type=int,
         default=15,
         help="dataset ratio for validation in %% [default: 15%%]"
@@ -172,24 +203,33 @@ if __name__ == "__main__":
     parser.add_argument(
         "-F", "--full",
         action="store_true",
-        help="train on full dataset, no validation (for inference)"
+        help="train on full dataset, no validation (for inference); overwrites tr and vr"
+    )
+
+    parser.add_argument(
+        "-M", "--method",
+        choices=["p99", "p995", "mad"],
+        default="p99",
+        help="threshold method [default: p99]"
+    )
+
+    parser.add_argument(
+        "-CW", "--calwindow",
+        type=int,
+        default=30,
+        help="calibration window in days for computing threshold [default: 30]"
     )
 
     parser.add_argument(
         "target",
-        nargs="?",
         help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
 
     args = parser.parse_args()
 
-    if not args.target:
-        parser.print_help()
-        exit(1)
-
     target = args.target
 
     if target.lower() == "all":
-        train_all(args.tr, args.vr, args.full)
+        train_all(args.tr, args.vr, args.full, args.method, args.calwindow)
     else:
-        train_country(target.upper(), args.tr, args.vr, args.full)
+        train_country(target.upper(), args.tr, args.vr, args.full, args.method, args.calwindow)
