@@ -158,7 +158,7 @@ def train_country(
     if full or tr == 100:
         print(f"[INFO] Computing threshold on calibration window...")
         
-        threshold_dict = calibrate_threshold(
+        threshold_dict, _ = calibrate_threshold(
             country, model, scaler, cfg.device, method, cw
         )
 

@@ -75,8 +75,7 @@ def calibrate_threshold(
         threshold = _compute_threshold(method, clean_errors)
         print(f"[INFO] Computed threshold ({method}) = {threshold:.6f}")
 
-        return {
-            "window": ts_cal, 
-            "errors": clean_errors, 
-            "threshold": threshold
-        }
+        threshold_dict = {"device": device, "threshold": threshold}
+        debug_dict = {"window": ts_cal, "errors": clean_errors, }
+
+        return threshold_dict, debug_dict
