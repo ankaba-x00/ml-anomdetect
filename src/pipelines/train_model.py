@@ -158,13 +158,13 @@ def train_country(
     if full or tr == 100:
         print(f"[INFO] Computing threshold on calibration window...")
         
-        threshold = calibrate_threshold(
+        threshold_dict = calibrate_threshold(
             country, model, scaler, cfg.device, method, cw
-        )["threshold"]
+        )
 
         thr_path = FULL_OUT_DIR / f"{country}_cal_threshold.json"
         with open(thr_path, "w") as f:
-            json.dump({"threshold": threshold}, f, indent=2)
+            json.dump(threshold_dict, f, indent=2)
         print(f"[OK] Saved threshold to {thr_path}")
 
         print(f"[DONE] Preparation for inference model for {country}")
