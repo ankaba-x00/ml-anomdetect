@@ -128,15 +128,10 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "target",
-        nargs="?",
         help="<COUNTRY|all> e.g. 'US' to analyse US model, or 'all' to evaluate all country models"
     )
 
     args = parser.parse_args()
-
-    if not args.target:
-        parser.print_help()
-        exit(1)
 
     target = args.target.lower()
 

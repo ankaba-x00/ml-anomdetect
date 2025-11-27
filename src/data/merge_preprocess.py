@@ -212,13 +212,11 @@ if __name__=='__main__':
 
     parser.add_argument(
         "file_key",
-        nargs="?",
         help="file key to process <all|[aibots_crawlers_time, bots_time, ...]>"
     )
 
     parser.add_argument(
         "merge_dir",
-        nargs="?",
         help="merge direction <0=consecutively|1=non-consecutively>"
     )
 
@@ -237,13 +235,13 @@ if __name__=='__main__':
         
         exit(0)
 
-    if args.file_key is None or args.file_key not in ["all", *TIME_DSFILE_MAP.keys()]:
+    if args.file_key not in ["all", *TIME_DSFILE_MAP.keys()]:
         if args.file_key != None:
             print(f"[Error] file_key {args.file_key} cannot be processed.\n")
         parser.print_help()
         exit(1)
 
-    if args.merge_dir is None or args.merge_dir not in ["0", "1"]:
+    if args.merge_dir not in ["0", "1"]:
         print(f"[Error] merge_dir {args.merge_dir} cannot be processed.\n")
         parser.print_help()
         exit(1)

@@ -302,7 +302,7 @@ if __name__ == "__main__":
     BASE_DIR = Path(__file__).resolve().parent
     PROJECT_ROOT = BASE_DIR.parents[1]
     INDIR = PROJECT_ROOT / "datasets" / "processed"
-    OUTDIR = PROJECT_ROOT / "results" / "exploration"
+    OUTDIR = PROJECT_ROOT / "results" / "exploration" / "y2023-2024"
     OUTDIR.mkdir(parents=True, exist_ok=True)
     
     SHOW = False

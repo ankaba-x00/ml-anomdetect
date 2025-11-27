@@ -177,7 +177,6 @@ if __name__=="__main__":
 
     parser.add_argument(
         "file_key",
-        nargs="?",
         help="file key to process [aibots_crawlers_time, anomalies, ...]"
     )
 
@@ -188,11 +187,6 @@ if __name__=="__main__":
         for key in DSFILE_MAP.keys():
             print(f"\t- {key}")
         exit(0)
-
-    if not args.file_key:
-        print(f"[ERROR] file_key {args.file_key} cannot be processed.\n")
-        parser.print_help()
-        exit(1)
 
     FILE_DIR = Path(__file__).resolve().parent
     PROJECT_ROOT = FILE_DIR.parents[1]

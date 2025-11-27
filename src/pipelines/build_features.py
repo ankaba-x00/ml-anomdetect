@@ -20,6 +20,7 @@ Usage:
 from pathlib import Path
 import pandas as pd
 import pickle
+from sklearn.base import TransformerMixin
 from src.data.feature_engineering import (
     COUNTRIES,
     build_feature_matrix,
@@ -43,7 +44,7 @@ SCALER_DIR.mkdir(parents=True, exist_ok=True)
 ##               HELPER                ##
 #########################################
 
-def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame, num_cont: int, cat_dims: list[int], scaler):
+def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame, num_cont: int, cat_dims: list[int], scaler: TransformerMixin):
     """
     Save:
       - continuous scaled features (float32)

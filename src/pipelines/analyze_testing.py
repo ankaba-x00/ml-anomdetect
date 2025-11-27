@@ -204,20 +204,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "-M", "--method", 
         choices=["p99", "p995", "mad"], 
-        default="p99"
+        default="p99",
+        help="threshold method [default: p99]"
     )
 
     parser.add_argument(
         "target",
-        nargs="?",
         help="<COUNTRY|all|none> e.g. 'US' to analyse US model, or 'all' to evaluate all country models"
     )
     
     args = parser.parse_args()
-
-    if not args.target:
-        parser.print_help()
-        exit(1)
 
     target = args.target
 

@@ -58,7 +58,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-n", "--ntrials",
-        nargs="?",
         type=int, 
         default=40, 
         help="number of Optuna trials [default: 40]"
@@ -66,7 +65,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-p", "--pruner",
-        nargs="?",
         type=str, 
         default="median",
         help="<median|halving|hyperband> Optuna pruner strategy [default: median]"
@@ -74,7 +72,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-tr",
-        nargs="?",
         type=int,
         default=75,
         help="dataset ratio for training in %% [default: 75%%]"
@@ -82,7 +79,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-vr",
-        nargs="?",
         type=int,
         default=15,
         help="dataset ratio for validation in %% [default: 15%%]"
@@ -90,17 +86,12 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "target",
-        nargs="?",
         help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
     )
 
     args = parser.parse_args()
 
     target = args.target
-
-    if not target:
-        parser.print_help()
-        exit(1)
     
     if args.pruner not in ["median", "halving", "hyperband"]:
         parser.print_help()

@@ -250,6 +250,6 @@ def tune_country(
         json.dump(cat_dims, f, indent=2)
 
     print(f"\n[OK] Finished tuning for {country}")
-    print(f"[DONE] Saved best model → {out_model_path}")
+    print(f"[DONE] Saved best model to {out_model_path}")
 
     return study

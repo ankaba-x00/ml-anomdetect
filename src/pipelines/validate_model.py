@@ -134,7 +134,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-tr",
-        nargs="?",
         type=int,
         default=75,
         help="dataset ratio for training in %% [default: 75%%]"
@@ -142,7 +141,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-vr",
-        nargs="?",
         type=int,
         default=15,
         help="dataset ratio for validation in %% [default: 15%%]"
@@ -150,15 +148,10 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "target",
-        nargs="?",
         help="<COUNTRY|all> e.g. 'US' to validate US model, or 'all' to evaluate all country models"
     )
 
     args = parser.parse_args()
-
-    if not args.target:
-        parser.print_help()
-        exit(1)
 
     target = args.target
 
