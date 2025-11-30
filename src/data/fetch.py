@@ -108,7 +108,7 @@ def pull_notime_data(TITLE, URL, BASE_PARAMS):
         params["dateEnd"] = window_end.isoformat().replace("+00:00", "Z")
 
         resp = session.get(URL, headers=_headers(), params=params, timeout=30)
-        print(f"  [{idx:02}] {params['dateStart']} → {params['dateEnd']} | status = {resp.status_code}")
+        print(f"  [{idx:02}] {params['dateStart']} to {params['dateEnd']} | status = {resp.status_code}")
 
         if resp.status_code == 200:
             try:
@@ -174,7 +174,7 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
                 print("[ERROR] Request error:", e)
                 break
             
-            print(f"  [{idx:02}] {params['dateStart']} → {params['dateEnd']} | status = {resp.status_code}")
+            print(f"  [{idx:02}] {params['dateStart']} to {params['dateEnd']} | status = {resp.status_code}")
 
             if resp.status_code == 200:
                 try:
@@ -252,7 +252,7 @@ def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2)
             params["dateEnd"]   = window_end.isoformat().replace("+00:00", "Z")
 
             resp = session.get(URL, headers=_headers(), params=params, timeout=30)
-            print(f"  [{idx:02}] {params['dateStart']} → {params['dateEnd']} | status = {resp.status_code}")
+            print(f"  [{idx:02}] {params['dateStart']} to {params['dateEnd']} | status = {resp.status_code}")
 
             if resp.status_code == 200:
                 try:

@@ -131,7 +131,6 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # ------------------------------------
     # 1. load all base series
     # ------------------------------------
-
     s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")
     s_l3t = _load_time_series("l3_target_time", country, "l3_target")
     s_l7 = _load_time_series("l7_time", country, "l7_traffic")
@@ -172,7 +171,6 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # ------------------------------------
     # 2. merge everything
     # ------------------------------------
-
     df = pd.concat([
             s_l3o, s_l3t, s_l7,
             s_http, s_http_auto, s_http_human,
@@ -196,7 +194,6 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # ------------------------------------
     # 4a. local-time daytype + daytime
     # ------------------------------------
-
     iso_series = df.index.to_series().dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Daytype / weekday
@@ -222,7 +219,6 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # ------------------------------------
     # 4b. month + week periodic encodings
     # ------------------------------------
-
     idx_local = conv_iso_to_local(iso_series, country, timezones)
 
     df["month_idx"] = idx_local.dt.month - 1
@@ -231,7 +227,6 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # ------------------------------------
     # 4c. time cyclic encoding
     # ------------------------------------
-
     # local hour-of-day and weekday cyclic
     df["hour_sin"] = np.sin(2 * np.pi * idx_local.dt.hour / 24)
     df["hour_cos"] = np.cos(2 * np.pi * idx_local.dt.hour / 24)
@@ -250,7 +245,6 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     # ------------------------------------
     # 5. rolling aggregates
     # ------------------------------------
-    
     df = df.sort_index()
     df = df.asfreq("h")
 
@@ -295,7 +289,6 @@ def build_feature_matrix(
     # ------------------------------------
     # Separate categorical vs continuous
     # ------------------------------------
-
     categorical_cols = [
         "weekday_idx",
         "daytype_idx",

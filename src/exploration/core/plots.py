@@ -329,13 +329,17 @@ def heatmap_anomalies(
     df['ongoing'] = df['endDates'].isna()
     df['type_code'] = df['types'].map({'AS': 1, 'LOCATION': 0})
 
-    pivots = {
-        "duration": df.pivot_table(index="location", columns="dates", values="duration", aggfunc="mean"),
-        "type": df.pivot_table(index="location", columns="dates", values="type_code", aggfunc="mean"),
-        "ongoing": df.pivot_table(index="location", columns="dates", values="ongoing", aggfunc="max"),
-    }
-    D, T, O = [p.fillna(0 if k != "ongoing" else False).reindex(sorted(p.columns), axis=1)
-           for k, p in pivots.items()]
+    year_start = df["dates"].min().normalize()
+    year_end   = df["dates"].max().normalize()
+    full_range = pd.date_range(start=year_start, end=year_end, freq="D")
+
+    D = df.pivot_table(index="location", columns="dates", values="duration", aggfunc="mean")
+    T = df.pivot_table(index="location", columns="dates", values="type_code", aggfunc="mean")
+    O = df.pivot_table(index="location", columns="dates", values="ongoing", aggfunc="max")
+
+    D = D.reindex(columns=full_range)
+    T = T.reindex(columns=full_range)
+    O = O.reindex(columns=full_range)
         
     norm = Normalize(vmin=0, vmax=np.nanpercentile(df["duration"], 95)) 
 
@@ -347,28 +351,46 @@ def heatmap_anomalies(
     )
 
     fig, ax = plt.subplots(figsize=(30,35))
-    for i, (loc, row) in enumerate(D.iterrows()):
-        for j, (date, dur) in enumerate(row.items()):
-            if np.isnan(dur):
+    for i, location in enumerate(D.index):
+        for j, date in enumerate(full_range):
+            dur = D.loc[location, date]
+            # no anomaly = white cell
+            if pd.isna(dur):
+                rect = mpl.patches.Rectangle(
+                    (j, i), 1, 1,
+                    facecolor="white",
+                    edgecolor="lightgray",
+                    lw=0.2
+                )
+                ax.add_patch(rect)
                 continue
-            tcode, ongoing = T.iloc[i, j], O.iloc[i, j]
+            # anomaly = colored
+            tcode = T.loc[location, date]
+            ongoing_flag = O.loc[location, date]
+
+            # Select colormap
             cmap = orange_cmap if tcode == 1 else teal_cmap
             color = cmap(norm(dur))
-            rect = mpl.patches.Rectangle((j, i), 1, 1, facecolor=color, edgecolor="gray", lw=0.3)
+
+            rect = mpl.patches.Rectangle((j, i), 1, 1,
+                                        facecolor=color,
+                                        edgecolor="gray",
+                                        lw=0.3)
             ax.add_patch(rect)
-            if ongoing:
+            if ongoing_flag:
                 ax.add_patch(
-                    mpl.patches.Rectangle((j, i), 1, 1, facecolor="none", edgecolor="black",
-                                        lw=0.6, hatch="///")
+                    mpl.patches.Rectangle((j, i), 1, 1,
+                                        facecolor="none",
+                                        edgecolor="black",
+                                        lw=0.6,
+                                        hatch="///")
                 )
-    ax.set_xlim(0, len(D.columns))
+    ax.set_xlim(0, len(full_range))
     ax.set_ylim(0, len(D.index))
-    ax.set_xticks(np.arange(len(D.columns)) + 0.5)
+    ax.set_xticks(np.arange(len(full_range)) + 0.5)
     ax.set_yticks(np.arange(len(D.index)) + 0.5)
-    labels = [d.strftime("%m/%d") for d in D.columns]
-    for i, label in enumerate(labels):
-        if i % 3 != 0:
-            labels[i] = ""    
+    labels = [d.strftime("%m/%d") for d in full_range]
+    labels = [label if i % 3 == 0 else "" for i, label in enumerate(labels)]
     ax.set_xticklabels(labels, rotation=90)
     ax.set_yticklabels(D.index)
     ax.invert_yaxis()
@@ -663,6 +685,12 @@ def pca_clusterplot(
 ##             RADAR CHARTS            ##
 #########################################
 
+def _safe_normalize(arr: np.ndarray) -> np.ndarray:
+    if arr.size == 0:
+        return arr
+    vmax = arr.max()
+    return arr / vmax if vmax > 0 else arr
+
 def radarchart_attack_fingerprint(
         L3: pd.DataFrame,
         L7: pd.DataFrame,
@@ -683,11 +711,14 @@ def radarchart_attack_fingerprint(
     # take top interaction countries (by L3+L7 avg)
     combined = L3 + L7
     top = combined.sort_values(ascending=False).head(top_n).index.tolist()
-    vals_L3 = np.array([L3.get(c, 0) for c in top])
-    vals_L7 = np.array([L7.get(c, 0) for c in top])
+    if len(top) == 0:
+        print(f"[WARN] No attackers found for {country} – skipping radar chart.")
+        return
+    vals_L3 = np.array([L3.get(c, 0) for c in top], dtype=float)
+    vals_L7 = np.array([L7.get(c, 0) for c in top], dtype=float)
     # normalize each to 0–1
-    L3n = vals_L3 / vals_L3.max() if vals_L3.max() > 0 else vals_L3
-    L7n = vals_L7 / vals_L7.max() if vals_L7.max() > 0 else vals_L7
+    L3n = _safe_normalize(vals_L3)
+    L7n = _safe_normalize(vals_L7)
 
     N = len(top)
     angles = np.linspace(0, 2 * np.pi, N, endpoint=False)  
