@@ -20,10 +20,9 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 COUNTRIES = [
-    "US","DE","GB","FR","JP","SG","NL","CA","AU","AT",
+    "US","DE","GB","FR","IQ","JP","SG","NL","CA","AU","AT",
     "BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL"
 ]
-
 
 ########################################################
 ##            LOADING + NORMALIZATION HELPERS         ##

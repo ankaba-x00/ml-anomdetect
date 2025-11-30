@@ -41,9 +41,8 @@ from src.models.train import train_autoencoder, save_autoencoder
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 OUT_DIR = PROJECT_ROOT / "results" / "models" / "trained"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-BEST_MODELS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 FULL_OUT_DIR = PROJECT_ROOT / "deployment" / "models"
+BEST_MODELS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 
 
 #########################################
@@ -58,6 +57,7 @@ def train_country(
         method: str, 
         cw: int
     ):
+    global OUT_DIR
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
@@ -125,7 +125,9 @@ def train_country(
             train_cont, train_cat, 
             val_cont, val_cat, 
             cfg
-        )                 
+        )
+        OUT_DIR = OUT_DIR
+        OUT_DIR.mkdir(parents=True, exist_ok=True)            
 
     model_path = OUT_DIR / f"{country}_autoencoder.pt"
     save_autoencoder(model, cfg, model_path)
