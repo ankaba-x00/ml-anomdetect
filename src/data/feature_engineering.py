@@ -86,7 +86,7 @@ def _load_weighted_dist(key: str, country: str, rename: str, mids: dict) -> pd.S
 ##           PROTOCOL FRACTIONS + ENTROPY             ##
 ########################################################
 
-def load_protocol_features(key: str, country: str):
+def load_protocol_features(key: str, country: str) -> pd.DataFrame:
     df = _load_df(key)
     if "regions" in df.columns:
         df = df[df["regions"] == country]
@@ -125,6 +125,7 @@ def load_protocol_features(key: str, country: str):
 ########################################################
 
 def build_country_dataframe(country: str) -> pd.DataFrame:
+    """Builds raw feature matrix as df for a given country."""
     print(f"[INFO] Building base merged DF for country={country}")
 
     # ------------------------------------
@@ -265,10 +266,11 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 
 def build_feature_matrix(
     country: str, 
-    scaler: Optional[TransformerMixin] = None, 
+    df: Optional[pd.DataFrame] = None,
+    scaler: Optional[TransformerMixin] = None
 ) -> tuple[pd.DataFrame, pd.DataFrame, int, dict, TransformerMixin]:
     """
-    Build feature matrix for a given country.
+    Build feature matrix and scaler for a given country.
     Returns
     -------
     X_cont : pd.DataFrame
@@ -283,7 +285,8 @@ def build_feature_matrix(
     scaler : RobustScaler
         Fitted scaler for continuous features.
     """
-    df = build_country_dataframe(country).copy()
+    if df is None:
+        df = build_country_dataframe(country).copy()
 
     # ------------------------------------
     # Separate categorical vs continuous

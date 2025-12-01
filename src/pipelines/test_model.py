@@ -123,7 +123,7 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
     print(f"Detected {len(starts)} anomaly intervals\n")
 
     for s, e in zip(starts, ends):
-        print(f"  > Interval {ts_eval[s]} - {ts_eval[e-1]}  ({e-s} samples)")
+        print(f"  > Interval {ts_eval[s]} - {ts_eval[e]} ({e-s} anomalies)")
 
     # --------------------
     # Save errors CSV

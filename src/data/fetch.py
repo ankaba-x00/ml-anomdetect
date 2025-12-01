@@ -10,7 +10,7 @@ Usage:
     python -m src.data.fetch
 """
 
-import time, requests, json, os
+import requests, json, os
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
