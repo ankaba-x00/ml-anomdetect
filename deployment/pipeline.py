@@ -40,7 +40,7 @@ def live_loop(
     # -------------------------
     # Print summary
     # -------------------------
-    print(f"\n--- Result threshold {bundle["method"]} ---")
+    print(f"\n--- Result threshold {bundle['method']}---")
     print(f"Threshold = {threshold:.6f}")
     print(f"Detected {mask.sum()} anomalous samples")
     print(f"Detected {len(starts)} anomaly intervals\n")
