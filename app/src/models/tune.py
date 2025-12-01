@@ -3,10 +3,10 @@ from optuna.pruners import MedianPruner, SuccessiveHalvingPruner, HyperbandPrune
 from pathlib import Path
 import numpy as np
 from dataclasses import asdict
-from src.data.feature_engineering import build_feature_matrix
-from src.models.autoencoder import AEConfig
-from src.models.train import train_autoencoder, save_autoencoder
-from src.data.split import timeseries_seq_split
+from app.src.data.feature_engineering import build_feature_matrix
+from app.src.models.autoencoder import AEConfig
+from app.src.models.train import train_autoencoder, save_autoencoder
+from app.src.data.split import timeseries_seq_split
 
 
 #########################################
@@ -14,7 +14,7 @@ from src.data.split import timeseries_seq_split
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[1]
+PROJECT_ROOT = FILE_DIR.parents[2]
 OUT_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 TRIAL_HIST_DIR = OUT_DIR / "trial_history"

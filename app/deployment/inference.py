@@ -2,9 +2,9 @@ from pathlib import Path
 from typing import Dict, Any
 import json, pickle
 import numpy as np
-from src.models.autoencoder import TabularAutoencoder
-from src.models.evaluate import reconstruction_error, anomaly_mask, find_anomalies
-from src.models.train import load_autoencoder
+from app.src.models.autoencoder import TabularAutoencoder
+from app.src.models.evaluate import reconstruction_error, anomaly_mask, find_anomalies
+from app.src.models.train import load_autoencoder
 
 
 #########################################

@@ -8,7 +8,7 @@ Outputs:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m src.data.preprocess <all|key>
+    python -m app.src.data.preprocess <all|key>
 """
 
 import json

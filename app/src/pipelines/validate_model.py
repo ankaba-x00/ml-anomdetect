@@ -16,10 +16,10 @@ import pickle, json
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from src.data.feature_engineering import build_feature_matrix, COUNTRIES
-from src.models.evaluate import reconstruction_error
-from src.models.train import load_autoencoder
-from src.data.split import timeseries_seq_split
+from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
+from app.src.models.evaluate import reconstruction_error
+from app.src.models.train import load_autoencoder
+from app.src.data.split import timeseries_seq_split
 
 
 #########################################
@@ -27,7 +27,7 @@ from src.data.split import timeseries_seq_split
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[1]
+PROJECT_ROOT = FILE_DIR.parents[2]
 MODELS_DIR = PROJECT_ROOT / "results" / "models" / "trained"
 OUT_DIR = PROJECT_ROOT / "results" / "models" / "validated"
 OUT_DIR.mkdir(parents=True, exist_ok=True)

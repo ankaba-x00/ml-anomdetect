@@ -29,8 +29,8 @@ Usage:
     python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
-from src.data.feature_engineering import COUNTRIES
-from src.models.tune import tune_country
+from app.src.data.feature_engineering import COUNTRIES
+from app.src.models.tune import tune_country
 
 
 #########################################

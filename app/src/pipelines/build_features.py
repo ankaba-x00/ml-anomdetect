@@ -1,4 +1,4 @@
-#!/usr/bin/env python3#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Builds and saves feature matrix for all countries:
 - loads processed time-series data
@@ -21,7 +21,7 @@ from pathlib import Path
 import pandas as pd
 import pickle
 from sklearn.base import TransformerMixin
-from src.data.feature_engineering import (
+from app.src.data.feature_engineering import (
     COUNTRIES,
     build_feature_matrix,
 )

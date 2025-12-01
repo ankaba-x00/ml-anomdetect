@@ -20,10 +20,10 @@ import pickle, json, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from src.data.feature_engineering import build_feature_matrix, COUNTRIES
-from src.models.train import load_autoencoder
-from src.models.evaluate import apply_model
-from src.data.split import timeseries_seq_split
+from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
+from app.src.models.train import load_autoencoder
+from app.src.models.evaluate import apply_model
+from app.src.data.split import timeseries_seq_split
 
 
 #########################################
@@ -31,7 +31,7 @@ from src.data.split import timeseries_seq_split
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[1]
+PROJECT_ROOT = FILE_DIR.parents[2]
 
 TRAINED_DIR = PROJECT_ROOT / "results" / "models" / "trained"
 TUNED_DIR = PROJECT_ROOT / "results" / "models" / "tuned"

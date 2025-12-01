@@ -27,11 +27,11 @@ import json, pickle
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from src.data import timeseries_seq_split
-from src.data.feature_engineering import COUNTRIES, build_feature_matrix
-from src.models.calibrate import calibrate_threshold
-from src.models.autoencoder import AEConfig
-from src.models.train import train_autoencoder, save_autoencoder
+from app.src.data import timeseries_seq_split
+from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
+from app.src.models.calibrate import calibrate_threshold
+from app.src.models.autoencoder import AEConfig
+from app.src.models.train import train_autoencoder, save_autoencoder
 
 
 #########################################
@@ -39,9 +39,9 @@ from src.models.train import train_autoencoder, save_autoencoder
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[1]
+PROJECT_ROOT = FILE_DIR.parents[2]
 OUT_DIR = PROJECT_ROOT / "results" / "models" / "trained"
-FULL_OUT_DIR = PROJECT_ROOT / "deployment" / "models"
+FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "models"
 BEST_MODELS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 
 

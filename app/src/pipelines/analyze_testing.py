@@ -19,10 +19,10 @@ import json, pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from src.data.feature_engineering import build_country_dataframe
-from src.data.split import timeseries_seq_split
-from src.data.feature_engineering import COUNTRIES
-from src.models.analysis import (
+from app.src.data.feature_engineering import build_country_dataframe
+from app.src.data.split import timeseries_seq_split
+from app.src.data.feature_engineering import COUNTRIES
+from app.src.models.analysis import (
     plot_error_curve,
     plot_intervals,
     plot_error_hist,
@@ -35,7 +35,7 @@ from src.models.analysis import (
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[1]
+PROJECT_ROOT = FILE_DIR.parents[2]
 TESTED_DIR = PROJECT_ROOT / "results" / "models" / "tested"
 ANALYSIS_TEST_DIR = TESTED_DIR / "analysis"
 ANALYSIS_TEST_DIR.mkdir(parents=True, exist_ok=True)

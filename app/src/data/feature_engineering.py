@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -7,9 +5,9 @@ from functools import lru_cache
 from typing import Optional
 from sklearn.base import TransformerMixin
 from sklearn.preprocessing import RobustScaler
-from src.data.io_utils import conv_pkltodf
-from src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
-from src.exploration.core.params import timezones
+from app.src.data.io_utils import conv_pkltodf
+from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
+from app.src.exploration.core.params import timezones
 
 
 ########################################################
@@ -20,7 +18,7 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 COUNTRIES = [
-    "US","DE","GB","FR","JP","SG","NL","CA","AU","AT",
+    "US","SE","DE","GB","FR","JP","SG","NL","CA","AU","AT",
     "BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL","IQ"
 ]
 

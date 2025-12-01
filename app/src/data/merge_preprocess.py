@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Merges 2 timeseries datasets fetched from Cloudflare and preprocesses to 
 internal df structure
@@ -9,14 +10,13 @@ Outputs:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m src.data.merge_preprocess
+    python -m app.src.data.merge_preprocess
 """
 
 import json
 import numpy as np
-import pickle
 from pathlib import Path
-from src.data.preprocess import  read_json_time_csplit, save_data
+from app.src.data.preprocess import  read_json_time_csplit, save_data
 
 #########################################
 ##                PARAMS               ##

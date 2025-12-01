@@ -5,29 +5,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from sklearn.base import TransformerMixin
-from src.data.fetch import _headers, _requests_session, _print_range
-from src.data.feature_engineering import build_feature_matrix
-from src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
-from src.exploration.core.params import timezones
-
-#########################################
-##                CONFIG               ##
-#########################################
-
-env_path = Path(__file__).resolve().parent / ".env"
-load_dotenv(env_path)
-API_TOKEN = os.getenv("API_TOKEN")
-if not API_TOKEN:
-    raise EnvironmentError("[ERROR] API_TOKEN not found in environment (.env)")
-
-
-#########################################
-##                PARAMS               ##
-#########################################
-
-FILE_DIR = Path(__file__).resolve().parent
-OUT_DIR = FILE_DIR / "data" / "featured"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+from app.src.data.fetch import _headers, _requests_session
+from app.src.data.feature_engineering import build_feature_matrix
+from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
+from app.src.exploration.core.params import timezones
 
 
 #########################################

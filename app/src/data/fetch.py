@@ -7,7 +7,7 @@ Outputs:
     raw files : datasets/raw/<dataset>.json
 
 Usage: 
-    python -m src.data.fetch
+    python -m app.src.data.fetch
 """
 
 import requests, json, os
@@ -23,7 +23,7 @@ from urllib3.util.retry import Retry
 ##                CONFIG               ##
 #########################################
 
-env_path = Path(__file__).resolve().parents[2] / ".env"
+env_path = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(env_path)
 API_TOKEN = os.getenv("API_TOKEN")
 if not API_TOKEN:
@@ -58,6 +58,7 @@ def _get_output_path(title: str) -> Path:
     return output_dir / f"{title}_pull-{pull_date}.json"
 
 def _headers():
+    global API_TOKEN
     return {
         "Authorization": f"Bearer {API_TOKEN}",
         "accept": "application/json",

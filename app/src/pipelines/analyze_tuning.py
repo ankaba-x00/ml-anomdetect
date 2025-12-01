@@ -26,8 +26,8 @@ Usage:
 import json, optuna
 import pandas as pd
 from pathlib import Path
-from src.data.feature_engineering import COUNTRIES
-from src.models.analysis import (
+from app.src.data.feature_engineering import COUNTRIES
+from app.src.models.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
     plot_loss_curves_all_trials,
@@ -42,7 +42,7 @@ from src.models.analysis import (
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[1]
+PROJECT_ROOT = FILE_DIR.parents[2]
 TUNED_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 ANALYSIS_TUNE_DIR = TUNED_DIR / "analysis"
 ANALYSIS_TUNE_DIR.mkdir(parents=True, exist_ok=True)

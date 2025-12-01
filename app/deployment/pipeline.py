@@ -1,8 +1,16 @@
-import time
+#!/usr/bin/env python3
+"""
+Runs interference pipeline as CLI and predicts anomalies for specified date.
+
+Usage:
+    python -m app.deployment.pipeline [-d <date>] <COUNTRY>
+"""
+
 import numpy as np
 from datetime import datetime, timezone
-from deployment.fetcher import run_fetcher
-from deployment.inference import load_inference_bundle, run_inference
+from app.deployment.fetcher import run_fetcher
+from app.deployment.inference import load_inference_bundle, run_inference
+
 
 def detect_anomalies(
         country: str, 
@@ -56,8 +64,9 @@ def detect_anomalies(
         # Return summary for GUI
         # -------------------------
         return {
+            "country": country,
             "threshold": threshold,
-            "num_anomalues": mask.sum(),
+            "num_anomalies": mask.sum(),
             "intervals" : intervals,
             "status": "ok"
         }
@@ -76,7 +85,7 @@ def detect_anomalies(
 if __name__=="__main__":
     import argparse, sys
     from datetime import datetime, timezone, timedelta
-    from src.data.feature_engineering import COUNTRIES
+    from app.src.data.feature_engineering import COUNTRIES
 
 
     def _is_valid_date(date: str) -> bool:

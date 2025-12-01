@@ -4,7 +4,7 @@ from typing import Any, Optional
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-from src.models.autoencoder import AEConfig, TabularAutoencoder
+from app.src.models.autoencoder import AEConfig, TabularAutoencoder
 
 
 #########################################
