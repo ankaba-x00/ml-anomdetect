@@ -384,7 +384,7 @@ def run_fetcher(country: str, date_from: datetime, date_to: datetime, scaler: Tr
     
     raw_df = run_build(country, object)
     
-    X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(country, raw_df, scaler)
+    X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(country, scaler=scaler, df=raw_df)
     print(f"[INFO] Feature matrix for {country} ready.")
 
     return X_cont, X_cat, num_cont, cat_dims, scaler

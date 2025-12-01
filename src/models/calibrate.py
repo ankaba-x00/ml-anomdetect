@@ -33,7 +33,7 @@ def calibrate_threshold(
         # ------------------------------------
         # Apply trained scaler on raw feature matrix
         # ------------------------------------ 
-        X_cont, X_cat, _, _, _ = build_feature_matrix(country, scaler)
+        X_cont, X_cat, _, _, _ = build_feature_matrix(country, scaler=scaler)
         Xc_np = X_cont.values.astype(np.float32)
         Xk_np = X_cat.values.astype(np.int64)
         ts = X_cont.index

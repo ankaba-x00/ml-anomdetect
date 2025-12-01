@@ -266,8 +266,8 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 
 def build_feature_matrix(
     country: str, 
-    df: Optional[pd.DataFrame] = None,
-    scaler: Optional[TransformerMixin] = None
+    scaler: Optional[TransformerMixin] = None, 
+    df: Optional[pd.DataFrame] = None
 ) -> tuple[pd.DataFrame, pd.DataFrame, int, dict, TransformerMixin]:
     """
     Build feature matrix and scaler for a given country.
