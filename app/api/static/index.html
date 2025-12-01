@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anomaly Detector</title>
+<link rel="stylesheet" href="./style.css" />
+<script src="/script.js" defer></script>
+</head>
+<body>
+
+<div class="container">
+  <h2>Anomaly Detection Dashboard</h2>
+  <label>Country</label>
+  <select id="country" class="country"></select>
+  <label>Date</label>
+  <input type="date" id="date" class="date"/>
+  <button onclick="runInference()">Run Detection</button>
+  <p id="loading" class="loading"></p>
+  <div id="result" class="result-box"></div>
+</div>
+</body>
+</html>
