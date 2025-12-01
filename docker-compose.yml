@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    container_name: anomaly_api
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - mlnet
+
+networks:
+  mlnet:
+    driver: bridge

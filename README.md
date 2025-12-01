@@ -27,3 +27,15 @@ run the following commands in $PROJECT_ROOT:
                         python -m scripts.run_tune
 5. Run inference stage
                         python -m scripts.run_inference
+
+
+
+## License
+
+This project is strictly proprietary.
+
+Only personal, non-commercial use is permitted.  
+Academic use, research use, redistribution, modification, and commercial use  
+are expressly forbidden.  
+
+See the LICENSE file for full terms.

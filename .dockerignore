@@ -1,0 +1,16 @@
+# Ignore Python venv
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+
+app/datasets/
+app/tests/
+results/
+scripts/
+
+.env
+stdout_*
+docker-compose.yml
+Dockerfile

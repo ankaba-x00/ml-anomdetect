@@ -6,10 +6,10 @@ __pycache__/
 .venv/
 requirements.txt
 
-datasets/raw/*
-datasets/processed/* 
-datasets/featured/*
-datasets/scalers/*
+app/datasets/raw/*
+app/datasets/processed/* 
+app/datasets/featured/*
+app/datasets/scalers/*
 
 results/exploration/y2022-2023
 results/models/trained/*
@@ -17,6 +17,6 @@ results/models/validated/*
 results/models/tuned/*
 results/models/tested/*
 
-deployment/models/*
+app/deployment/models/*
 
 stdout_*
