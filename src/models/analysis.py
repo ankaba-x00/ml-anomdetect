@@ -57,6 +57,10 @@ def plot_training_curves(
     lrs = np.array(history["learning_rates"])
     best_epoch = history.get("best_epoch", None)
 
+    if len(epochs) > len(lrs):
+        diff = int(len(epochs) - len(lrs))
+        lrs = np.concatenate([lrs, np.zeros(diff)])
+    
     # -------------------------------
     # 1. Loss curves
     # -------------------------------
