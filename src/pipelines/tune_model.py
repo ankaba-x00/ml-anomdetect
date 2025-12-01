@@ -29,7 +29,6 @@ Usage:
     python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
-import argparse
 from src.data.feature_engineering import COUNTRIES
 from src.models.tune import tune_country
 
@@ -54,6 +53,8 @@ def tune_all(trials: int, pruner: str, tr: int, vr: int):
 
 
 if __name__ == "__main__":
+    import argparse
+
     parser = argparse.ArgumentParser(description="Tune AE hyperparameters for single or for all countries.")
 
     parser.add_argument(
