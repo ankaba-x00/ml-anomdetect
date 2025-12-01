@@ -28,7 +28,7 @@ function validateDate(dateStr) {
         return { ok: false, msg: "Invalid date format." };
     }
 
-    const MIN = new Date("2025-11-14T00:00:00Z");
+    const MIN = new Date("2025-11-15T00:00:00Z");
 
     const today = new Date();
     const MAX = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);

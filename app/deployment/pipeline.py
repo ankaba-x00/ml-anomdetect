@@ -56,7 +56,7 @@ def detect_anomalies(
 
         intervals = []
         for s, e in zip(starts, ends):
-            interval_str = f"{ts[s]} - {ts[e]}  ({e-s} anomalies)"
+            interval_str = f"{ts[s]} - {ts[e-1]}  ({e-s} anomalies)"
             intervals.append(interval_str)
             print("  > Interval", interval_str)
 
@@ -73,12 +73,20 @@ def detect_anomalies(
     except Exception as e:
         print(f"[ERROR] Inference failed internally: {e}")
         return {
-            "status": "error"
+            "country": country,
+            "threshold": None,
+            "num_anomalies": 0,
+            "intervals": [],
+            "status": f"error: {e}"
         }
     except BaseException as e:
         print(f"[ERROR] Inference failed on system-level: {e}")
         return {
-            "status": "error"
+            "country": country,
+            "threshold": None,
+            "num_anomalies": 0,
+            "intervals": [],
+            "status": f"error: {e}"
         }
 
 
