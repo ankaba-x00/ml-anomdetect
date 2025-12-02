@@ -31,10 +31,10 @@ def calibrate_threshold(
         """Computes anomaly threshold for a given model on a specified calibration window and threshold method."""
         
         # ------------------------------------
-        # Apply trained scaler on raw feature matrix
+        # Build raw feature matrix
         # ------------------------------------ 
-        X_cont, X_cat, _, _, _ = build_feature_matrix(country, scaler=scaler)
-        Xc_np = X_cont.values.astype(np.float32)
+        X_cont, X_cat, _, _ = build_feature_matrix(country)
+        Xc_np = X_cont.values.astype(np.float64)
         Xk_np = X_cat.values.astype(np.int64)
         ts = X_cont.index
 
@@ -52,11 +52,16 @@ def calibrate_threshold(
         print(f"[INFO] Calibration samples: {len(X_cont_cal)}")
 
         # ------------------------------------
+        # Apply scaler from fit_transforming full data on cont data
+        # ------------------------------------ 
+        X_cont_cal_scld = scaler.transform(X_cont_cal).astype(np.float32)
+
+        # ------------------------------------
         # Compute recon error in window
         # ------------------------------------ 
         errors = reconstruction_error(
             model,
-            X_cont_cal,
+            X_cont_cal_scld,
             X_cat_cal,
             device
         )

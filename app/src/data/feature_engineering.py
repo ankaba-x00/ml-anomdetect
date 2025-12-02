@@ -4,7 +4,6 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Optional
 from sklearn.base import TransformerMixin
-from sklearn.preprocessing import RobustScaler
 from app.src.data.io_utils import conv_pkltodf
 from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
 from app.src.exploration.core.params import timezones
@@ -18,9 +17,12 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 COUNTRIES = [
-    "US","SE","DE","GB","FR","JP","SG","NL","CA","AU","AT",
-    "BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL","IQ"
+    "US","SE","DE","GB","FR","JP","SG","NL","CA","AU","AT","MM","BR","CH","TW","IN","ZA","KR","SE","IT","ES","PL","IQ","TZ"
 ]
+
+# COUNTRIES = [
+#     "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ", "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS", "BT", "BV", "BW", "BY", "BZ", "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN", "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE", "EG", "EH", "ER", "ES", "ET", "FI", "FJ", "FK", "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF", "GG", "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY", "HK", "HM", "HN", "HR", "HT", "HU", "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT", "JE", "JM", "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR", "KW", "KY", "KZ", "LA", "LB", "LC", "LI", "LK", "LR", "LS", "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK", "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", "MX", "MY", "MZ", "NA", "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ", "OM", "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", "PN", "PR", "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW", "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY", "SZ", "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO", "TR", "TT", "TV", "TW", "TZ", "UA", "UG", "UM", "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI", "VN", "VU", "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW"
+# ]
 
 ########################################################
 ##            LOADING + NORMALIZATION HELPERS         ##
@@ -264,15 +266,14 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 
 def build_feature_matrix(
     country: str, 
-    scaler: Optional[TransformerMixin] = None, 
     df: Optional[pd.DataFrame] = None
-) -> tuple[pd.DataFrame, pd.DataFrame, int, dict, TransformerMixin]:
+) -> tuple[pd.DataFrame, pd.DataFrame, int, dict]:
     """
-    Build feature matrix and scaler for a given country.
+    Build feature matrix for a given country.
     Returns
     -------
     X_cont : pd.DataFrame
-        Scaled continuous features (float64)
+        Continuous features (float64)
     X_cat : pd.DataFrame
         Categorical index features (int64 as required for embeddings in pytorch), columns in a FIXED order.
     num_cont : int
@@ -280,8 +281,6 @@ def build_feature_matrix(
     cat_dims : dict[str, int]
         Mapping from categorical column name -> cardinality.
         Keys match X_cat.columns exactly and order defines embedding order.
-    scaler : RobustScaler
-        Fitted scaler for continuous features.
     """
     if df is None:
         df = build_country_dataframe(country).copy()
@@ -303,28 +302,13 @@ def build_feature_matrix(
     df_cat = df[categorical_cols].astype("int64")
 
     # ------------------------------------
-    # Fit scaler on continuous features
-    # ------------------------------------
-    if scaler is None:
-        scaler = RobustScaler()
-        X_cont_scaled = scaler.fit_transform(df_cont)
-    else:
-        X_cont_scaled = scaler.transform(df_cont)
-
-    X_cont_scaled = pd.DataFrame(
-        X_cont_scaled,
-        index=df_cont.index,
-        columns=df_cont.columns
-    )
-
-    # ------------------------------------
     # Generate embedding metadata
     # ------------------------------------
-    num_cont = X_cont_scaled.shape[1]
+    num_cont = df_cont.shape[1]
     # category cardinalities as a dict[col_name: cardinality]
     cat_dims = {
         col: int(df_cat[col].max()) + 1 for col in categorical_cols
     }
 
-    return X_cont_scaled, df_cat, num_cont, cat_dims, scaler
+    return df_cont, df_cat, num_cont, cat_dims
  

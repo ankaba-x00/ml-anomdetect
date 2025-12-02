@@ -2,6 +2,7 @@ import json, pickle, torch, optuna
 from optuna.pruners import MedianPruner, SuccessiveHalvingPruner, HyperbandPruner
 from pathlib import Path
 import numpy as np
+from sklearn.preprocessing import RobustScaler
 from dataclasses import asdict
 from app.src.data.feature_engineering import build_feature_matrix
 from app.src.models.autoencoder import AEConfig
@@ -50,8 +51,8 @@ def objective(
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
-    X_cont_df, X_cat_df, num_cont, cat_dims, _ = build_feature_matrix(country)
-    Xc_np = X_cont_df.values.astype(np.float32)
+    X_cont_df, X_cat_df, num_cont, cat_dims, = build_feature_matrix(country)
+    Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)
 
     # ------------------------------------
@@ -63,6 +64,13 @@ def objective(
         train_ratio=tr/100,
         val_ratio=vr/100
     )
+
+    # ------------------------------------
+    # Fit scaler on cont features and tranform data
+    # ------------------------------------
+    scaler = RobustScaler()
+    Xc_train_scald = scaler.fit_transform(Xc_train).astype(np.float32)
+    Xc_val_scald = scaler.transform(Xc_val).astype(np.float32)
 
     # ------------------------------------
     # Hyperparameter search space
@@ -115,8 +123,8 @@ def objective(
     # Train model
     # ------------------------------------
     _, history = train_autoencoder(
-        Xc_train, Xk_train,
-        Xc_val, Xk_val, 
+        Xc_train_scald, Xk_train,
+        Xc_val_scald, Xk_val, 
         cfg
     )
 
@@ -125,8 +133,8 @@ def objective(
     with open(trial_history_path, "w") as f:
         json.dump(history, f, indent=2)
 
-    #final_val_loss = history["val_loss"][-1]
-    final_val_loss = min(history["val_loss"])
+    best_epoch = np.argmin(history["val_loss"])
+    final_val_loss = history["val_loss"][best_epoch]
 
     trial.report(final_val_loss, step=0)
     if trial.should_prune():
@@ -185,8 +193,8 @@ def tune_country(
     # ------------------------------------
     # Retrain best model fully
     # ------------------------------------
-    X_cont_df, X_cat_df, num_cont, cat_dims, scaler = build_feature_matrix(country)
-    Xc_np = X_cont_df.values.astype(np.float32)
+    X_cont_df, X_cat_df, num_cont, cat_dims = build_feature_matrix(country)
+    Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)
 
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
@@ -195,6 +203,10 @@ def tune_country(
         train_ratio=tr/100,
         val_ratio=vr/100
     )
+
+    scaler = RobustScaler()
+    Xc_train_scald = scaler.fit_transform(Xc_train).astype(np.float32)
+    Xc_val_scald = scaler.transform(Xc_val).astype(np.float32)
 
     p = study.best_trial.params
     depth = p["depth"]
@@ -222,8 +234,8 @@ def tune_country(
     )
 
     best_model, best_history = train_autoencoder(
-        Xc_train, Xk_train, 
-        Xc_val, Xk_val, 
+        Xc_train_scald, Xk_train, 
+        Xc_val_scald, Xk_val, 
         best_cfg
     )
 

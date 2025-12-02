@@ -33,7 +33,6 @@ from app.src.data.split import timeseries_seq_split
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
 
-TRAINED_DIR = PROJECT_ROOT / "results" / "models" / "trained"
 TUNED_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
 OUT_DIR = PROJECT_ROOT / "results" / "models" / "tested"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,23 +63,21 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
 
     model, cfg = load_autoencoder(model_path)
 
-    # scaler provides num_cont for splitting
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
+
     with open(catdims_path, "r") as f:
         cat_dims = json.load(f)
-
-    device = torch.device(cfg.device)
 
     # --------------------
     # Load feature matrix
     # --------------------
-    X_cont_df, X_cat_df, _, cat_dims2, _ = build_feature_matrix(country, scaler=scaler)
+    X_cont_df, X_cat_df, _, cat_dims2 = build_feature_matrix(country)
 
     # ensure consistent categorical structure
     assert cat_dims2 == cat_dims, "[Error] Saved cat_dims mismatch — rebuild features."
 
-    X_cont = X_cont_df.values.astype(np.float32)
+    X_cont = X_cont_df.values.astype(np.float64)
     X_cat = X_cat_df.values.astype(np.int64)
     ts = X_cont_df.index
 
@@ -93,17 +90,21 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
         train_ratio=tr/100,
         val_ratio=vr/100
     )
-    X_eval_cont = Xc_test
-    X_eval_cat = Xk_test
+
     ts_eval = ts[len(Xc_train)+len(Xc_val):]
     
+    # --------------------
+    # Apply scaler on cont features and tranform data
+    # --------------------
+    Xc_test_scald = scaler.transform(Xc_test).astype(np.float32)
+
     # --------------------
     # Run anomaly detection
     # --------------------
     results = apply_model(
         model=model,
-        X_cont=X_eval_cont,
-        X_cat=X_eval_cat,
+        X_cont=Xc_test_scald,
+        X_cat=Xk_test,
         method=method,
         device=cfg.device,
     )

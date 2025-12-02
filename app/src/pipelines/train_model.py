@@ -12,12 +12,12 @@ Outputs:
                  results/models/trained/<COUNTRY_CODE>_cat_dims.json
                  results/models/trained/<COUNTRY_CODE>_num_cont.json
                  results/models/trained/<COUNTRY_CODE>_training_history.json
-    for inference: deployment/models/<COUNTRY_CODE>_autoencoder.pt
-                   deployment/models/<COUNTRY_CODE>_scaler_cont.pkl
-                   deployment/models/<COUNTRY_CODE>_cat_dims.json
-                   deployment/models/<COUNTRY_CODE>_num_cont.json
-                   deployment/models/<COUNTRY_CODE>_training_history.json
-                   deployment/models/<COUNTRY_CODE>_cal_threshold.json"
+    for inference: app/deployment/models/<COUNTRY_CODE>_autoencoder.pt
+                   app/deployment/models/<COUNTRY_CODE>_scaler_cont.pkl
+                   app/deployment/models/<COUNTRY_CODE>_cat_dims.json
+                   app/deployment/models/<COUNTRY_CODE>_num_cont.json
+                   app/deployment/models/<COUNTRY_CODE>_training_history.json
+                   app/deployment/models/<COUNTRY_CODE>_cal_threshold.json"
 
 Usage:
     python -m src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] <COUNTRY_CODE|all> [| tee stdout_train.txt]
@@ -26,7 +26,7 @@ Usage:
 import json, pickle
 from pathlib import Path
 import numpy as np
-import pandas as pd
+from sklearn.preprocessing import RobustScaler
 from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
 from app.src.models.calibrate import calibrate_threshold
@@ -65,8 +65,8 @@ def train_country(
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
-    X_cont, X_cat, num_cont, cat_dims, scaler = build_feature_matrix(country)
-    Xc_np = X_cont.values.astype(np.float32)
+    X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
+    Xc_np = X_cont.values.astype(np.float64)
     Xk_np = X_cat.values.astype(np.int64)
       
     # ------------------------------------
@@ -106,27 +106,49 @@ def train_country(
     # Full OR Split : Train model
     # ------------------------------------
     if full or tr == 100:
+        # ------------------------------------
+        # Fit scaler on cont features and tranform data
+        # ------------------------------------
+        scaler = RobustScaler()
+        Xc_np_scald = scaler.fit_transform(Xc_np).astype(np.float32)
+
+        # ------------------------------------
+        # Train model
+        # ------------------------------------
         print(f"[INFO] Dataset not split: 100% train.")
         model, history = train_autoencoder(
-            Xc_np, Xk_np,
+            Xc_np_scald, Xk_np,
             None, None,
             cfg
         )
         OUT_DIR = FULL_OUT_DIR
         OUT_DIR.mkdir(parents=True, exist_ok=True)
     else:
+        # ------------------------------------
+        # Split dataset
+        # ------------------------------------
         print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test.")
         (train_cont, train_cat), (val_cont, val_cat), _ = timeseries_seq_split(
             Xc_np, Xk_np,
             train_ratio=tr/100,
             val_ratio=vr/100,
         )
+
+        # ------------------------------------
+        # Fit scaler on cont features and tranform data
+        # ------------------------------------
+        scaler = RobustScaler()
+        train_cont_scald = scaler.fit_transform(train_cont).astype(np.float32)
+        val_cont_scald = scaler.transform(val_cont).astype(np.float32)
+
+        # ------------------------------------
+        # Train model
+        # ------------------------------------
         model, history = train_autoencoder(
-            train_cont, train_cat, 
-            val_cont, val_cat, 
+            train_cont_scald, train_cat, 
+            val_cont_scald, val_cat, 
             cfg
         )
-        OUT_DIR = OUT_DIR
         OUT_DIR.mkdir(parents=True, exist_ok=True)            
 
     model_path = OUT_DIR / f"{country}_autoencoder.pt"
