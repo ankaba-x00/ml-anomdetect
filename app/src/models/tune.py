@@ -75,20 +75,22 @@ def objective(
     # ------------------------------------
     # Hyperparameter search space
     # ------------------------------------
-    latent_dim = trial.suggest_categorical("latent_dim", [4, 8, 12, 16, 24, 32, 48, 64])
+    latent_dim = trial.suggest_categorical("latent_dim", [4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192])
     depth = trial.suggest_int("depth", 1, 4)
+    possible_h = [int(latent_dim * m) for m in [2, 3, 4, 6, 8, 12]]
+    possible_h = [h for h in possible_h if 32 <= h <= 1024]
     hidden_dims = [
-        trial.suggest_categorical(f"h{i}", [64, 128, 256, 384, 512, 768])
+        trial.suggest_categorical(f"h{i}", possible_h)
         for i in range(depth)
     ]
     dropout = trial.suggest_float("dropout", 0.0, 0.35)
     lr = trial.suggest_float("lr", 1e-5, 3e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-4, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512])
+    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512, 1024])
     patience = trial.suggest_int("patience", 4, 10)
     embedding_dim = trial.suggest_categorical("embedding_dim", [4, 8, 12, 16, 24])
-    noise_std = trial.suggest_float("noise_std", 0.0, 0.10)
-    residual_strength = trial.suggest_float("residual_strength", 0.0, 0.3)
+    noise_std = trial.suggest_float("noise_std", 0.0, 0.20)
+    residual_strength = trial.suggest_float("residual_strength", 0.0, 0.5)
     optimizer = trial.suggest_categorical("optimizer", ["adam", "adamw"])
     lr_scheduler = trial.suggest_categorical(
         "lr_scheduler",
