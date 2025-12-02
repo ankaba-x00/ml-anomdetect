@@ -306,8 +306,8 @@ def plot_best_trial_learning_curve(
     """Lineplot train/val learning curves of best trial."""
     apply_custom_theme()
 
-    train_loss = best_history["train_loss"]
-    val_loss = best_history["val_loss"]
+    train_loss = np.array(best_history["train_loss"], dtype=float)
+    val_loss   = np.array(best_history["val_loss"], dtype=float)
     epochs = np.arange(1, len(train_loss) + 1)
     best_epoch = best_history.get("best_epoch")
 
