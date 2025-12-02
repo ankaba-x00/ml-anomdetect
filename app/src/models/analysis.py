@@ -51,53 +51,76 @@ def plot_training_curves(
     """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
     apply_custom_theme()
 
-    epochs = np.arange(1, len(history["train_loss"]) + 1)
-    train_loss = np.array(history["train_loss"])
-    val_loss = np.array(history["val_loss"])
-    lrs = np.array(history["learning_rates"])
+    train_loss = np.array(history["train_loss"], dtype=float)
+    val_loss   = np.array(history["val_loss"], dtype=float)
+    lrs        = np.array(history["learning_rates"], dtype=float)
+    epochs     = np.arange(1, len(train_loss) + 1)
     best_epoch = history.get("best_epoch", None)
 
-    if len(epochs) > len(lrs):
-        diff = int(len(epochs) - len(lrs))
-        lrs = np.concatenate([lrs, np.zeros(diff)])
-    
+    # Ensure lr schedule length matches number of epochs
+    if len(lrs) < len(epochs):
+        pad = np.full(len(epochs) - len(lrs), lrs[-1] if len(lrs) > 0 else 0.0)
+        lrs = np.concatenate([lrs, pad])
+
+    # normalization for shape comparison
+    train_norm = train_loss / train_loss[0]
+    val_norm   = val_loss / val_loss[0]
+
     # -------------------------------
     # 1. Loss curves
     # -------------------------------
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # 1) Raw losses (log-scale)
+    ax = axes[0]
     ax.plot(epochs, train_loss, label="Train Loss", linewidth=2)
     ax.plot(epochs, val_loss, label="Val Loss", linewidth=2)
-    if best_epoch is not None:
-        ax.axvline(best_epoch, color="red", linestyle="--", label=f"best epoch = {best_epoch}")
-    ax.set_title(f"{country} — Training & Validation Loss")
+    if best_epoch:
+        ax.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
+
+    ax.set_title(f"{country} — Loss Curve (Raw Loss, Log Scale)")
     ax.set_xlabel("Epoch")
-    ax.set_xticks(list(range(1, len(epochs) + 1, 3)))
     ax.set_ylabel("Loss")
     ax.set_yscale("log")
     ax.grid(True)
     ax.legend()
+
+    # 2) Normalized losses (linear scale)
+    ax2 = axes[1]
+    ax2.plot(epochs, train_norm, label="Train (norm)", linewidth=2)
+    ax2.plot(epochs, val_norm, label="Val (norm)", linewidth=2)
+    if best_epoch:
+        ax2.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
+
+    ax2.set_title(f"{country} — Learning Curve (Normalized to check for overfitting)")
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Normalized Loss")
+    ax2.grid(True)
+    ax2.legend()
+
     plt.tight_layout()
     fig.savefig(folder / fnames[0], dpi=160)
     print(f"[OK] Saved to {fnames[0]}")
-    if show: plt.show()
+    if show:
+        plt.show()
     plt.close(fig)
 
     # -------------------------------
     # 2. Learning rate curve
     # -------------------------------
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(epochs, lrs, label="Learning Rate", linewidth=2)
-    ax.set_title(f"{country} — LR Schedule")
-    ax.set_xlabel("Epoch")
-    ax.set_xticks(list(range(1, len(epochs) + 1, 3)))
-    ax.set_ylabel("Learning Rate")
-    ax.set_yscale("log")
-    ax.grid(True)
+    fig2, ax3 = plt.subplots(figsize=(12, 5))
+    ax3.plot(epochs, lrs, linewidth=2)
+    ax3.set_title(f"{country} — Learning Rate Schedule")
+    ax3.set_xlabel("Epoch")
+    ax3.set_ylabel("Learning Rate")
+    ax3.grid(True)
+
     plt.tight_layout()
-    fig.savefig(folder / fnames[1], dpi=160)
+    fig2.savefig(folder / fnames[1], dpi=160)
     print(f"[OK] Saved to {fnames[1]}")
-    if show: plt.show()
-    plt.close(fig)
+    if show:
+        plt.show()
+    plt.close(fig2)
 
 
 #########################################
@@ -288,21 +311,49 @@ def plot_best_trial_learning_curve(
     epochs = np.arange(1, len(train_loss) + 1)
     best_epoch = best_history.get("best_epoch")
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(epochs, train_loss, label="Train Loss", linewidth=2)
-    plt.plot(epochs, val_loss, label="Val Loss", linewidth=2)
+    # normalization for shape comparison
+    train_norm = train_loss / train_loss[0]
+    val_norm   = val_loss / val_loss[0]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    
+    # 1) Raw losses (log-scale)
+    ax = axes[0]
+    ax.plot(epochs, train_loss, label="Train Loss", linewidth=2)
+    ax.plot(epochs, val_loss, label="Val Loss", linewidth=2)
+
     if best_epoch is not None:
-        plt.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title("Best Trial — Learning Curve")
-    plt.yscale("log")
-    plt.grid(True)
-    plt.legend()
+        ax.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss (log scale)")
+    ax.set_title("Learning Curve (Raw Loss, Log Scale)")
+    ax.set_yscale("log")
+    ax.grid(True)
+    ax.legend()
+
+    # 2) Normalized losses (linear scale)
+    ax2 = axes[1]
+    ax2.plot(epochs, train_norm, label="Train (norm)", linewidth=2)
+    ax2.plot(epochs, val_norm, label="Val (norm)", linewidth=2)
+
+    if best_epoch is not None:
+        ax2.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
+
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Normalized Loss")
+    ax2.set_title("Learning Curve (Normalized to check for overfitting)")
+    ax2.grid(True)
+    ax2.legend()
+
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")
-    if show: plt.show()
+
+    if show:
+        plt.show()
+
     plt.close()
 
 def plot_3d_scatter(
