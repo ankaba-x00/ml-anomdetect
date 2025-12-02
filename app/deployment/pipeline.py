@@ -8,7 +8,8 @@ Usage:
 
 import numpy as np
 from datetime import datetime, timezone
-from app.deployment.fetcher import run_fetcher
+from app.deployment.fetcher import run_fetch
+from app.deployment.features import build_features
 from app.deployment.inference import load_inference_bundle, run_inference
 
 
@@ -19,21 +20,23 @@ def detect_anomalies(
     ):
     try: 
         bundle = load_inference_bundle(country)
-
-        X_cont_df, X_cat_df, _, cat_dims2, _ = run_fetcher(country, date_from, date_to, bundle["scaler"])
+        newdata = run_fetch(country, date_from, date_to)
+        X_cont_df, X_cat_df, _, cat_dims2, = build_features(newdata)
 
         assert cat_dims2.keys() == bundle["cat_dims"].keys(), "[Error] Saved cat_dims fatal mismatch — rebuild features."
 
-        X_cont = X_cont_df.values.astype(np.float32)
+        X_cont = X_cont_df.values.astype(np.float64)
         X_cat = X_cat_df.values.astype(np.int64)
         ts = X_cont_df.index
+
+        X_cont_scaled = bundle["scaler"].transform(X_cont).astype(np.float32)
 
         # --------------------
         # Run anomaly detection
         # --------------------
         results = run_inference(
             model=bundle["model"],
-            X_cont=X_cont,
+            X_cont=X_cont_scaled,
             X_cat=X_cat,
             threshold=bundle["threshold"],
             device=bundle["config"].device,
