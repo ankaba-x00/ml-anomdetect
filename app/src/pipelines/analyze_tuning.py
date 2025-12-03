@@ -25,7 +25,7 @@ Usage:
     python -m src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
 """
 
-import json, optuna
+import json, optuna, torch
 import pandas as pd
 from pathlib import Path
 from app.src.data.feature_engineering import COUNTRIES
@@ -35,7 +35,10 @@ from app.src.models.analysis import (
     plot_loss_curves_all_trials,
     plot_best_trial_learning_curve,
     plot_3d_scatter,
-    plot_multi_country_overview,
+    plot_loss_component_analysis,
+    plot_multi_loss_overview,
+    plot_multi_weights_overview,
+    plot_multi_weight_loss_correlation
 )
 
 
@@ -81,24 +84,54 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
-    summary = {}
+    out_dir = ANALYSIS_TUNE_DIR / "_multi"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     #countries.remove("KR")
     #countries.remove("TW")
     #countries.remove("AT")
     #countries.remove("GB")
     #countries.remove("CH")
+    losses_data = {}
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{c}_study.db"
         if not cfg_path.exists() or not study_path.exists():
             continue
         study = load_study(c, study_path)
-        summary[c] = study.best_value
-    out_dir = ANALYSIS_TUNE_DIR / "_multi"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    plot_multi_country_overview(summary, out_dir, "best_losses.png", show)
+        losses_data[c] = study.best_value
+    plot_multi_loss_overview(losses_data, out_dir, "best_losses.png", show)
     with open(out_dir / "best_losses.json", "w") as f:
-        json.dump(summary, f, indent=2)
+        json.dump(losses_data, f, indent=2)
+
+    weights_data = {}
+    for c in countries:
+        try:
+            model_path = TUNED_DIR / f"{c}_best_model.pt"
+            if model_path.exists():
+                payload = torch.load(model_path, map_location="cpu")
+                loss_weights = payload.get("additional_info", {}).get("loss_weights", {})
+                weights_data[c] = {
+                    "cont_weight": loss_weights.get("cont_weight", 1.0),
+                    "cat_weight": loss_weights.get("cat_weight", 1.0),
+                    "ratio": loss_weights.get("cat_weight", 1.0) / max(loss_weights.get("cont_weight", 1.0), 1e-8)
+                }
+        except Exception:
+            continue
+    plot_multi_weights_overview(weights_data, out_dir, "best_weights.png", show)
+    with open(out_dir / "best_weights.json", "w") as f:
+        json.dump(weights_data, f, indent=2)
+
+    if weights_data and losses_data:
+        common_countries = set(weights_data.keys()) & set(losses_data.keys())
+        if len(common_countries) >= 3:
+            plot_multi_weight_loss_correlation(
+                    weights_data, 
+                    losses_data, 
+                    out_dir,
+                    "weight_loss_correlation.png", 
+                    show
+                )
     print(f"[OK] Multi-country comparison completed!")
 
 def analyze_country(country: str, multi: bool = True, all: bool = False, show: bool = False):
@@ -130,6 +163,16 @@ def analyze_country(country: str, multi: bool = True, all: bool = False, show: b
         with open(best_hist_path, "r") as f:
             best_history = json.load(f)
         plot_best_trial_learning_curve(best_history, out_dir, "best_learning_curve.png", show)
+    if study:
+        plot_loss_component_analysis(
+            study,
+            country, 
+            history_dir = TUNED_DIR / "trial_history",
+            folder=out_dir,
+            fname="loss_component_analysis.png",
+            show=show
+        )
+
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:

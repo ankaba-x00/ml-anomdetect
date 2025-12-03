@@ -1,10 +1,9 @@
-import json
+import json, torch, optuna
 from typing import Optional, Union
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from app.src.models.autoencoder import TabularAutoencoder
-import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import seaborn as sns
@@ -290,7 +289,7 @@ def summarize_validation(
 ##             TUNING PLOTS            ##
 #########################################
 
-def save_optuna_plots(study, folder: Path):
+def save_optuna_plots(study: optuna.Study, folder: Path):
     """Save Optuna-provided visualizations as png if kaleido is installed and/or html file which requires no add package and has nicer formatting."""
 
     figs = {
@@ -329,7 +328,7 @@ def plot_correlation_heatmap(
     plt.close()
 
 def plot_loss_curves_all_trials(
-        study, 
+        study: optuna.Study, 
         country: str, 
         history_dir: Path, 
         folder: Path = Path.cwd(),
@@ -343,10 +342,10 @@ def plot_loss_curves_all_trials(
     colors = plt.cm.tab20(np.linspace(0, 1, len(study.trials)))
     plotted = False
 
-    for i, t in enumerate(study.trials):
-        if t.state.name != "COMPLETE":
+    for idx, trial in enumerate(study.trials):
+        if trial.state.name != "COMPLETE":
             continue
-        hist_file = history_dir / f"{country}_trial_{t.number}_history.json"
+        hist_file = history_dir / f"{country}_trial_{trial.number:04d}_history.json"
         if not hist_file.exists():
             continue
         with open(hist_file, "r") as f:
@@ -356,7 +355,7 @@ def plot_loss_curves_all_trials(
         if train_loss is None or val_loss is None:
             continue
         epochs = np.arange(1, len(train_loss) + 1)
-        plt.plot(epochs, val_loss, label=f"trial {t.number}", alpha=0.6, color=colors[i])
+        plt.plot(epochs, val_loss, label=f"trial {trial.number}", alpha=0.6, color=colors[idx])
         plotted = True
     if not plotted:
         plt.close()
@@ -494,30 +493,268 @@ def plot_3d_scatter(
     if show: plt.show()
     plt.close(fig)
 
-def plot_multi_country_overview(
+def plot_loss_component_analysis(
+    study: optuna.Study,
+    country: str, 
+    history_dir: Path,
+    folder: Path = Path.cwd(),
+    fname: str = "loss_component_analysis.png",
+    show: bool = False
+):
+    """Scatter plots showing how continuous vs categorical losses contribute to total loss."""
+    apply_custom_theme()
+    
+    cont_losses = []
+    cat_losses = []
+    total_losses = []
+    trial_numbers = []
+    for trial in study.trials:
+        if trial.state.name != "COMPLETE":
+            continue
+        hist_file = history_dir / f"{country}_trial_{trial.number:04d}_history.json"
+        if not hist_file.exists():
+            continue
+        with open(hist_file, "r") as f:
+            hist = json.load(f)    
+        if "train_cont_loss" in hist and "train_cat_loss" in hist:
+            cont_losses.append(hist["train_cont_loss"][-1])
+            cat_losses.append(hist["train_cat_loss"][-1])
+            total_losses.append(trial.value)
+            trial_numbers.append(trial.number)
+    if len(cont_losses) < 3:
+        print(f"[INFO] Not enough loss component data for {country}")
+        return
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    axes[0, 0].scatter(cont_losses, total_losses, alpha=0.7)
+    axes[0, 0].set_xlabel("Continuous Loss (MSE)")
+    axes[0, 0].set_ylabel("Total Validation Loss")
+    axes[0, 0].set_title("Continuous Loss Contribution")
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    axes[0, 1].scatter(cat_losses, total_losses, alpha=0.7)
+    axes[0, 1].set_xlabel("Categorical Loss (CE)")
+    axes[0, 1].set_ylabel("Total Validation Loss")
+    axes[0, 1].set_title("Categorical Loss Contribution")
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    ratios = [c/(m+1e-8) for m, c in zip(cont_losses, cat_losses)]
+    axes[1, 0].scatter(ratios, total_losses, alpha=0.7)
+    axes[1, 0].axvline(1, color='gray', linestyle='--', alpha=0.5)
+    axes[1, 0].set_xlabel("Loss Ratio (CE/MSE)")
+    axes[1, 0].set_ylabel("Total Validation Loss")
+    axes[1, 0].set_title("Loss Ratio vs Performance")
+    axes[1, 0].set_xscale("log")
+    axes[1, 0].grid(True, alpha=0.3)
+
+    df_components = pd.DataFrame({
+        'trial': trial_numbers,
+        'cont_loss': cont_losses,
+        'cat_loss': cat_losses,
+        'total_loss': total_losses,
+        'ratio': ratios
+    })
+    best_idx = df_components['total_loss'].idxmin()
+    
+    axes[1, 1].plot(['cont_loss', 'cat_loss', 'total_loss'], 
+                   df_components.loc[best_idx, ['cont_loss', 'cat_loss', 'total_loss']], 
+                   'ro-', label='Best Trial', linewidth=3)
+    
+    for idx, row in df_components.iterrows():
+        if idx != best_idx:
+            axes[1, 1].plot(['cont_loss', 'cat_loss', 'total_loss'], 
+                           row[['cont_loss', 'cat_loss', 'total_loss']], 
+                           'b-', alpha=0.2)
+    
+    axes[1, 1].set_title("Loss Component Comparison")
+    axes[1, 1].set_ylabel("Loss Value")
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    plt.suptitle(f"{country} — Loss Component Analysis")
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_multi_loss_overview(
         best_losses: dict, 
         folder: Path = Path.cwd(),
-        fname: str = "plot_multi_country_overview.png",
+        fname: str = "plot_multi_loss_overview.png",
         show: bool = False
     ):
     """Barplot comparing best val losses across countries."""
     apply_custom_theme()
 
+    if not best_losses:
+        print("[INFO] No losses found to plot")
+        return
+
     countries = list(best_losses.keys())
     losses = [best_losses[c] for c in countries]
 
-    plt.figure(figsize=(12, 6))
-    sns.barplot(x=countries, y=losses)
-    plt.title("Best Validation Loss per Country")
-    plt.ylabel("Validation Loss")
-    plt.xlabel("Country")
-    plt.grid(True, axis="y", alpha=0.4)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    axes[0].bar(countries, losses)
+    axes[0].set_title("Best Validation Loss per Country (Linear)")
+    axes[0].set_ylabel("Validation Loss")
+    axes[0].set_xlabel("Country")
+    axes[0].tick_params(axis='x', rotation=45)
+    axes[0].grid(True, axis="y", alpha=0.4)
+    
+    axes[1].bar(countries, losses)
+    axes[1].set_title("Best Validation Loss per Country (Log Scale)")
+    axes[1].set_ylabel("Validation Loss (log)")
+    axes[1].set_xlabel("Country")
+    axes[1].tick_params(axis='x', rotation=45)
+    axes[1].set_yscale("log")
+    axes[1].grid(True, axis="y", alpha=0.4)
+    
+    plt.suptitle(f"Loss Weight Comparison Across Countries (n={len(countries)})")
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
-    plt.close()
+    plt.close(fig)
 
+def plot_multi_weights_overview(
+    best_weights: dict,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_multi_weights_overview.png",
+    show: bool = False,
+):
+    """Bar and scatter plots comparing loss weights and their ratio across countries."""
+    apply_custom_theme()
+    
+    if not best_weights:
+        print("[INFO] No loss weights found to plot")
+        return
+    
+    df = pd.DataFrame(best_weights, orient='index')
+    df.index.name = "country"
+    df = df.reset_index()
+    
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))  
+
+    x = np.arange(len(df))
+    width = 0.35
+    axes[0].bar(x - width/2, df["cont_weight"], width, label="Continuous", color='blue')
+    axes[0].bar(x + width/2, df["cat_weight"], width, label="Categorical", color='red')
+    axes[0].set_xlabel("Country")
+    axes[0].set_ylabel("Weight")
+    axes[0].set_title("Loss Weights by Country")
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels(df["country"], rotation=45)
+    axes[0].legend()
+    axes[0].grid(True, axis='y', alpha=0.3)
+
+    axes[1].scatter(df["cont_weight"], df["cat_weight"], s=100, alpha=0.7)
+    for i, row in df.iterrows():
+        axes[1].annotate(row["country"], (row["cont_weight"], row["cat_weight"]), 
+                        fontsize=9, alpha=0.8, xytext=(5, 5), textcoords='offset points')
+    axes[1].axline((0, 0), slope=1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
+    axes[1].set_xlabel("Continuous Weight")
+    axes[1].set_ylabel("Categorical Weight")
+    axes[1].set_title("Weight Scatter Plot")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].bar(df["country"], df["ratio"], color='purple')
+    axes[2].axhline(1.0, color='gray', linestyle='--', alpha=0.5, label='Ratio = 1')
+    axes[2].set_xlabel("Country")
+    axes[2].set_ylabel("Ratio (cat/cont)")
+    axes[2].set_title("Weight Ratio by Country")
+    axes[2].set_xticklabels(df["country"], rotation=45)
+    axes[2].legend()
+    axes[2].grid(True, axis='y', alpha=0.3)
+    
+    plt.suptitle(f"Loss Weight Comparison Across Countries (n={len(df)})", fontsize=14)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160, bbox_inches='tight')
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_multi_weight_loss_correlation(
+    weights_data: dict,
+    losses_data: dict,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_multi_weight_loss_correlation.png",
+    show: bool = False,
+):
+    """Scatter plots showing relationship between loss weights and validation performance."""
+    apply_custom_theme()
+
+    merged = {}
+    for country in set(weights_data.keys()) & set(losses_data.keys()):
+        merged[country] = {
+            "country": country,
+            "cont_weight": weights_data[country]["cont_weight"],
+            "cat_weight": weights_data[country]["cat_weight"],
+            "ratio": weights_data[country]["ratio"],
+            "loss": losses_data[country],
+        }
+
+    df = pd.DataFrame(merged, orient='index')
+    df.index.name = "country"
+    df = df.reset_index()
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    axes[0, 0].scatter(df["cont_weight"], df["loss"], s=100, alpha=0.7)
+    for _, row in df.iterrows():
+        axes[0, 0].annotate(row["country"], (row["cont_weight"], row["loss"]), 
+                          fontsize=9, alpha=0.8)
+    axes[0, 0].set_xlabel("Continuous Weight")
+    axes[0, 0].set_ylabel("Validation Loss")
+    axes[0, 0].set_title("Continuous Weight vs Performance")
+    axes[0, 0].set_yscale("log")
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    axes[0, 1].scatter(df["cat_weight"], df["loss"], s=100, alpha=0.7)
+    for _, row in df.iterrows():
+        axes[0, 1].annotate(row["country"], (row["cat_weight"], row["loss"]), 
+                          fontsize=9, alpha=0.8)
+    axes[0, 1].set_xlabel("Categorical Weight")
+    axes[0, 1].set_ylabel("Validation Loss")
+    axes[0, 1].set_title("Categorical Weight vs Performance")
+    axes[0, 1].set_yscale("log")
+    axes[0, 1].grid(True, alpha=0.3)
+
+    axes[1, 0].scatter(df["ratio"], df["loss"], s=100, alpha=0.7)
+    for _, row in df.iterrows():
+        axes[1, 0].annotate(row["country"], (row["ratio"], row["loss"]), 
+                          fontsize=9, alpha=0.8)
+    axes[1, 0].axvline(1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
+    axes[1, 0].set_xlabel("Weight Ratio (cat/cont)")
+    axes[1, 0].set_ylabel("Validation Loss")
+    axes[1, 0].set_title("Weight Ratio vs Performance")
+    axes[1, 0].set_xscale("log")
+    axes[1, 0].set_yscale("log")
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+
+    scatter = axes[1, 1].scatter(df["cont_weight"], df["cat_weight"], 
+                                 c=df["loss"], s=100, alpha=0.7, cmap='viridis')
+    for _, row in df.iterrows():
+        axes[1, 1].annotate(row["country"], (row["cont_weight"], row["cat_weight"]), 
+                          fontsize=9, alpha=0.8)
+    axes[1, 1].axline((0, 0), slope=1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
+    axes[1, 1].set_xlabel("Continuous Weight")
+    axes[1, 1].set_ylabel("Categorical Weight")
+    axes[1, 1].set_title("Weight Space (color = loss)")
+    plt.colorbar(scatter, ax=axes[1, 1], label='Validation Loss')
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    plt.suptitle("Loss Weight vs Performance Correlation Analysis", fontsize=16)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
+    if show:
+        plt.show()
+    plt.close(fig)
 
 #########################################
 ##             TESTING PLOTS           ##
