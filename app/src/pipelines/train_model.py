@@ -26,6 +26,7 @@ Usage:
 import json, pickle
 from pathlib import Path
 import numpy as np
+from typing import Optional
 from sklearn.preprocessing import RobustScaler
 from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
@@ -55,7 +56,10 @@ def train_country(
         vr: int, 
         full: bool, 
         method: str, 
-        cw: int
+        cw: int,
+        loss_weights: Optional[dict] = None,
+        save_checkpoints: bool = False,
+        checkpoint_dir: Optional[Path] = None
     ):
     global OUT_DIR
     print(f"\n==============================")
@@ -75,11 +79,26 @@ def train_country(
     if full or tr == 100:
         print(f"[INFO] Reading AEConfig from best tuning run.")
         tuned_cfg_path = BEST_MODELS_DIR / f"{country}_best_config.json"
+        tuned_params_path = BEST_MODELS_DIR / f"{country}_best_params.json"
         if not tuned_cfg_path.exists():
             raise FileNotFoundError("[ERROR] Best config not found. Run tuning first.")
+        if not tuned_params_path.exists():
+            raise FileNotFoundError("[ERROR] Best params not found. Run tuning first.")
         with open(tuned_cfg_path, "r") as f:
             cfg_dict = json.load(f)
             cfg = AEConfig(**cfg_dict)
+        with open(tuned_params_path, "r") as f:
+            best_params = json.load(f)
+        try:
+            loss_weights = {
+                "cont_weight": best_params.get("cont_weight", 1.0),
+                "cat_weight": best_params.get("cat_weight", 1.0),
+            }
+            print(f"[INFO] Using tuned loss weights: {loss_weights}")
+        except Exception:
+            loss_weights = {"cont_weight": 1.0, "cat_weight": 1.0}
+            print(f"[INFO] Using default loss weights: {loss_weights}")
+
     else:
         print(f"[INFO] Constructing AEConfig from inital params.")
         cfg = AEConfig(
@@ -100,7 +119,12 @@ def train_country(
             optimizer="adam",
             lr_scheduler="plateau",
             use_lr_scheduler=True,
+            anomaly_threshold=None,
         )
+    
+    # Default loss weights if not provided
+    if loss_weights is None:
+        loss_weights = {"cont_weight": 1.0, "cat_weight": 0.5}
 
     # ------------------------------------
     # Full OR Split : Train model
@@ -119,7 +143,8 @@ def train_country(
         model, history = train_autoencoder(
             Xc_np_scald, Xk_np,
             None, None,
-            cfg
+            cfg,
+            loss_weights
         )
         OUT_DIR = FULL_OUT_DIR
         OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -147,12 +172,25 @@ def train_country(
         model, history = train_autoencoder(
             train_cont_scald, train_cat, 
             val_cont_scald, val_cat, 
-            cfg
+            cfg,
+            loss_weights
         )
         OUT_DIR.mkdir(parents=True, exist_ok=True)            
 
     model_path = OUT_DIR / f"{country}_autoencoder.pt"
-    save_autoencoder(model, cfg, model_path)
+    save_autoencoder(
+        model=model, 
+        config=cfg, 
+        path=model_path,
+        additional_info={
+            "country": country,
+            "training_mode": "full" if full else "split",
+            "train_ratio": tr,
+            "val_ratio": vr,
+            "loss_weights": loss_weights,
+            "total_samples": len(Xc_np),
+        }
+    )
 
     scaler_path = OUT_DIR / f"{country}_scaler_cont.pkl"
     with open(scaler_path, "wb") as f:
@@ -183,7 +221,14 @@ def train_country(
         print(f"[INFO] Computing threshold on calibration window...")
         
         threshold_dict, _ = calibrate_threshold(
-            country, model, scaler, cfg.device, method, cw
+            country, 
+            model, 
+            scaler, 
+            cfg.device, 
+            method, 
+            cw,
+            cont_weight=loss_weights["cont_weight"],
+            cat_weight=loss_weights["cat_weight"] 
         )
 
         thr_path = FULL_OUT_DIR / f"{country}_cal_threshold.json"

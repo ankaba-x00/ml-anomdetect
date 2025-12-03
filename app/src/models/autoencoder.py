@@ -2,6 +2,7 @@ import json, torch
 from dataclasses import dataclass, asdict
 from typing import Sequence, Optional
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 ################################################
@@ -60,13 +61,8 @@ class TabularAutoencoder(nn.Module):
         self.num_cont = num_cont
         self.cat_dims = cat_dims
         self.latent_dim = latent_dim
-        self.embedding_dim = embedding_dim
         self.continuous_noise_std = continuous_noise_std
         self.residual_strength = residual_strength
-
-        # -------------------------------
-        # Categorical embedding dynamically
-        # -------------------------------
 
         # Example cat_dims:
         # {"weekday":7, "daytype":2, "daytime":5, "month":12, "week":53}
@@ -83,6 +79,7 @@ class TabularAutoencoder(nn.Module):
             self.emb_sizes[name] = d
 
         total_emb_dim = sum(self.emb_sizes.values())
+        self.input_dim = num_cont + total_emb_dim
 
         if residual_strength > 0:
             self.residual_proj = nn.Linear(num_cont + total_emb_dim, latent_dim)
@@ -90,49 +87,54 @@ class TabularAutoencoder(nn.Module):
         # -------------------------------
         # Encoder
         # -------------------------------
-        enc_in_dim = num_cont + total_emb_dim
+        self.encoder_layers = nn.ModuleList()
+        prev = self.input_dim
         
-        enc_layers = []
-        prev = enc_in_dim
         for h in hidden_dims:
-            enc_layers += [
-                nn.Linear(prev, h),
-                nn.BatchNorm1d(h),
-                nn.ReLU(inplace=True),
-                nn.Dropout(dropout)
-            ]
+            self.encoder_layers.append(
+                nn.Sequential(
+                    nn.Linear(prev, h),
+                    nn.BatchNorm1d(h),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(dropout)
+                )
+            )
             prev = h
-
-        enc_layers.append(nn.Linear(prev, latent_dim))
-        self.encoder = nn.Sequential(*enc_layers)
+        
+        # Final encoder layer (no activation for bottleneck)
+        self.encoder_out = nn.Linear(prev, latent_dim)
 
         # -------------------------------
         # Decoder (mirror)
         # -------------------------------
-        dec_layers = []
+        self.decoder_layers = nn.ModuleList()
         prev = latent_dim
+        
         for h in reversed(hidden_dims):
-            dec_layers += [
-                nn.Linear(prev, h),
-                nn.BatchNorm1d(h),
-                nn.ReLU(inplace=True),
-                nn.Dropout(dropout),
-            ]
+            self.decoder_layers.append(
+                nn.Sequential(
+                    nn.Linear(prev, h),
+                    nn.BatchNorm1d(h),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(dropout)
+                )
+            )
             prev = h
-
-        # OUTPUT = reconstruct continuous features only
-        dec_layers.append(nn.Linear(prev, num_cont))
-        self.decoder = nn.Sequential(*dec_layers)
+        
+        # Continuous reconstruction head
+        self.cont_recon = nn.Linear(prev, num_cont)
+        
+        # Categorical reconstruction heads
+        self.cat_recon_heads = nn.ModuleDict()
+        for name, card in cat_dims.items():
+            self.cat_recon_heads[name] = nn.Linear(prev, card)
 
     # -------------------------------
     # Embedding fuser
     # -------------------------------
     def _embed(self, x_cat: torch.Tensor) -> torch.Tensor:
-        """
-        x_cat shape: (batch, num_categorical)
-        Mapped in fixed order based on cat_dims.keys()
-        """
-        parts: list[torch.Tensor] = []
+        """Embed categorical features."""
+        parts = []
 
         # ensure consistent order of categories:
         for i, name in enumerate(self.cat_dims.keys()):
@@ -140,38 +142,79 @@ class TabularAutoencoder(nn.Module):
 
         return torch.cat(parts, dim=1)
 
+    def encode(self, x_cont: torch.Tensor, x_cat: torch.Tensor) -> torch.Tensor:
+        """Encode to latent space."""
+        x_emb = self._embed(x_cat)
+        x = torch.cat([x_cont, x_emb], dim=1)
+        
+        # Add noise during training (denoising autoencoder)
+        if self.training and self.continuous_noise_std > 0.:
+            noise = torch.randn_like(x_cont) * self.continuous_noise_std
+            # Only add noise to continuous part
+            x_cont_noisy = x_cont + noise
+            x = torch.cat([x_cont_noisy, x_emb], dim=1)
+        
+        # Forward through encoder
+        h = x
+        for layer in self.encoder_layers:
+            h = layer(h)
+        
+        z = self.encoder_out(h)
+        
+        # Optional residual connection
+        if self.residual_strength > 0:
+            z = z + self.residual_strength * self.residual_proj(x)
+        
+        return z
+    
+    def decode(self, z: torch.Tensor):
+        """Decode from latent space."""
+        h = z
+        for layer in self.decoder_layers:
+            h = layer(h)
+        
+        # Continuous reconstruction
+        cont_recon = self.cont_recon(h)
+        
+        # Categorical reconstructions
+        cat_recons = {}
+        for name in self.cat_dims.keys():
+            cat_recons[name] = self.cat_recon_heads[name](h)
+        
+        return cont_recon, cat_recons
+
     # -------------------------------
     # Forward
     # -------------------------------
-    def forward(self, x_cont: torch.Tensor, x_cat: torch.Tensor) -> torch.Tensor:
-        """
-        x_cont : (batch, num_cont)
-        x_cat  : (batch, num_categories)
-        """
-        # embeddings
-        x_emb = self._embed(x_cat)
-
-        # concatenate continuous + embedding features
-        x = torch.cat([x_cont, x_emb], dim=1)
-
-        # optional denoising in training only
-        if self.training and self.continuous_noise_std > 0.:
-            x = x + self.continuous_noise_std * torch.randn_like(x)
-
-        z = self.encoder(x)
-        
-        if self.residual_strength > 0:
-            z = z + self.residual_strength * self.residual_proj(x)
-
-        recon = self.decoder(z)
-
-        return recon
-
+    def forward(self, x_cont: torch.Tensor, x_cat: torch.Tensor):
+        """Full forward pass."""
+        z = self.encode(x_cont, x_cat)
+        return self.decode(z)
+    
     # -------------------------------
     # Anomaly score
     # -------------------------------
-    def anomaly_score(self, x_cont: torch.Tensor, x_cat: torch.Tensor) -> torch.Tensor:
-        """MSE reconstruction error."""
+    def anomaly_score(self, x_cont: torch.Tensor, x_cat: torch.Tensor, cont_weight: float = 1.0, cat_weight: float = 1.0) -> torch.Tensor:
+        """Combined reconstruction error."""
         with torch.no_grad():
-            recon = self.forward(x_cont, x_cat)
-            return ((recon - x_cont) ** 2).mean(dim=1)
+            cont_recon, cat_recons = self.forward(x_cont, x_cat)
+            
+            # Continuous MSE
+            cont_error = ((cont_recon - x_cont) ** 2).mean(dim=1)
+            
+            # Categorical cross-entropy
+            cat_error = torch.zeros_like(cont_error)
+            for i, name in enumerate(self.cat_dims.keys()):
+                cat_error += F.cross_entropy(
+                    cat_recons[name],
+                    x_cat[:, i].long(),
+                    reduction='none'
+                )
+
+            # no weights per feature category
+            # total_features = self.num_cont + len(self.cat_dims)
+            # return (cont_error * self.num_cont + cat_error) / total_features
+            
+            # weights per feature category
+            total_weight = cont_weight + cat_weight
+            return (cont_weight * cont_error + cat_weight * cat_error) / total_weight

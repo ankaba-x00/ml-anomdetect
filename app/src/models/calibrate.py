@@ -27,6 +27,8 @@ def calibrate_threshold(
         device: str = None,
         method: str = "p99",
         cw: int = 30,
+        cont_weight: float = 1.0,
+        cat_weight: float = 1.0
 ) -> dict[str, Union[np.ndarray, float]]:
         """Computes anomaly threshold for a given model on a specified calibration window and threshold method."""
         
@@ -63,7 +65,9 @@ def calibrate_threshold(
             model,
             X_cont_cal_scld,
             X_cat_cal,
-            device
+            device,
+            cont_weight,
+            cat_weight
         )
         print(f"[INFO] Computed {len(errors)} errors")
 
@@ -72,7 +76,12 @@ def calibrate_threshold(
         # ------------------------------------ 
         prelim = _compute_threshold(method, errors)
         clean_errors = errors[errors < prelim]
-        print(f"[INFO] Removed {len(errors)-len(clean_errors)} preliminary anomalies to clean window")
+        removed_count = len(errors) - len(clean_errors)
+        print(f"[INFO] Removed {removed_count} preliminary anomalies to clean window")
+
+        if len(clean_errors) < 10:
+            print(f"[WARN] Very few clean samples ({len(clean_errors)}). Using all errors.")
+            clean_errors = errors
 
         # ------------------------------------
         # Compute threshold on cleaned window
@@ -80,7 +89,35 @@ def calibrate_threshold(
         threshold = _compute_threshold(method, clean_errors)
         print(f"[INFO] Computed threshold ({method}) = {threshold:.6f}")
 
-        threshold_dict = {"device": device, "method": method, "threshold": threshold}
-        debug_dict = {"window": ts_cal, "errors": clean_errors, }
+        anomaly_rate = np.mean(errors > threshold) * 100
+        print(f"[INFO] Expected anomaly rate: {anomaly_rate:.2f}%")
+
+        threshold_dict = {
+            "country": country,
+            "device": device, 
+            "method": method, 
+            "threshold": threshold,
+            "calibration_window_days": cw,
+            "calibration_samples": len(X_cont_cal),
+            "clean_samples": len(clean_errors),
+            "preliminary_anomalies_removed": removed_count,
+            "cont_weight": cont_weight,
+            "cat_weight": cat_weight,
+            "error_stats": {
+                "min": float(errors.min()),
+                "mean": float(errors.mean()),
+                "median": float(np.median(errors)),
+                "max": float(errors.max()),
+                "std": float(errors.std()),
+                "p99": float(np.percentile(errors, 99)),
+            },
+            "anomaly_rate_pct": float(anomaly_rate),
+        }
+        debug_dict = {
+            "window": ts_cal, 
+            "errors": errors,
+            "clean_errors": clean_errors,
+            "preliminary_threshold": float(prelim),
+        }
 
         return threshold_dict, debug_dict

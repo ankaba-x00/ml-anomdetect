@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from typing import Any
+from typing import Any, Optional
 from app.src.models.autoencoder import TabularAutoencoder
 
 
@@ -12,9 +12,11 @@ def reconstruction_error(
     model: TabularAutoencoder,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    device: str = None,
+    device: Optional[str] = None,
+    cont_weight: float = 1.0,
+    cat_weight: float = 1.0,
 ) -> np.ndarray:
-    """Per-row reconstruction MSE."""
+    """Per-sample reconstruction error normalized by features."""
     if device is None:
         device = next(model.parameters()).device
     else:
@@ -25,10 +27,9 @@ def reconstruction_error(
     Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
 
     with torch.no_grad():
-        recon_cont = model(Xc, Xk)
-        mse = ((recon_cont - Xc) ** 2).mean(dim=1)
+        errors = model.anomaly_score(Xc, Xk, cont_weight, cat_weight)
 
-    return mse.cpu().numpy()
+    return errors.cpu().numpy()
 
 
 #########################################
@@ -52,7 +53,7 @@ def threshold_mad(errors: np.ndarray, k: float = 6.0) -> float:
     med = np.median(errors)
     mad = np.median(np.abs(errors - med)) + 1e-12
     thr = med + k * mad
-    # thr = min(thr, np.percentile(errors, 99.9))
+    thr = min(thr, np.percentile(errors, 99.9)) # to avoid extreme outliers
     return float(thr)
 
 
@@ -128,16 +129,20 @@ def apply_model(
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     method: str = "p99",
-    device: str = None,
+    device: Optional[str] = None,
     min_length: int = 1,
     merge_gap: int = 0,
+    cont_weight: float = 1.0,
+    cat_weight: float = 1.0,
 ) -> dict[str, Any]:
     """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
     errors = reconstruction_error(
         model,
         X_cont,
         X_cat,
-        device=device,
+        device,
+        cont_weight,
+        cat_weight
     )
     if method == "p99":
         threshold = threshold_percentile(errors, p=99)

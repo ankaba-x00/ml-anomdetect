@@ -77,12 +77,12 @@ def objective(
     # ------------------------------------
     latent_dim = trial.suggest_categorical("latent_dim", [4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192])
     depth = trial.suggest_int("depth", 1, 4)
-    possible_h = [int(latent_dim * m) for m in [2, 3, 4, 6, 8, 12]]
-    possible_h = [h for h in possible_h if 32 <= h <= 1024]
+    possible_h = [32, 64, 96, 128, 192, 256, 384, 512, 768, 1024]
     hidden_dims = [
         trial.suggest_categorical(f"h{i}", possible_h)
         for i in range(depth)
     ]
+    hidden_dims = [max(h, latent_dim * 2) for h in hidden_dims]
     dropout = trial.suggest_float("dropout", 0.0, 0.35)
     lr = trial.suggest_float("lr", 1e-5, 3e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-4, log=True)
@@ -96,6 +96,9 @@ def objective(
         "lr_scheduler",
         ["none", "plateau", "cosine", "onecycle"]
     )
+    cont_weight = trial.suggest_float("cont_weight", 0.5, 2.0)
+    cat_weight = trial.suggest_float("cat_weight", 0.5, 2.0)
+    loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
 
     # ------------------------------------
     # AEConfig object
@@ -127,7 +130,8 @@ def objective(
     _, history = train_autoencoder(
         Xc_train_scald, Xk_train,
         Xc_val_scald, Xk_val, 
-        cfg
+        cfg,
+        loss_weights=loss_weights
     )
 
     # save per-trial history (optional)
@@ -139,6 +143,11 @@ def objective(
     final_val_loss = history["val_loss"][best_epoch]
 
     trial.report(final_val_loss, step=0)
+    # Store additional metrics
+    trial.set_user_attr("cont_weight", cont_weight)
+    trial.set_user_attr("cat_weight", cat_weight)
+    trial.set_user_attr("best_epoch", int(best_epoch) if 'best_epoch' in locals() else -1)
+
     if trial.should_prune():
         raise optuna.TrialPruned()
 
@@ -185,6 +194,7 @@ def tune_country(
         lambda t: objective(t, country, tr, vr),
         n_trials=n_trials,
         n_jobs=1,
+        show_progress_bar=True
     )
     print("\nBest Trial:")
     print(study.best_trial)
@@ -214,6 +224,10 @@ def tune_country(
     depth = p["depth"]
     hidden_dims = [p[f"h{i}"] for i in range(depth)]
 
+    cont_weight = p.get("cont_weight", 1.0)
+    cat_weight = p.get("cat_weight", 1.0)
+    loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
+
     best_cfg = AEConfig(
         num_cont=num_cont,
         cat_dims=cat_dims,
@@ -238,7 +252,8 @@ def tune_country(
     best_model, best_history = train_autoencoder(
         Xc_train_scald, Xk_train, 
         Xc_val_scald, Xk_val, 
-        best_cfg
+        best_cfg,
+        loss_weights
     )
 
     # ------------------------------------

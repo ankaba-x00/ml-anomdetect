@@ -99,6 +99,17 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
     Xc_test_scald = scaler.transform(Xc_test).astype(np.float32)
 
     # --------------------
+    # Load loss weights
+    # --------------------
+    payload = torch.load(model_path, map_location="cpu")
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 1.0})
+
+    cont_weight = loss_weights["cont_weight"]
+    cat_weight = loss_weights["cat_weight"]
+
+    print(f"[INFO] Using loss weights - Continuous: {cont_weight:.2f}, Categorical: {cat_weight:.2f}")
+
+    # --------------------
     # Run anomaly detection
     # --------------------
     results = apply_model(
@@ -107,6 +118,8 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
         X_cat=Xk_test,
         method=method,
         device=cfg.device,
+        cont_weight=cont_weight,
+        cat_weight=cat_weight
     )
 
     errors = results["errors"]
@@ -119,12 +132,21 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
     # Print summary
     # -------------------------
     print(f"\n--- Result threshold method: {method} ---")
+    print(f"Total test samples = {len(errors)}")
     print(f"Threshold = {threshold:.6f}")
-    print(f"Detected {mask.sum()} anomalous samples")
-    print(f"Detected {len(starts)} anomaly intervals\n")
+    print(f"Detected anomalous samples = {mask.sum()}")
+    print(f"Detected anomaly intervals =  {len(starts)}\n")
 
     for s, e in zip(starts, ends):
         print(f"  > Interval {ts_eval[s]} - {ts_eval[e]} ({e-s} anomalies)")
+
+    print(f"\nError Statistics:")
+    print(f"Min:      {errors.min():.6f}")
+    print(f"Mean:     {errors.mean():.6f}")
+    print(f"Median:   {np.median(errors):.6f}")
+    print(f"Max:      {errors.max():.6f}")
+    print(f"Std:      {errors.std():.6f}")
+    print(f"99th pct: {np.percentile(errors, 99):.6f}")    
 
     # --------------------
     # Save errors CSV
@@ -133,6 +155,7 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
         "ts": ts_eval,
         "error": errors,
         "is_anomaly": mask.astype(int),
+        "threshold": threshold,
     })
 
     err_path = OUT_DIR / f"{country}_errors_{method}.csv"
@@ -155,8 +178,29 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
     # Save threshold
     # --------------------
     thr_path = OUT_DIR / f"{country}_threshold_{method}.json"
+    threshold_data = {
+        "country": country,
+        "method": method,
+        "threshold": float(threshold),
+        "loss_weights": loss_weights,
+        "test_samples": len(errors),
+        "anomaly_count": int(mask.sum()),
+        "interval_count": len(starts),
+        "error_stats": {
+            "min": float(errors.min()),
+            "mean": float(errors.mean()),
+            "median": float(np.median(errors)),
+            "max": float(errors.max()),
+            "std": float(errors.std()),
+            "p99": float(np.percentile(errors, 99)),
+        },
+        "test_period": {
+            "start": str(ts_eval[0].date()),
+            "end": str(ts_eval[-1].date()),
+        },
+    }
     with open(thr_path, "w") as f:
-        json.dump({"threshold": threshold}, f, indent=2)
+        json.dump(threshold_data, f, indent=2)
     print(f"[OK] Saved threshold to {thr_path}")
 
 

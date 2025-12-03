@@ -12,7 +12,7 @@ Usage:
     python -m src.pipelines.validate_model [-tr <int>] [-vr <int>] <COUNTRY_CODE|all> [| tee stdout_val.txt]
 """
 
-import pickle, json
+import pickle, json, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -60,6 +60,8 @@ def validate_country(country: str, tr: int, vr: int):
     # Load model + config, scaler, num_cont
     # --------------------
     model, cfg = load_autoencoder(model_path)
+    model = model.to(cfg.device)
+    model.eval()
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
@@ -100,6 +102,17 @@ def validate_country(country: str, tr: int, vr: int):
     Xc_val_scald = scaler.transform(Xc_val).astype(np.float32)
     
     # --------------------
+    # Load loss weights
+    # --------------------
+    payload = torch.load(model_path, map_location="cpu")
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 1.0})
+
+    cont_weight = loss_weights["cont_weight"]
+    cat_weight = loss_weights["cat_weight"]
+
+    print(f"[INFO] Using loss weights - Continuous: {cont_weight:.2f}, Categorical: {cat_weight:.2f}")
+
+    # --------------------
     # Compute reconstruction error
     # --------------------
     errors = reconstruction_error(
@@ -107,16 +120,22 @@ def validate_country(country: str, tr: int, vr: int):
         X_cont=Xc_val_scald,
         X_cat=Xk_val,
         device=cfg.device,
+        cont_weight=cont_weight,
+        cat_weight=cat_weight
     )
 
     # --------------------
     # Print summary
     # --------------------
     print("\n--- Validation Error Summary ---")
+    print(f"Total samples: {len(errors)}")
     print(f"Min error:  {errors.min():.6f}")
+    print(f"Max error:  {errors.max():.6f}")
     print(f"Mean error: {errors.mean():.6f}")
+    print(f"Std error:  {errors.std():.6f}")
     print(f"Median:     {np.median(errors):.6f}")
     print(f"95th pct:   {np.percentile(errors, 95):.6f}")
+    print(f"99.5th pct: {np.percentile(errors, 99.5):.6f}")
     print(f"99th pct:   {np.percentile(errors, 99):.6f}")
 
     df_out = pd.DataFrame({
