@@ -5,6 +5,7 @@ Train a autoencoder for one or all countries:
 - applies scaling to continuous features
 - builds autoencoder configuration (AEConfig)
 - trains TabularAutoencoder with early stopping
+- performs latent space analysis if specified
 
 Outputs:
     for tuning : results/models/trained/<COUNTRY_CODE>_autoencoder.pt
@@ -12,15 +13,19 @@ Outputs:
                  results/models/trained/<COUNTRY_CODE>_cat_dims.json
                  results/models/trained/<COUNTRY_CODE>_num_cont.json
                  results/models/trained/<COUNTRY_CODE>_training_history.json
+                 app/deployment/models/<COUNTRY_CODE>_latent_space_pca_coords.csv
+                 app/deployment/models/<COUNTRY_CODE>_latent_space.png
     for inference: app/deployment/models/<COUNTRY_CODE>_autoencoder.pt
                    app/deployment/models/<COUNTRY_CODE>_scaler_cont.pkl
                    app/deployment/models/<COUNTRY_CODE>_cat_dims.json
                    app/deployment/models/<COUNTRY_CODE>_num_cont.json
                    app/deployment/models/<COUNTRY_CODE>_training_history.json
                    app/deployment/models/<COUNTRY_CODE>_cal_threshold.json"
+                   app/deployment/models/<COUNTRY_CODE>_latent_space_pca_coords.csv
+                   app/deployment/models/<COUNTRY_CODE>_latent_space.png
 
 Usage:
-    python -m src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] <COUNTRY_CODE|all> [| tee stdout_train.txt]
+    python -m src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <COUNTRY_CODE|all> [| tee stdout_train.txt]
 """
 
 import json, pickle
@@ -32,6 +37,7 @@ from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
 from app.src.models.calibrate import calibrate_threshold
 from app.src.models.autoencoder import AEConfig
+from app.src.models.analysis import plot_latent_space
 from app.src.models.train import train_autoencoder, save_autoencoder
 
 
@@ -57,9 +63,8 @@ def train_country(
         full: bool, 
         method: str, 
         cw: int,
+        latent: bool,
         loss_weights: Optional[dict] = None,
-        save_checkpoints: bool = False,
-        checkpoint_dir: Optional[Path] = None
     ):
     global OUT_DIR
     print(f"\n==============================")
@@ -231,18 +236,35 @@ def train_country(
             cat_weight=loss_weights["cat_weight"] 
         )
 
-        thr_path = FULL_OUT_DIR / f"{country}_cal_threshold.json"
+        thr_path = OUT_DIR / f"{country}_cal_threshold.json"
         with open(thr_path, "w") as f:
             json.dump(threshold_dict, f, indent=2)
         print(f"[OK] Saved threshold to {thr_path}")
 
         print(f"[DONE] Preparation for inference model for {country}")
+    
+    # ------------------------------------
+    # Visualize latent space
+    # ------------------------------------
+    if latent:
+        print(f"[INFO] Preparing latent space visualization...")
+        if full or tr == 100:
+            train_cont_scald, train_cat, = Xc_np_scald, Xk_np
+        plot_latent_space(
+            country, 
+            train_cont_scald, 
+            train_cat,
+            model,
+            cfg.device,
+            OUT_DIR,
+            f"{country}_latent_space.png"
+        )
 
 
-def train_all(tr: int, vr: int, full: bool, method: str, cw: int):
+def train_all(tr: int, vr: int, full: bool, method: str, cw: int, latent: bool):
     for c in COUNTRIES:
         try:
-            train_country(c, tr, vr, full, method, cw)
+            train_country(c, tr, vr, full, method, cw, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model trainings completed!")
@@ -290,6 +312,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-L", "--latent",
+        action="store_true",
+        help="generate latent space plot after training"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
@@ -299,6 +327,6 @@ if __name__ == "__main__":
     target = args.target
 
     if target.lower() == "all":
-        train_all(args.tr, args.vr, args.full, args.method, args.calwindow)
+        train_all(args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)
     else:
-        train_country(target.upper(), args.tr, args.vr, args.full, args.method, args.calwindow)
+        train_country(target.upper(), args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)

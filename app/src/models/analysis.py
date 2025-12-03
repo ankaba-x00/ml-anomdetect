@@ -3,6 +3,10 @@ from typing import Optional, Union
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from app.src.models.autoencoder import TabularAutoencoder
+import torch
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 import seaborn as sns
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -122,6 +126,78 @@ def plot_training_curves(
         plt.show()
     plt.close(fig2)
 
+def plot_detailed_loss_curves(
+    country: str,
+    history: dict,
+    folder: Path = Path.cwd(),
+    fname: str = "detailed_loss_curves.png",
+    show: bool = False,
+):
+    """Plot separate loss curves for continuous and categorical components."""
+    apply_custom_theme()
+
+    if "train_cont_loss" not in history or "train_cat_loss" not in history:
+        print(f"[INFO] Detailed loss components not available for {country}")
+        return
+    
+    train_cont = np.array(history["train_cont_loss"], dtype=float)
+    train_cat = np.array(history["train_cat_loss"], dtype=float)
+    val_cont = np.array(history.get("val_cont_loss", []), dtype=float)
+    val_cat = np.array(history.get("val_cat_loss", []), dtype=float)
+    epochs = np.arange(1, len(train_cont) + 1)
+
+    # normalization for shape comparison
+    train_norm = train_cont / train_cont[0]
+    val_norm   = val_cont / val_cont[0]
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    axes[0, 0].plot(epochs, train_norm, label="Train Continuous", linewidth=2, color='blue')
+    if len(val_cont) > 0:
+        axes[0, 0].plot(epochs, val_norm, label="Val Continuous", linewidth=2, color='cyan')
+    axes[0, 0].set_title("Continuous MSE Loss (Normalized to check for overfitting)")
+    axes[0, 0].set_xlabel("Epoch")
+    axes[0, 0].set_ylabel("MSE")
+    axes[0, 0].set_yscale("log")
+    axes[0, 0].legend()
+    axes[0, 0].grid(True)
+
+    axes[0, 1].plot(epochs, train_cat, label="Train Categorical", linewidth=2, color='red')
+    if len(val_cat) > 0:
+        axes[0, 1].plot(epochs, val_cat, label="Val Categorical", linewidth=2, color='orange')
+    axes[0, 1].set_title("Categorical Cross-Entropy Loss")
+    axes[0, 1].set_xlabel("Epoch")
+    axes[0, 1].set_ylabel("Cross-Entropy")
+    axes[0, 1].set_yscale("log")
+    axes[0, 1].legend()
+    axes[0, 1].grid(True)
+
+    # loss ratio (CE/MSE)
+    if len(train_cat) > 0 and len(train_cont) > 0:
+        loss_ratio = train_cat / (train_cont + 1e-8)
+        axes[1, 0].plot(epochs, loss_ratio, linewidth=2, color='purple')
+        axes[1, 0].set_title("Loss Ratio (CE / MSE)")
+        axes[1, 0].set_xlabel("Epoch")
+        axes[1, 0].set_ylabel("Ratio")
+        axes[1, 0].grid(True)
+    
+    # loss weights
+    if "loss_weights" in history:
+        weights = history["loss_weights"]
+        axes[1, 1].bar(["Continuous", "Categorical"], 
+                      [weights.get("cont_weight", 1.0), weights.get("cat_weight", 1.0)],
+                      color=['blue', 'red'])
+        axes[1, 1].set_title("Loss Weights")
+        axes[1, 1].set_ylabel("Weight")
+        axes[1, 1].grid(True, axis='y')
+    
+    plt.suptitle(f"{country} — Detailed Loss Analysis", fontsize=20)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved detailed loss curves to {fname}")
+    if show:
+        plt.show()
+    plt.close(fig)
 
 #########################################
 ##          VALIDATION PLOTS           ##
@@ -556,3 +632,71 @@ def plot_raw_with_errors(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
+
+
+#########################################
+##             LATENT SPACE            ##
+#########################################
+
+def plot_latent_space(
+    country: str,
+    X_cont: np.ndarray,
+    X_cat: np.ndarray,
+    model: TabularAutoencoder,
+    device: str,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_latent_space.png",
+    show: bool = False,
+):
+    """Scatter plot showing latent space using PCA/t-SNE."""
+    apply_custom_theme()
+    
+    Xc_tensor = torch.from_numpy(X_cont).to(device)
+    Xk_tensor = torch.from_numpy(X_cat).to(device)
+    
+    model.eval()
+    with torch.no_grad():
+        z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
+    
+    if len(z) < 10:
+        print(f"[INFO] Not enough samples for latent space visualization: {len(z)}")
+        return
+    
+    pca = PCA(n_components=2)
+    z_pca = pca.fit_transform(z)
+    
+    if len(z) >= 50:
+        tsne = TSNE(n_components=2, perplexity=min(30, len(z)-1), random_state=42)
+        z_tsne = tsne.fit_transform(z)
+    
+    fig, axes = plt.subplots(1, 3 if len(z) >= 50 else 2, figsize=(18, 6))
+    
+    axes[0].scatter(z_pca[:, 0], z_pca[:, 1], alpha=0.6, s=20)
+    axes[0].set_title(f"{country} — Latent Space (PCA)")
+    axes[0].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%})")
+    axes[0].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%})")
+    axes[0].grid(True, alpha=0.3)
+    
+    axes[1].boxplot(z, showfliers=False)
+    axes[1].set_title(f"{country} — Latent Dimension Distributions")
+    axes[1].set_xlabel("Latent Dimension")
+    axes[1].set_ylabel("Value")
+    axes[1].grid(True, axis='y', alpha=0.3)
+    
+    if len(z) >= 50:
+        axes[2].scatter(z_tsne[:, 0], z_tsne[:, 1], alpha=0.6, s=20)
+        axes[2].set_title(f"{country} — Latent Space (t-SNE)")
+        axes[2].set_xlabel("t-SNE 1")
+        axes[2].set_ylabel("t-SNE 2")
+        axes[2].grid(True, alpha=0.3)
+    
+    plt.suptitle(f"{country} — Latent Space Analysis", fontsize=16)
+    plt.tight_layout()
+    
+    pca_path = folder / f"{fname[:-4]}_pca_coords.csv"
+    pd.DataFrame(z_pca, columns=['PC1', 'PC2']).to_csv(pca_path, index=False)
+    
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved latent space visualization to {fname}")
+    if show: plt.show()
+    plt.close(fig)

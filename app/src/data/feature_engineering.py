@@ -3,7 +3,6 @@ import pandas as pd
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional
-from sklearn.base import TransformerMixin
 from app.src.data.io_utils import conv_pkltodf
 from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
 from app.src.exploration.core.params import timezones

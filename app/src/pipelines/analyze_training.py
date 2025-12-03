@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.models.analysis import (
-    plot_training_curves, plot_error_histogram, plot_error_timeseries, summarize_validation
+    plot_training_curves, plot_detailed_loss_curves, plot_error_histogram, plot_error_timeseries, summarize_validation
 )
 
 
@@ -46,7 +46,7 @@ def load_training_history(country: str, models_dir: Path) -> dict:
     """Load training history for country and returns train_loss, val_loss, learning_rates, best_epoch."""
     path = Path(models_dir) / f"{country}_training_history.json"
     if not path.exists():
-        raise FileNotFoundError(f"Training history not found: {path}")
+        raise FileNotFoundError(f"[ERROR] Training history not found: {path}")
     with open(path, "r") as f:
         return json.load(f)
 
@@ -55,7 +55,7 @@ def load_validation_errors(country: str, validated_dir: Path) -> pd.DataFrame:
     """Load validation CSV and returns ts, error."""
     path = Path(validated_dir) / f"{country}_validation.csv"
     if not path.exists():
-        raise FileNotFoundError(f"Validation CSV not found: {path}")
+        raise FileNotFoundError(f"[ERROR] Validation CSV not found: {path}")
     return pd.read_csv(path, parse_dates=["ts"])
 
 
@@ -80,6 +80,13 @@ def analyze_country(country: str, show_plots: bool):
             [f"{country}_loss_curve.png", f"{country}_lr_schedule.png"],
             show_plots,
         )
+        plot_detailed_loss_curves(
+            country,
+            history,
+            ANALYSIS_TRAIN_DIR,
+            f"{country}_detailed_loss_curves.png",
+            show_plots,
+        )
         plot_error_histogram(
             country,
             val_df,
@@ -95,7 +102,7 @@ def analyze_country(country: str, show_plots: bool):
             f"{country}_error_timeseries.png",
             show_plots,
         )
-        summary = summarize_validation(
+        summarize_validation(
             country,
             val_df,
             ANALYSIS_VAL_DIR,
