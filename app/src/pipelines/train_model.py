@@ -256,6 +256,7 @@ def train_country(
             train_cat,
             model,
             cfg.device,
+            1000,
             OUT_DIR,
             f"{country}_latent_space.png"
         )

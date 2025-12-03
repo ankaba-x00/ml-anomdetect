@@ -644,6 +644,7 @@ def plot_latent_space(
     X_cat: np.ndarray,
     model: TabularAutoencoder,
     device: str,
+    max_samples: int = 1000,
     folder: Path = Path.cwd(),
     fname: str = "plot_latent_space.png",
     show: bool = False,
@@ -651,6 +652,12 @@ def plot_latent_space(
     """Scatter plot showing latent space using PCA/t-SNE."""
     apply_custom_theme()
     
+    if len(X_cont) > max_samples:
+        indices = np.random.choice(len(X_cont), max_samples, replace=False)
+        X_cont = X_cont[indices]
+        X_cat = X_cat[indices]
+        print(f"[INFO] Using random subset of {max_samples} samples for latent space")
+
     Xc_tensor = torch.from_numpy(X_cont).to(device)
     Xk_tensor = torch.from_numpy(X_cat).to(device)
     
