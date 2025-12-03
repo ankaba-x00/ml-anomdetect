@@ -64,7 +64,11 @@ def _load_results(
     with open(thr_path, "r") as f:
         threshold = json.load(f)["threshold"]
 
-    df_int = pd.read_csv(int_path, parse_dates=["start_ts", "end_ts", "duration_samples"])
+    df_int = pd.read_csv(
+        int_path, 
+        parse_dates=["start_ts", "end_ts", "duration_samples"],
+        date_format="ISO8601"
+    )
     return df_err, threshold, df_int
 
 
