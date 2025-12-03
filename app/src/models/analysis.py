@@ -653,7 +653,7 @@ def plot_latent_space(
     apply_custom_theme()
     
     if len(X_cont) > max_samples:
-        indices = np.random.choice(len(X_cont), max_samples, replace=False)
+        indices = np.random.RandomState(42).choice(len(X_cont), max_samples, replace=False)
         X_cont = X_cont[indices]
         X_cat = X_cat[indices]
         print(f"[INFO] Using random subset of {max_samples} samples for latent space")
