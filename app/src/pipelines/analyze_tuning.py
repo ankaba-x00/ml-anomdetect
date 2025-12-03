@@ -16,6 +16,8 @@ Outputs:
             results/models/tuned/analysis/<COUNTRY>/best_learning_curve.png
             results/models/tuned/analysis/<COUNTRY>/correlation_heatmap.png
             results/models/tuned/analysis/multi/best_losses.png
+            results/models/tuned/analysis/<COUNTRY_CODE>_latent_space_pca_coords.csv
+            results/models/tuned/analysis/<COUNTRY_CODE>_latent_space.png
     summary : results/models/tuned/analysis/<COUNTRY>/trial_results.csv
               results/models/tuned/analysis/multi/best_losses.json
 

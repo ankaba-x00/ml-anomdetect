@@ -6,11 +6,14 @@ Test model to detect anomalies in new data:
 - computes threshold of choice (p99, p995, MAD)
 - identifies anomaly intervals of certain min. sample length and sample gap 
 - prints summary stats
+- performs latent space analysis if specified
 
 Outputs:
     errors : results/models/tested/<COUNTRY>_errors_<method>.csv
     thresholds : results/models/tested/<COUNTRY>_threshold_<method>.json
     anomalies : results/models/tested/<COUNTRY>_intervals_<method>.csv
+    latent space: results/models/tested/<COUNTRY>_latent_space_pca_coords.csv
+                  results/models/tested/<COUNTRY>_latent_space.png
 
 Usage:
     python -m src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_test.txt]
@@ -24,6 +27,7 @@ from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
 from app.src.models.train import load_autoencoder
 from app.src.models.evaluate import apply_model
 from app.src.data.split import timeseries_seq_split
+from app.src.models.analysis import plot_latent_space
 
 
 #########################################
@@ -42,7 +46,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
+def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: bool = False):
     print(f"\n==============================")
     print(f"  DETECT ANOMALIES ({country})")
     print(f"==============================")
@@ -203,11 +207,29 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15):
         json.dump(threshold_data, f, indent=2)
     print(f"[OK] Saved threshold to {thr_path}")
 
+    # ------------------------------------
+    # Visualize latent space
+    # ------------------------------------
+    if latent:
+        print(f"[INFO] Preparing latent space visualization...")
+        plot_latent_space(
+            country, 
+            Xc_test_scald,
+            Xk_test,
+            model,
+            cfg.device,
+            1000,
+            OUT_DIR,
+            f"{country}_latent_space.png"
+        )
 
-def test_all(method: str, tr: int, vr: int):
+    print(f"[DONE] Tested model for {country}")
+
+
+def test_all(method: str, tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
-            test_country(c, method=method, tr=tr, vr=vr)
+            test_country(c, method=method, tr=tr, vr=vr, latent=latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model testings completed!")
@@ -242,6 +264,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-L", "--latent",
+        action="store_true",
+        help="generate latent space plot after training"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
@@ -252,12 +280,14 @@ if __name__ == "__main__":
         test_all(
             method=args.method, 
             tr=args.tr,
-            vr=args.vr
+            vr=args.vr,
+            latent=args.latent
         )
     else:
         test_country(
             args.target.upper(), 
             method=args.method, 
             tr=args.tr,
-            vr=args.vr
+            vr=args.vr,
+            latent=args.latent
         )

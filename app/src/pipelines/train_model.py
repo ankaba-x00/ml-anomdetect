@@ -217,6 +217,24 @@ def train_country(
         json.dump(history, f, indent=2)
     print(f"[OK] Saved training history to {history_path}")
 
+    # ------------------------------------
+    # Visualize latent space
+    # ------------------------------------
+    if latent:
+        print(f"[INFO] Preparing latent space visualization...")
+        if full or tr == 100:
+            train_cont_scald, train_cat, = Xc_np_scald, Xk_np
+        plot_latent_space(
+            country, 
+            train_cont_scald, 
+            train_cat,
+            model,
+            cfg.device,
+            1000,
+            OUT_DIR,
+            f"{country}_latent_space.png"
+        )
+
     print(f"[DONE] Trained model for {country}")
 
     # ------------------------------------
@@ -242,24 +260,6 @@ def train_country(
         print(f"[OK] Saved threshold to {thr_path}")
 
         print(f"[DONE] Preparation for inference model for {country}")
-    
-    # ------------------------------------
-    # Visualize latent space
-    # ------------------------------------
-    if latent:
-        print(f"[INFO] Preparing latent space visualization...")
-        if full or tr == 100:
-            train_cont_scald, train_cat, = Xc_np_scald, Xk_np
-        plot_latent_space(
-            country, 
-            train_cont_scald, 
-            train_cat,
-            model,
-            cfg.device,
-            1000,
-            OUT_DIR,
-            f"{country}_latent_space.png"
-        )
 
 
 def train_all(tr: int, vr: int, full: bool, method: str, cw: int, latent: bool):

@@ -4,6 +4,7 @@ Validate a trained autoencoder:
 - loads model and features
 - computes reconstruction errors
 - prints summary stats
+- performs latent space analysis if specified
 
 Outputs: 
     error per ts : results/models/validate/<COUNTRY_CODE>_validation.csv
@@ -20,6 +21,7 @@ from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
 from app.src.models.evaluate import reconstruction_error
 from app.src.models.train import load_autoencoder
 from app.src.data.split import timeseries_seq_split
+from app.src.models.analysis import plot_latent_space
 
 
 #########################################
@@ -37,7 +39,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def validate_country(country: str, tr: int, vr: int):
+def validate_country(country: str, tr: int, vr: int, latent: bool):
     print(f"\n==============================")
     print(f"  VALIDATE MODEL ({country})")
     print(f"==============================")
@@ -144,12 +146,29 @@ def validate_country(country: str, tr: int, vr: int):
     })
     out_path = OUT_DIR / f"{country}_validation.csv"
     df_out.to_csv(out_path, index=False)
+
+    # ------------------------------------
+    # Visualize latent space
+    # ------------------------------------
+    if latent:
+        print(f"[INFO] Preparing latent space visualization...")
+        plot_latent_space(
+            country, 
+            Xc_val_scald,
+            Xk_val,
+            model,
+            cfg.device,
+            1000,
+            OUT_DIR,
+            f"{country}_latent_space.png"
+        )
+    
     print(f"[DONE] Validation CSV saved: {out_path}")
 
-def validate_all(tr: int, vr: int):
+def validate_all(tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
-            validate_country(c, tr, vr)
+            validate_country(c, tr, vr, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model validations completed!")
@@ -177,6 +196,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-L", "--latent",
+        action="store_true",
+        help="generate latent space plot after training"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to validate US model, or 'all' to evaluate all country models"
     )
@@ -186,6 +211,6 @@ if __name__ == "__main__":
     target = args.target
 
     if target.lower() == "all":
-        validate_all(args.tr, args.vr)
+        validate_all(args.tr, args.vr, args.latent)
     else:
-        validate_country(target.upper(), args.tr, args.vr)
+        validate_country(target.upper(), args.tr, args.vr, args.latent)

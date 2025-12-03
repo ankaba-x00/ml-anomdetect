@@ -24,9 +24,11 @@ Outputs:
     training hist : results/models/tuned/<COUNTRY>_best_history.json
     tuned scaler fitted on cont features: results/models/tuned/<COUNTRY>_scaler.pkl
     categorical dims : results/models/tuned/<COUNTRY>_cat_dims.json
+    latent space : results/models/tuned/<COUNTRY>_latent_space_pca_coords.csv
+                   results/models/tuned/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_tune.txt]
+    python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 from app.src.data.feature_engineering import COUNTRIES
@@ -37,7 +39,7 @@ from app.src.models.tune import tune_country
 ##                 RUN                 ##
 #########################################
 
-def tune_all(trials: int, pruner: str, tr: int, vr: int):
+def tune_all(trials: int, pruner: str, tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
             tune_country(
@@ -45,7 +47,8 @@ def tune_all(trials: int, pruner: str, tr: int, vr: int):
                 n_trials=trials, 
                 pruner=pruner, 
                 tr=tr, 
-                vr=vr
+                vr=vr,
+                latent=latent
             )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
@@ -86,6 +89,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-L", "--latent",
+        action="store_true",
+        help="generate latent space plot after training"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
     )
@@ -99,12 +108,13 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        tune_all(args.ntrials, args.pruner, args.tr, args.vr)
+        tune_all(args.ntrials, args.pruner, args.tr, args.vr, args.latent)
     else:
         tune_country(
             country=target.upper(),
             n_trials=args.ntrials,
             pruner=args.pruner,
             tr=args.tr, 
-            vr=args.vr
+            vr=args.vr,
+            latent=args.latent
         )

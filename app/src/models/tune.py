@@ -8,6 +8,7 @@ from app.src.data.feature_engineering import build_feature_matrix
 from app.src.models.autoencoder import AEConfig
 from app.src.models.train import train_autoencoder, save_autoencoder
 from app.src.data.split import timeseries_seq_split
+from app.src.models.analysis import plot_latent_space
 
 
 #########################################
@@ -163,7 +164,8 @@ def tune_country(
         n_trials: int = 40, 
         pruner: str = "median",
         tr: int = 75,
-        vr: int = 15
+        vr: int = 15,
+        latent: bool = False
     ):
     """Full Optuna tuning incl. creating study, running optimization, retraining best model fully"""
     set_global_seeds(42)
@@ -279,6 +281,19 @@ def tune_country(
         json.dump(cat_dims, f, indent=2)
 
     print(f"\n[OK] Finished tuning for {country}")
+
+    if latent:
+        plot_latent_space(
+            country, 
+            Xc_train_scald, 
+            Xk_train,
+            best_model,
+            best_cfg.device,
+            1000,
+            OUT_DIR,
+            f"{country}_best_latent_space.png"
+        )
+        
     print(f"[DONE] Saved best model to {out_model_path}")
 
     return study
