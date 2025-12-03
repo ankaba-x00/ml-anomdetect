@@ -7,6 +7,7 @@ Analyze training and validation performance for one or all countries:
 
 Outputs:
     plots : results/models/trained/<COUNTRY_CODE>_loss_curve.png
+            results/models/trained/<COUNTRY_CODE>_detailed_loss_curves.png
             results/models/trained/<COUNTRY_CODE>_lr_schedule.png
             results/models/validated/<COUNTRY_CODE>_error_hist.png
             results/models/validated/<COUNTRY_CODE>_error_timeseries.png

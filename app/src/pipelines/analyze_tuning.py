@@ -13,13 +13,16 @@ Outputs:
             results/models/tuned/analysis/<COUNTRY>/contour.png + .html
             results/models/tuned/analysis/<COUNTRY>/slice.png + .html
             results/models/tuned/analysis/<COUNTRY>/3d_scatter.png
+            results/models/tuned/analysis/<COUNTRY>/losses_all_trials
             results/models/tuned/analysis/<COUNTRY>/best_learning_curve.png
             results/models/tuned/analysis/<COUNTRY>/correlation_heatmap.png
+            results/models/tuned/analysis/<COUNTRY>/loss_component_analysis.png
             results/models/tuned/analysis/multi/best_losses.png
-            results/models/tuned/analysis/<COUNTRY_CODE>_latent_space_pca_coords.csv
-            results/models/tuned/analysis/<COUNTRY_CODE>_latent_space.png
+            results/models/tuned/analysis/multi/best_weights.png
+            results/models/tuned/analysis/multi/weight_loss_correlation.png
     summary : results/models/tuned/analysis/<COUNTRY>/trial_results.csv
               results/models/tuned/analysis/multi/best_losses.json
+              results/models/tuned/analysis/multi/best_weights.json
 
 Usage:
     python -m src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
