@@ -54,13 +54,17 @@ def _load_results(
     int_path = TESTED_DIR / f"{country}_intervals_{method}.csv"
 
     if not err_path.exists():
-        raise FileNotFoundError(err_path)
+        raise FileNotFoundError(f"Error not found: {err_path}")
+    if not thr_path.exists():
+        raise FileNotFoundError(f"Threshold dict not found: {thr_path}")
+    if not int_path.exists():
+        raise FileNotFoundError(f"Intervals not found: {int_path}")
 
     df_err = pd.read_csv(err_path, parse_dates=["ts"])
     with open(thr_path, "r") as f:
         threshold = json.load(f)["threshold"]
 
-    df_int = pd.read_csv(int_path, parse_dates=["start_ts", "end_ts"])
+    df_int = pd.read_csv(int_path, parse_dates=["start_ts", "end_ts", "duration_samples"])
     return df_err, threshold, df_int
 
 
@@ -123,7 +127,7 @@ def analyze_raw(
                 f"{country}_raw_{name}_erroroverlay_{method}.png",
                 show_plots
             )
-        except ValueError or IndexError:
+        except (ValueError, IndexError):
             print("[Error] Invalid index. Please enter valid integer from signal list.")
 
 def analyze_country(
