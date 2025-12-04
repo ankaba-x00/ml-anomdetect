@@ -103,7 +103,7 @@ def calibrate_threshold(
                     best_temp_metric = combined_metric
                     best_temp = temp
             
-            print(f"[CAL] Optimal inference temperature: {best_temp:.3f}")
+            print(f"[CAL] Computed optimal inference temperature in cw: {best_temp:.3f}")
             temperature_tuned = True
         else:
             best_temp = 1.0
@@ -138,7 +138,7 @@ def calibrate_threshold(
         # Compute threshold on cleaned window
         # ------------------------------------
         threshold = _compute_threshold(method, clean_errors)
-        print(f"[INFO] Computed threshold ({method}) = {threshold:.6f}")
+        print(f"[CAL] Computed threshold ({method}) = {threshold:.6f}")
 
         anomaly_rate = np.mean(errors > threshold) * 100
         print(f"[INFO] Expected anomaly rate: {anomaly_rate:.2f}%")
