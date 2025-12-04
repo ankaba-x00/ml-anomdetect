@@ -142,7 +142,7 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: 
     print(f"Detected anomaly intervals =  {len(starts)}\n")
 
     for s, e in zip(starts, ends):
-        print(f"  > Interval {ts_eval[s]} - {ts_eval[e]} ({e-s} anomalies)")
+        print(f"  > Interval {ts_eval[s]} - {ts_eval[e]-1} ({e-s} anomalies)")
 
     print(f"\nError Statistics:")
     print(f"Min:      {errors.min():.6f}")

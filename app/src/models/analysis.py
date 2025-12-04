@@ -631,7 +631,7 @@ def plot_multi_weights_overview(
         print("[INFO] No loss weights found to plot")
         return
     
-    df = pd.DataFrame(best_weights, orient='index')
+    df = pd.DataFrame.from_dict(best_weights, orient='index')
     df.index.name = "country"
     df = df.reset_index()
     
@@ -665,7 +665,8 @@ def plot_multi_weights_overview(
     axes[2].set_xlabel("Country")
     axes[2].set_ylabel("Ratio (cat/cont)")
     axes[2].set_title("Weight Ratio by Country")
-    axes[2].set_xticklabels(df["country"], rotation=45)
+    #axes[2].set_xticklabels(df["country"], rotation=45)
+    axes[2].tick_params(axis='x', rotation=45)
     axes[2].legend()
     axes[2].grid(True, axis='y', alpha=0.3)
     
@@ -689,14 +690,13 @@ def plot_multi_weight_loss_correlation(
     merged = {}
     for country in set(weights_data.keys()) & set(losses_data.keys()):
         merged[country] = {
-            "country": country,
             "cont_weight": weights_data[country]["cont_weight"],
             "cat_weight": weights_data[country]["cat_weight"],
             "ratio": weights_data[country]["ratio"],
             "loss": losses_data[country],
         }
 
-    df = pd.DataFrame(merged, orient='index')
+    df = pd.DataFrame.from_dict(merged, orient='index')
     df.index.name = "country"
     df = df.reset_index()
 
