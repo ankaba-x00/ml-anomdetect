@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any
-import json, pickle
+import json, pickle, torch
 import numpy as np
 from app.src.models.autoencoder import TabularAutoencoder
 from app.src.models.evaluate import reconstruction_error, anomaly_mask, find_anomalies
@@ -41,6 +41,9 @@ def load_inference_bundle(country: str) -> Dict[str, Any]:
 
     model, cfg = load_autoencoder(model_path)
     
+    payload = torch.load(model_path, map_location="cpu")
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 1.0})
+
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
 
@@ -54,15 +57,18 @@ def load_inference_bundle(country: str) -> Dict[str, Any]:
         calibration_obj = json.load(f)
         threshold = calibration_obj["threshold"]
         method = calibration_obj["method"]
+        temperature = calibration_obj.get("temperature_inference", 1.0)
 
     return {
         "model": model,
         "config": cfg,
+        "loss_weights": loss_weights,
         "scaler": scaler,
         "num_cont": num_cont,
         "cat_dims": cat_dims,
         "threshold": float(threshold),
-        "method": method
+        "method": method,
+        "temperature": temperature,
     }
 
 
@@ -78,6 +84,9 @@ def run_inference(
     device: str = None,
     min_length: int = 1,
     merge_gap: int = 0,
+    cont_weight: float = 1.0,
+    cat_weight: float = 1.0,  
+    temperature: float = 1.0,
 ) -> dict[str, Any]:
     """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
     errors = reconstruction_error(
@@ -85,6 +94,9 @@ def run_inference(
         X_cont,
         X_cat,
         device=device,
+        cont_weight=cont_weight,
+        cat_weight=cat_weight,
+        temperature=temperature,
     )
     mask = anomaly_mask(errors, threshold)
     intervals = find_anomalies(

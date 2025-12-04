@@ -116,8 +116,8 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
                 loss_weights = payload.get("additional_info", {}).get("loss_weights", {})
                 weights_data[c] = {
                     "cont_weight": loss_weights.get("cont_weight", 1.0),
-                    "cat_weight": loss_weights.get("cat_weight", 1.0),
-                    "ratio": loss_weights.get("cat_weight", 1.0) / max(loss_weights.get("cont_weight", 1.0), 1e-8)
+                    "cat_weight": loss_weights.get("cat_weight", 0.0),
+                    "ratio": loss_weights["cat_weight"] / max(loss_weights["cont_weight"], 1e-8)
                 }
         except Exception:
             continue

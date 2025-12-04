@@ -97,9 +97,10 @@ def objective(
         "lr_scheduler",
         ["none", "plateau", "cosine", "onecycle"]
     )
-    cont_weight = trial.suggest_float("cont_weight", 0.5, 2.0)
-    cat_weight = trial.suggest_float("cat_weight", 0.5, 2.0)
+    cont_weight = trial.suggest_float("cont_weight", 0.0, 2.0)
+    cat_weight = trial.suggest_float("cat_weight", 0.0, 2.0)
     loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
+    activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "gelu", "tanh", "elu"])
 
     # ------------------------------------
     # AEConfig object
@@ -123,6 +124,8 @@ def objective(
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         device="cuda" if torch.cuda.is_available() else "cpu",
+        activation=activation,
+        temperature=1.0
     )
 
     # ------------------------------------
@@ -227,8 +230,10 @@ def tune_country(
     hidden_dims = [p[f"h{i}"] for i in range(depth)]
 
     cont_weight = p.get("cont_weight", 1.0)
-    cat_weight = p.get("cat_weight", 1.0)
+    cat_weight = p.get("cat_weight", 0.0)
     loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
+
+    activation = p.get("activation", "relu")
 
     best_cfg = AEConfig(
         num_cont=num_cont,
@@ -249,6 +254,8 @@ def tune_country(
         optimizer=p["optimizer"],
         lr_scheduler=p["lr_scheduler"],
         device="cuda" if torch.cuda.is_available() else "cpu",
+        activation=activation,
+        temperature=1.0
     )
 
     best_model, best_history = train_autoencoder(

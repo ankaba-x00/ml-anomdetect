@@ -184,7 +184,7 @@ def plot_detailed_loss_curves(
     if "loss_weights" in history:
         weights = history["loss_weights"]
         axes[1, 1].bar(["Continuous", "Categorical"], 
-                      [weights.get("cont_weight", 1.0), weights.get("cat_weight", 1.0)],
+                      [weights.get("cont_weight", 1.0), weights.get("cat_weight", 0.0)],
                       color=['blue', 'red'])
         axes[1, 1].set_title("Loss Weights")
         axes[1, 1].set_ylabel("Weight")

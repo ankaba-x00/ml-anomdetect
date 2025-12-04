@@ -20,9 +20,10 @@ def detect_anomalies(
     ):
     try: 
         bundle = load_inference_bundle(country)
-        newdata = run_fetch(country, date_from, date_to)
-        X_cont_df, X_cat_df, _, cat_dims2, = build_features(newdata)
 
+        newdata = run_fetch(country, date_from, date_to)
+        X_cont_df, X_cat_df, _, cat_dims2, = build_features(country, newdata)
+        
         assert cat_dims2.keys() == bundle["cat_dims"].keys(), "[Error] Saved cat_dims fatal mismatch — rebuild features."
 
         X_cont = X_cont_df.values.astype(np.float64)
@@ -40,6 +41,9 @@ def detect_anomalies(
             X_cat=X_cat,
             threshold=bundle["threshold"],
             device=bundle["config"].device,
+            cont_weight=bundle["loss_weights"]["cont_weight"],
+            cat_weight=bundle["loss_weights"]["cat_weight"],
+            temperature=bundle.get("temperature", 1.0),
         )
 
         errors = results["errors"]
@@ -114,7 +118,7 @@ if __name__=="__main__":
     parser.add_argument(
         "-d", "--date",
         type=str, 
-        default="11/14/2025",
+        default="11/15/2025",
         help="prediction date in format MM/DD/YYYT within range 11/15/2025 to yesterday [default: 11/15/2025]"
     )
 

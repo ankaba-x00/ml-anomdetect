@@ -222,7 +222,7 @@ def run_build(country: str, data: dict) -> pd.DataFrame:
 ##               MAIN RUN              ##
 #########################################
 
-def build_features(newdata: dict) -> tuple[pd.DataFrame, pd.DataFrame, int, dict]:
+def build_features(country: str, newdata: dict) -> tuple[pd.DataFrame, pd.DataFrame, int, dict]:
     """Fetches and processes raw data to return feature matrix objects ready for inference."""
    
     raw_df = run_build(country, newdata)

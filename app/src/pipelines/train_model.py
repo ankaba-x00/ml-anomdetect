@@ -97,11 +97,11 @@ def train_country(
         try:
             loss_weights = {
                 "cont_weight": best_params.get("cont_weight", 1.0),
-                "cat_weight": best_params.get("cat_weight", 1.0),
+                "cat_weight": best_params.get("cat_weight", 0.0),
             }
             print(f"[INFO] Using tuned loss weights: {loss_weights}")
         except Exception:
-            loss_weights = {"cont_weight": 1.0, "cat_weight": 1.0}
+            loss_weights = {"cont_weight": 1.0, "cat_weight": 0.0}
             print(f"[INFO] Using default loss weights: {loss_weights}")
 
     else:
@@ -125,11 +125,13 @@ def train_country(
             lr_scheduler="plateau",
             use_lr_scheduler=True,
             anomaly_threshold=None,
+            activation="relu",
+            temperature=1.0
         )
     
     # Default loss weights if not provided
     if loss_weights is None:
-        loss_weights = {"cont_weight": 1.0, "cat_weight": 0.5}
+        loss_weights = {"cont_weight": 1.0, "cat_weight": 0.0}
 
     # ------------------------------------
     # Full OR Split : Train model
@@ -251,7 +253,9 @@ def train_country(
             method, 
             cw,
             cont_weight=loss_weights["cont_weight"],
-            cat_weight=loss_weights["cat_weight"] 
+            cat_weight=loss_weights["cat_weight"],
+            tune_temperature=True,
+            temperature_range=[0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0]
         )
 
         thr_path = OUT_DIR / f"{country}_cal_threshold.json"

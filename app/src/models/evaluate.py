@@ -14,7 +14,8 @@ def reconstruction_error(
     X_cat: np.ndarray,
     device: Optional[str] = None,
     cont_weight: float = 1.0,
-    cat_weight: float = 1.0,
+    cat_weight: float = 0.0,
+    temperature: float = 1.0,
 ) -> np.ndarray:
     """Per-sample reconstruction error normalized by features."""
     if device is None:
@@ -27,7 +28,7 @@ def reconstruction_error(
     Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
 
     with torch.no_grad():
-        errors = model.anomaly_score(Xc, Xk, cont_weight, cat_weight)
+        errors = model.anomaly_score(Xc, Xk, cont_weight, cat_weight, temperature)
 
     return errors.cpu().numpy()
 
@@ -133,7 +134,8 @@ def apply_model(
     min_length: int = 1,
     merge_gap: int = 0,
     cont_weight: float = 1.0,
-    cat_weight: float = 1.0,
+    cat_weight: float = 0.0,
+    temperature: float = 1.0,
 ) -> dict[str, Any]:
     """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
     errors = reconstruction_error(
@@ -142,7 +144,8 @@ def apply_model(
         X_cat,
         device,
         cont_weight,
-        cat_weight
+        cat_weight,
+        temperature
     )
     if method == "p99":
         threshold = threshold_percentile(errors, p=99)

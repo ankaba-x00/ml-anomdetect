@@ -106,7 +106,7 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: 
     # Load loss weights
     # --------------------
     payload = torch.load(model_path, map_location="cpu")
-    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 1.0})
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 0.0})
 
     cont_weight = loss_weights["cont_weight"]
     cat_weight = loss_weights["cat_weight"]

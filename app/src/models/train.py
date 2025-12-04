@@ -53,7 +53,7 @@ def train_autoencoder(
     """
 
     if loss_weights is None:
-        loss_weights = {"cont_weight": 1.0, "cat_weight": 1.0}
+        loss_weights = {"cont_weight": 1.0, "cat_weight": 0.0}
 
     device = torch.device(config.device)
 
@@ -88,6 +88,7 @@ def train_autoencoder(
         embedding_dim=config.embedding_dim,
         continuous_noise_std=config.continuous_noise_std,
         residual_strength=config.residual_strength,
+        activation=config.activation
     ).to(device)
 
     # -------------------------
@@ -198,7 +199,7 @@ def train_autoencoder(
             optimizer.zero_grad(set_to_none=True)
 
             # Forward pass
-            cont_recon, cat_recons = model(batch_Xc, batch_Xk)
+            cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
             
             # Continuous loss (MSE)
             cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
@@ -262,7 +263,7 @@ def train_autoencoder(
                     batch_Xk = batch_Xk.to(device, non_blocking=True)
 
                     # Forward pass
-                    cont_recon, cat_recons = model(batch_Xc, batch_Xk)
+                    cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
                     
                     # Continuous loss
                     cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
@@ -424,6 +425,7 @@ def load_autoencoder(
         embedding_dim=cfg.embedding_dim,
         continuous_noise_std=cfg.continuous_noise_std,
         residual_strength=cfg.residual_strength,
+        activation=cfg.activation
     )
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
