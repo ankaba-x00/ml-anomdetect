@@ -262,7 +262,18 @@ def tune_country(
     # Save output
     # ------------------------------------
     out_model_path = OUT_DIR / f"{country}_best_model.pt"
-    save_autoencoder(best_model, best_cfg, out_model_path)
+    save_autoencoder(
+        model=best_model, 
+        config=best_cfg, 
+        path=out_model_path,
+        additional_info={
+            "country": country,
+            "train_ratio": tr,
+            "val_ratio": vr,
+            "loss_weights": loss_weights,
+            "total_samples": len(Xc_train_scald),
+        }
+    )
 
     with open(OUT_DIR / f"{country}_best_params.json", "w") as f:
         json.dump(p, f, indent=2)
