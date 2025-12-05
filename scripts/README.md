@@ -1,12 +1,12 @@
 # MODULE USAGE GUIDE
 
 - [Overview](#overview)
-- [Step-by-step Instructions](#step-by-step)
+- [Step-by-step Instructions](#step-by-step-instructions)
 - [Prerequisites](#prerequisites)
-- [Fetch Datasets](#1-fetch-datasets)
-- [Build and Train Models](#2-build-and-train-models)
-- [Tune Models](#3-tune-models)
-- [Use Models](#4-use-models)
+- [Fetch Datasets](#fetch-datasets)
+- [Build and Train Models](#build-and-train-models)
+- [Tune Models](#tune-models)
+- [Use Models](#use-models)
 
 ## Overview
 This package has multiple sequential stages
