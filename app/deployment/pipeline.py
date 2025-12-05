@@ -119,7 +119,7 @@ if __name__=="__main__":
         "-d", "--date",
         type=str, 
         default="11/15/2025",
-        help="prediction date in format MM/DD/YYYT within range 11/15/2025 to yesterday [default: 11/15/2025]"
+        help="prediction date in format MM/DD/YYYY within range 11/15/2025 to yesterday [default: 11/15/2025]"
     )
 
     parser.add_argument(
