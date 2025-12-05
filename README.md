@@ -62,6 +62,13 @@ Cloudflare Radar API  → Feature Engineering → Country-Specific Models → An
 
 ## Getting Started
 
+This project includes a full end-to-end workflow for fetching datasets, training anomaly-detection models, tuning hyperparameters, testing, and running inference.  
+For the complete step-by-step guide, please read the **Usage Guide**:
+
+<br> --> see ./scripts/README.md (recommended)
+
+Below is a minimal quick-start.
+
 ### 1. Installation
     
     git clone https://github.com/ankaba-x00/ml-anomdetect.git
