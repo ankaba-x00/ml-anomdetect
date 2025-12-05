@@ -12,7 +12,7 @@ Outputs:
            results/models/tested/analysis/<COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
 
 Usage:
-    python -m src.pipelines.analyze_testing [-s] [-M] [-R] <COUNTRY|all|none>
+    python -m app.src.pipelines.analyze_testing [-s] [-M] [-R] <COUNTRY|all|none>
 """
 
 import json, pickle

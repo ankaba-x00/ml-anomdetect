@@ -14,7 +14,7 @@ Outputs:
     scaler : datasets/scalers/scaler_<COUNTRY_CODE>.pkl
 
 Usage:
-    python -m src.pipelines.build_features
+    python -m app.src.pipelines.build_features
 """
 
 from pathlib import Path

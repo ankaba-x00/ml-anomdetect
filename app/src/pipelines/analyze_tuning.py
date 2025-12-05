@@ -25,7 +25,7 @@ Outputs:
               results/models/tuned/analysis/multi/best_weights.json
 
 Usage:
-    python -m src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
+    python -m app.src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
 """
 
 import json, optuna, torch

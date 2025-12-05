@@ -16,7 +16,7 @@ Outputs:
                   results/models/tested/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_test.txt]
+    python -m app.src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_test.txt]
 """
 
 import pickle, json, torch

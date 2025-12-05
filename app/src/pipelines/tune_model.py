@@ -28,7 +28,7 @@ Outputs:
                    results/models/tuned/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all> [| tee stdout_tune.txt]
+    python -m app.src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 from app.src.data.feature_engineering import COUNTRIES

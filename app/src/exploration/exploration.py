@@ -13,7 +13,7 @@ Outputs:
     png files : results/exploration/<figure_type>.png
 
 Usage: 
-    python -m src.exploration.exploration
+    python -m app.src.exploration.exploration
 """
 
 from typing import Optional

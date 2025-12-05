@@ -25,7 +25,7 @@ Outputs:
                    app/deployment/models/<COUNTRY_CODE>_latent_space.png
 
 Usage:
-    python -m src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <COUNTRY_CODE|all> [| tee stdout_train.txt]
+    python -m app.src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <COUNTRY_CODE|all> [| tee stdout_train.txt]
 """
 
 import json, pickle

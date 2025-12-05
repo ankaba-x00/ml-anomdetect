@@ -14,7 +14,7 @@ Outputs:
     summary : results/models/validated/<COUNTRY_CODE>_summary.json
 
 Usage:
-    python -m src.pipelines.analyze_training [-s] <COUNTRY_CODE|all>
+    python -m app.src.pipelines.analyze_training [-s] <COUNTRY_CODE|all>
 """
 import json
 from pathlib import Path

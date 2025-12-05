@@ -4,7 +4,7 @@ Fetches raw datasets from Cloudflare.
 - outputs json files
 
 Outputs:
-    raw files : datasets/raw/<dataset>.json
+    raw files : app/datasets/raw/<dataset>.json
 
 Usage: 
     python -m app.src.data.fetch
