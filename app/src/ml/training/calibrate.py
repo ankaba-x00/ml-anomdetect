@@ -3,8 +3,8 @@ import numpy as np
 from typing import Union
 from sklearn.base import TransformerMixin
 from app.src.data.feature_engineering import build_feature_matrix
-from app.src.models.autoencoder import TabularAutoencoder
-from app.src.models.evaluate import reconstruction_error, threshold_percentile, threshold_mad
+from app.src.ml.models.ae import TabularAutoencoder
+from app.src.ml.training.evaluate import reconstruction_error, threshold_percentile, threshold_mad
 
 
 def _compute_threshold(method: str, err_array: np.ndarray):

@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from app.src.models.autoencoder import AEConfig, TabularAutoencoder
+from app.src.ml.models.ae import AEConfig, TabularAutoencoder
 
 
 #########################################

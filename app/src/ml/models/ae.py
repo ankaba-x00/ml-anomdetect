@@ -256,3 +256,7 @@ class TabularAutoencoder(nn.Module):
             # Weighted combination
             total_weight = cont_weight + cat_weight
             return (cont_weight * cont_error + cat_weight * cat_error) / total_weight
+        
+################################################
+## HYBRID TABULAR AUTOENCODER WITH EMBEDDINGS ##
+################################################

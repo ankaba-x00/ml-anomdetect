@@ -7,7 +7,7 @@ Validate a trained autoencoder:
 - performs latent space analysis if specified
 
 Outputs: 
-    error per ts : results/models/validate/<COUNTRY_CODE>_validation.csv
+    error per ts : results/ml/validate/<COUNTRY_CODE>_validation.csv
 
 Usage:
     python -m app.src.pipelines.validate_model [-tr <int>] [-vr <int>] <COUNTRY_CODE|all> [| tee stdout_val.txt]
@@ -18,10 +18,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
-from app.src.models.evaluate import reconstruction_error
-from app.src.models.train import load_autoencoder
+from app.src.ml.training.evaluate import reconstruction_error
+from app.src.ml.training.train import load_autoencoder
 from app.src.data.split import timeseries_seq_split
-from app.src.models.analysis import plot_latent_space
+from app.src.ml.analysis.analysis import plot_latent_space
 
 
 #########################################
@@ -30,8 +30,8 @@ from app.src.models.analysis import plot_latent_space
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-MODELS_DIR = PROJECT_ROOT / "results" / "models" / "trained"
-OUT_DIR = PROJECT_ROOT / "results" / "models" / "validated"
+MODELS_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
+OUT_DIR = PROJECT_ROOT / "results" / "ml" / "validated"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

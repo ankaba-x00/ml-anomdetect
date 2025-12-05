@@ -5,10 +5,10 @@ import numpy as np
 from sklearn.preprocessing import RobustScaler
 from dataclasses import asdict
 from app.src.data.feature_engineering import build_feature_matrix
-from app.src.models.autoencoder import AEConfig
-from app.src.models.train import train_autoencoder, save_autoencoder
 from app.src.data.split import timeseries_seq_split
-from app.src.models.analysis import plot_latent_space
+from app.src.ml.models.ae import AEConfig
+from app.src.ml.training.train import train_autoencoder, save_autoencoder
+from app.src.ml.analysis.analysis import plot_latent_space
 
 
 #########################################
@@ -17,7 +17,7 @@ from app.src.models.analysis import plot_latent_space
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-OUT_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
+OUT_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 TRIAL_HIST_DIR = OUT_DIR / "trial_history"
 TRIAL_HIST_DIR.mkdir(parents=True, exist_ok=True)

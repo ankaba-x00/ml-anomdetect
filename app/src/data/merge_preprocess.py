@@ -14,7 +14,6 @@ Usage:
 """
 
 import json
-import numpy as np
 from pathlib import Path
 from app.src.data.preprocess import  read_json_time_csplit, save_data
 

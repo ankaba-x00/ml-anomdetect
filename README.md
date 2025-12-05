@@ -116,7 +116,7 @@ app/
 ├── src/
 │   ├── data/         # Data ingestion & preprocessing
 │   ├── exploration/  # EDA, diagnostics, visualizations
-│   ├── models/       # Autoencoder implementation
+│   ├── ml/           # All DL modules incl. models, training, tuning, analysis
 │   └── pipelines/    # Training, validation, tuning & testing workflows
 └── tests/            # PyTest-based unit tests
 results/              # Trained models, histories, scalers, visual outputs

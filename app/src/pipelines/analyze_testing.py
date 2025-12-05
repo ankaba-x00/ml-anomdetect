@@ -6,10 +6,10 @@ Visualize test-set anomaly detection results:
 - generates plots (error curve with threshold and detected anomalies, anomaly intervals, error histogram, raw target signal with error overlay)
 
 Outputs:
-    plots: results/models/tested/analysis/<COUNTRY>_errorcurves_<METHOD>.png
-           results/models/tested/analysis/<COUNTRY>_hist_<METHOD>.png
-           results/models/tested/analysis/<COUNTRY>_intervals_<METHOD>.png
-           results/models/tested/analysis/<COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
+    plots: results/ml/tested/analysis/<COUNTRY>_errorcurves_<METHOD>.png
+           results/ml/tested/analysis/<COUNTRY>_hist_<METHOD>.png
+           results/ml/tested/analysis/<COUNTRY>_intervals_<METHOD>.png
+           results/ml/tested/analysis/<COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
 
 Usage:
     python -m app.src.pipelines.analyze_testing [-s] [-M] [-R] <COUNTRY|all|none>
@@ -22,7 +22,7 @@ from pathlib import Path
 from app.src.data.feature_engineering import build_country_dataframe
 from app.src.data.split import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.models.analysis import (
+from app.src.ml.analysis.analysis import (
     plot_error_curve,
     plot_intervals,
     plot_error_hist,
@@ -36,7 +36,7 @@ from app.src.models.analysis import (
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-TESTED_DIR = PROJECT_ROOT / "results" / "models" / "tested"
+TESTED_DIR = PROJECT_ROOT / "results" / "ml" / "tested"
 ANALYSIS_TEST_DIR = TESTED_DIR / "analysis"
 ANALYSIS_TEST_DIR.mkdir(parents=True, exist_ok=True)
 

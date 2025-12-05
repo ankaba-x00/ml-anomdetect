@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from typing import Any, Optional
-from app.src.models.autoencoder import TabularAutoencoder
+from app.src.ml.models.ae import TabularAutoencoder
 
 
 #########################################

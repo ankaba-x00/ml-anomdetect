@@ -6,12 +6,12 @@ Analyze training and validation performance for one or all countries:
 - generates plots (loss curves, LR schedules, error histograms, error time series) and validation summary
 
 Outputs:
-    plots : results/models/trained/<COUNTRY_CODE>_loss_curve.png
-            results/models/trained/<COUNTRY_CODE>_detailed_loss_curves.png
-            results/models/trained/<COUNTRY_CODE>_lr_schedule.png
-            results/models/validated/<COUNTRY_CODE>_error_hist.png
-            results/models/validated/<COUNTRY_CODE>_error_timeseries.png
-    summary : results/models/validated/<COUNTRY_CODE>_summary.json
+    plots : results/ml/trained/<COUNTRY_CODE>_loss_curve.png
+            results/ml/trained/<COUNTRY_CODE>_detailed_loss_curves.png
+            results/ml/trained/<COUNTRY_CODE>_lr_schedule.png
+            results/ml/validated/<COUNTRY_CODE>_error_hist.png
+            results/ml/validated/<COUNTRY_CODE>_error_timeseries.png
+    summary : results/ml/validated/<COUNTRY_CODE>_summary.json
 
 Usage:
     python -m app.src.pipelines.analyze_training [-s] <COUNTRY_CODE|all>
@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.models.analysis import (
+from app.src.ml.analysis.analysis import (
     plot_training_curves, plot_detailed_loss_curves, plot_error_histogram, plot_error_timeseries, summarize_validation
 )
 
@@ -31,8 +31,8 @@ from app.src.models.analysis import (
 #########################################
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-TRAINED_DIR = PROJECT_ROOT / "results" / "models" / "trained"
-VALIDATED_DIR = PROJECT_ROOT / "results" / "models" / "validated"
+TRAINED_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
+VALIDATED_DIR = PROJECT_ROOT / "results" / "ml" / "validated"
 ANALYSIS_TRAIN_DIR = TRAINED_DIR / "analysis"
 ANALYSIS_TRAIN_DIR.mkdir(parents=True, exist_ok=True)
 ANALYSIS_VAL_DIR = VALIDATED_DIR / "analysis"

@@ -3,7 +3,6 @@ from typing import Optional, Union
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from app.src.models.autoencoder import TabularAutoencoder
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import seaborn as sns
@@ -16,6 +15,8 @@ from optuna.visualization import (
     plot_slice,
     plot_contour,
 )
+from app.src.ml.models.ae import TabularAutoencoder
+
 
 #########################################
 ##                CONFIG               ##

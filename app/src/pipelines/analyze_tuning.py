@@ -7,22 +7,22 @@ Analyze Optuna tuning resultse for one or all countries:
 - generates plots (Optuna standard plots as html and png, trial correlation heatmap, best trial learning curves, loss curves for all trials, 3D hyperparam landscape, csv and json reports, multi-country comparison)
 
 Outputs:
-    plots : results/models/tuned/analysis/<COUNTRY>/optimization_history.png + .html
-            results/models/tuned/analysis/<COUNTRY>/parallel_coordinates.png + .html
-            results/models/tuned/analysis/<COUNTRY>/param_importance.png + .html
-            results/models/tuned/analysis/<COUNTRY>/contour.png + .html
-            results/models/tuned/analysis/<COUNTRY>/slice.png + .html
-            results/models/tuned/analysis/<COUNTRY>/3d_scatter.png
-            results/models/tuned/analysis/<COUNTRY>/losses_all_trials
-            results/models/tuned/analysis/<COUNTRY>/best_learning_curve.png
-            results/models/tuned/analysis/<COUNTRY>/correlation_heatmap.png
-            results/models/tuned/analysis/<COUNTRY>/loss_component_analysis.png
-            results/models/tuned/analysis/multi/best_losses.png
-            results/models/tuned/analysis/multi/best_weights.png
-            results/models/tuned/analysis/multi/weight_loss_correlation.png
-    summary : results/models/tuned/analysis/<COUNTRY>/trial_results.csv
-              results/models/tuned/analysis/multi/best_losses.json
-              results/models/tuned/analysis/multi/best_weights.json
+    plots : results/ml/tuned/analysis/<COUNTRY>/optimization_history.png + .html
+            results/ml/tuned/analysis/<COUNTRY>/parallel_coordinates.png + .html
+            results/ml/tuned/analysis/<COUNTRY>/param_importance.png + .html
+            results/ml/tuned/analysis/<COUNTRY>/contour.png + .html
+            results/ml/tuned/analysis/<COUNTRY>/slice.png + .html
+            results/ml/tuned/analysis/<COUNTRY>/3d_scatter.png
+            results/ml/tuned/analysis/<COUNTRY>/losses_all_trials
+            results/ml/tuned/analysis/<COUNTRY>/best_learning_curve.png
+            results/ml/tuned/analysis/<COUNTRY>/correlation_heatmap.png
+            results/ml/tuned/analysis/<COUNTRY>/loss_component_analysis.png
+            results/ml/tuned/analysis/multi/best_losses.png
+            results/ml/tuned/analysis/multi/best_weights.png
+            results/ml/tuned/analysis/multi/weight_loss_correlation.png
+    summary : results/ml/tuned/analysis/<COUNTRY>/trial_results.csv
+              results/ml/tuned/analysis/multi/best_losses.json
+              results/ml/tuned/analysis/multi/best_weights.json
 
 Usage:
     python -m app.src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
@@ -32,7 +32,7 @@ import json, optuna, torch
 import pandas as pd
 from pathlib import Path
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.models.analysis import (
+from app.src.ml.analysis.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
     plot_loss_curves_all_trials,
@@ -51,7 +51,7 @@ from app.src.models.analysis import (
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-TUNED_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
+TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 ANALYSIS_TUNE_DIR = TUNED_DIR / "analysis"
 ANALYSIS_TUNE_DIR.mkdir(parents=True, exist_ok=True)
 

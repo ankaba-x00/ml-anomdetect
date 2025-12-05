@@ -17,22 +17,22 @@ Search space:
 - lr scheduler type
 
 Outputs:
-    study db : results/models/tuned/<COUNTRY>_study.db
-    best model : results/models/tuned/<COUNTRY>_best_model.pt
-    best hyperparams: results/models/tuned/<COUNTRY>_best_params.json
-    best AEConfig : results/models/tuned/<COUNTRY>_best_config.json
-    training hist : results/models/tuned/<COUNTRY>_best_history.json
-    tuned scaler fitted on cont features: results/models/tuned/<COUNTRY>_scaler.pkl
-    categorical dims : results/models/tuned/<COUNTRY>_cat_dims.json
-    latent space : results/models/tuned/<COUNTRY>_latent_space_pca_coords.csv
-                   results/models/tuned/<COUNTRY>_latent_space.png
+    study db : results/ml/tuned/<COUNTRY>_study.db
+    best model : results/ml/tuned/<COUNTRY>_best_model.pt
+    best hyperparams: results/ml/tuned/<COUNTRY>_best_params.json
+    best AEConfig : results/ml/tuned/<COUNTRY>_best_config.json
+    training hist : results/ml/tuned/<COUNTRY>_best_history.json
+    tuned scaler fitted on cont features: results/ml/tuned/<COUNTRY>_scaler.pkl
+    categorical dims : results/ml/tuned/<COUNTRY>_cat_dims.json
+    latent space : results/ml/tuned/<COUNTRY>_latent_space_pca_coords.csv
+                   results/ml/tuned/<COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.models.tune import tune_country
+from app.src.ml.tuning.tune import tune_country
 
 
 #########################################

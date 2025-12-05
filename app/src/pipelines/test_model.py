@@ -9,11 +9,11 @@ Test model to detect anomalies in new data:
 - performs latent space analysis if specified
 
 Outputs:
-    errors : results/models/tested/<COUNTRY>_errors_<method>.csv
-    thresholds : results/models/tested/<COUNTRY>_threshold_<method>.json
-    anomalies : results/models/tested/<COUNTRY>_intervals_<method>.csv
-    latent space: results/models/tested/<COUNTRY>_latent_space_pca_coords.csv
-                  results/models/tested/<COUNTRY>_latent_space.png
+    errors : results/ml/tested/<COUNTRY>_errors_<method>.csv
+    thresholds : results/ml/tested/<COUNTRY>_threshold_<method>.json
+    anomalies : results/ml/tested/<COUNTRY>_intervals_<method>.csv
+    latent space: results/ml/tested/<COUNTRY>_latent_space_pca_coords.csv
+                  results/ml/tested/<COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_test.txt]
@@ -24,10 +24,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
-from app.src.models.train import load_autoencoder
-from app.src.models.evaluate import apply_model
+from app.src.ml.training.train import load_autoencoder
+from app.src.ml.training.evaluate import apply_model
 from app.src.data.split import timeseries_seq_split
-from app.src.models.analysis import plot_latent_space
+from app.src.ml.analysis.analysis import plot_latent_space
 
 
 #########################################
@@ -37,8 +37,8 @@ from app.src.models.analysis import plot_latent_space
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
 
-TUNED_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
-OUT_DIR = PROJECT_ROOT / "results" / "models" / "tested"
+TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
+OUT_DIR = PROJECT_ROOT / "results" / "ml" / "tested"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

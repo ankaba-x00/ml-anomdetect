@@ -8,11 +8,11 @@ Train a autoencoder for one or all countries:
 - performs latent space analysis if specified
 
 Outputs:
-    for tuning : results/models/trained/<COUNTRY_CODE>_autoencoder.pt
-                 results/models/trained/<COUNTRY_CODE>_scaler_cont.pkl
-                 results/models/trained/<COUNTRY_CODE>_cat_dims.json
-                 results/models/trained/<COUNTRY_CODE>_num_cont.json
-                 results/models/trained/<COUNTRY_CODE>_training_history.json
+    for tuning : results/ml/trained/<COUNTRY_CODE>_autoencoder.pt
+                 results/ml/trained/<COUNTRY_CODE>_scaler_cont.pkl
+                 results/ml/trained/<COUNTRY_CODE>_cat_dims.json
+                 results/ml/trained/<COUNTRY_CODE>_num_cont.json
+                 results/ml/trained/<COUNTRY_CODE>_training_history.json
                  app/deployment/models/<COUNTRY_CODE>_latent_space_pca_coords.csv
                  app/deployment/models/<COUNTRY_CODE>_latent_space.png
     for inference: app/deployment/models/<COUNTRY_CODE>_autoencoder.pt
@@ -35,10 +35,10 @@ from typing import Optional
 from sklearn.preprocessing import RobustScaler
 from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
-from app.src.models.calibrate import calibrate_threshold
-from app.src.models.autoencoder import AEConfig
-from app.src.models.analysis import plot_latent_space
-from app.src.models.train import train_autoencoder, save_autoencoder
+from app.src.ml.training.calibrate import calibrate_threshold
+from app.src.ml.models.ae import AEConfig
+from app.src.ml.models.analysis.analysis import plot_latent_space
+from app.src.ml.training.train import train_autoencoder, save_autoencoder
 
 
 #########################################
@@ -47,9 +47,9 @@ from app.src.models.train import train_autoencoder, save_autoencoder
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-OUT_DIR = PROJECT_ROOT / "results" / "models" / "trained"
+OUT_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
 FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "models"
-BEST_MODELS_DIR = PROJECT_ROOT / "results" / "models" / "tuned"
+BEST_MODELS_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 
 
 #########################################

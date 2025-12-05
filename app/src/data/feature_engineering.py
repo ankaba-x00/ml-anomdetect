@@ -21,7 +21,7 @@ def load_countries_from_config(models_path: Path) -> list[str]:
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
-COUNTRIES = load_countries_from_config(FILE_DIR.parent / "models" / "models.yml")
+COUNTRIES = load_countries_from_config(FILE_DIR.parent / "ml" / "models" / "models.yml")
 
 ########################################################
 ##            LOADING + NORMALIZATION HELPERS         ##
