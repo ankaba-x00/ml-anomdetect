@@ -7,6 +7,7 @@
 - [Build and Train Models](#build-and-train-models)
 - [Tune Models](#tune-models)
 - [Use Models](#use-models)
+- [Troubleshooting](#troubleshooting)
 
 ## Overview
 This package has multiple sequential stages
@@ -126,3 +127,33 @@ This package has multiple sequential stages
     <br>`docker-compose up --build `
 3. Open the web application at
    <br>`http://0.0.0.0:8000/` 
+
+## Troubleshooting
+
+1. FileNotFoundError
+
+Please execute all scripts from the $PROJECT_ROOT which is ./ml-anomdetect. All files - automation bundles from ./scripts as well as all pipelines from ./app/src/pipelines and ./app/deployment are written to be executed from $PROJECT_ROOT.
+
+2. CloudFlare Fetch incomplete but no error during fetch.
+
+Sometime CloudFlare does not return any values for a given location while also not throwing an error. In this case, you might get timestamps only and the values list in the json is empty. The fetch will not break if the API operation continues as normal. In this event, you will later get an error while building the feature matrix that looks like this 
+    ```
+    X_cont_df, X_cat_df, num_cont, cat_dims, = build_feature_matrix(country)
+    KeyError: "None of [Index(['udp', 'tcp', 'icmp', 'gre'], dtype='object', name='metric')] are in the [columns]"
+    ```
+Example shows the value list for a country in l3attack_origin_protocol was empty.
+
+To overcome this error, do as follows
+    1. Check the raw json file for this country. If indeed the values are missing, you have to fetch this dataset again. 
+    2. Before doing so, check the following website if the dataset is available for your traget country: https://radar.cloudflare.com/explorer?dataSet=netflows
+    3. If you confirmed availability, fetch again, e.g. for the above error example
+        <br>`python -m app.src.data.fetch -S 11/15/2022 -E 11/15/2023 -l3ort`
+    ADVICE: You might want to comment out other datasets in the parser section of fetch.py if the flag fetches multiple datasets.
+    4. If the dataset is not available, you cannot build the country model with the current setup. In this case, you can choose a different country or modify the feature matrix build to exclude this dataset. For the latter, you need to modify ./app/src/data/feature_engineering.py as follows:
+        a. find the dataset in build_country_dataframe() under section "1. load all datasets", e.g. 
+            <br>`s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")`
+        b. search for all variable instances of this dataset and remove variable where it is used, e.g.
+            <br>`s_l3o`
+        c. search for all name instances of the dataset and remove where it is used, e.g.
+            <br>`"l3_origin"`
+        d. do the same in app/deployment/features.py for fetching live data during inference.
