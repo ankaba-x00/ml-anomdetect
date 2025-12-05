@@ -4,6 +4,7 @@ __pycache__/
 
 .env
 .venv/
+release_bundles/*
 requirements.txt
 
 app/datasets/raw/*
