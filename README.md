@@ -135,10 +135,5 @@ Always open for constructive criticism and code roasts, and happy to acknowledge
 For contributions, comments or collaborations, please open an issue or reach out directly.
 
 ## License
-This project is strictly proprietary.
-
-Only personal, non-commercial use is permitted.  
-Academic use, research use, redistribution, modification, and commercial use  
-are expressly forbidden.  
-
-See the LICENSE file for full terms.
+This project is open-source under the MIT License.  
+You may use, modify, and distribute this software freely, subject to the terms stated in the LICENSE file.
