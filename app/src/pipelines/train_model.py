@@ -4,7 +4,7 @@ Train a autoencoder for one or all countries:
 - produces continuous + categorical feature matrices
 - applies scaling to continuous features
 - builds autoencoder configuration (AEConfig)
-- trains TabularAutoencoder with early stopping
+- trains TabularAE with early stopping
 - performs latent space analysis if specified
 
 Outputs:
@@ -37,7 +37,7 @@ from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
 from app.src.ml.training.calibrate import calibrate_threshold
 from app.src.ml.models.ae import AEConfig
-from app.src.ml.models.analysis.analysis import plot_latent_space
+from app.src.ml.analysis.analysis import plot_latent_space
 from app.src.ml.training.train import train_autoencoder, save_autoencoder
 
 

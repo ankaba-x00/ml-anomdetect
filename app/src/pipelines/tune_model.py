@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Hyperparameter tuning for the TabularAutoencoder using Optuna.
+Hyperparameter tuning for the TabularAE using Optuna.
 
 Search space:
 - latent_dim

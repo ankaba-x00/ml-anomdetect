@@ -15,7 +15,7 @@ from optuna.visualization import (
     plot_slice,
     plot_contour,
 )
-from app.src.ml.models.ae import TabularAutoencoder
+from app.src.ml.models.ae import TabularAE
 
 
 #########################################
@@ -880,7 +880,7 @@ def plot_latent_space(
     country: str,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    model: TabularAutoencoder,
+    model: TabularAE,
     device: str,
     max_samples: int = 1000,
     folder: Path = Path.cwd(),

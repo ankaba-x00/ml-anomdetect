@@ -3,7 +3,7 @@ import numpy as np
 from typing import Union
 from sklearn.base import TransformerMixin
 from app.src.data.feature_engineering import build_feature_matrix
-from app.src.ml.models.ae import TabularAutoencoder
+from app.src.ml.models.ae import TabularAE
 from app.src.ml.training.evaluate import reconstruction_error, threshold_percentile, threshold_mad
 
 
@@ -21,7 +21,7 @@ def _compute_threshold(method: str, err_array: np.ndarray):
 # TODO: benchmark threshold calibration window 7 to 30 days 
 def calibrate_threshold(
         country: str,
-        model: TabularAutoencoder,
+        model: TabularAE,
         scaler: TransformerMixin,
         device: str = None,
         method: str = "p99",

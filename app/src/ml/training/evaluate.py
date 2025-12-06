@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from typing import Any, Optional
-from app.src.ml.models.ae import TabularAutoencoder
+from app.src.ml.models.ae import TabularAE
 
 
 #########################################
@@ -9,7 +9,7 @@ from app.src.ml.models.ae import TabularAutoencoder
 #########################################
 
 def reconstruction_error(
-    model: TabularAutoencoder,
+    model: TabularAE,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     device: Optional[str] = None,
@@ -126,7 +126,7 @@ def find_anomalies(mask: np.ndarray,
 #########################################
 
 def apply_model(
-    model: TabularAutoencoder,
+    model: TabularAE,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     method: str = "p99",

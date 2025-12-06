@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from app.src.ml.models.ae import AEConfig, TabularAutoencoder
+from app.src.ml.models.ae import AEConfig, TabularAE
 
 
 #########################################
@@ -42,13 +42,13 @@ def train_autoencoder(
     val_cat: Optional[np.ndarray],
     config: AEConfig,
     loss_weights: Optional[dict] = None,
-) -> tuple[TabularAutoencoder, dict[str, Any]]:
+) -> tuple[TabularAE, dict[str, Any]]:
     """
     Train autoencoder with continuous + categorical input features on split dataset with early stopping and val metrics OR full dataset with no early stopping.
    
     Returns
     -------
-    model : TabularAutoencoder
+    model : TabularAE
     history : dict
     """
 
@@ -79,7 +79,7 @@ def train_autoencoder(
     # -------------------------
     # Build model
     # -------------------------
-    model = TabularAutoencoder(
+    model = TabularAE(
         num_cont=config.num_cont,
         cat_dims=config.cat_dims,
         latent_dim=config.latent_dim,
@@ -379,7 +379,7 @@ def train_autoencoder(
 #########################################
 
 def save_autoencoder(
-    model: TabularAutoencoder,
+    model: TabularAE,
     config: AEConfig,
     path: Path,
     additional_info: Optional[dict] = None
@@ -394,7 +394,7 @@ def save_autoencoder(
         "config": asdict(config),
         "cat_dims": cat_dims_from_model,
         "num_cont": model.num_cont,
-        "model_class": "TabularAutoencoder",
+        "model_class": "TabularAE",
         "additional_info": additional_info or {},
     }
     torch.save(payload, path)
@@ -404,7 +404,7 @@ def save_autoencoder(
 def load_autoencoder(
         path: Path,
         device: Optional[str] = None
-    ) -> tuple[TabularAutoencoder, AEConfig]:
+    ) -> tuple[TabularAE, AEConfig]:
     """Load model + config from a .pt file."""
     if torch.cuda.is_available():
         payload = torch.load(path, map_location="cuda")
@@ -416,7 +416,7 @@ def load_autoencoder(
     if device is not None:
         cfg.device = device
 
-    model = TabularAutoencoder(
+    model = TabularAE(
         num_cont=cfg.num_cont,
         cat_dims=cfg.cat_dims,
         latent_dim=cfg.latent_dim,
