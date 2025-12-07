@@ -7,25 +7,13 @@ Analyze Optuna tuning resultse for one or all countries:
 - generates plots (Optuna standard plots as html and png, trial correlation heatmap, best trial learning curves, loss curves for all trials, 3D hyperparam landscape, csv and json reports, multi-country comparison)
 
 Outputs:
-    plots : results/ml/tuned/analysis/<COUNTRY>/optimization_history.png + .html
-            results/ml/tuned/analysis/<COUNTRY>/parallel_coordinates.png + .html
-            results/ml/tuned/analysis/<COUNTRY>/param_importance.png + .html
-            results/ml/tuned/analysis/<COUNTRY>/contour.png + .html
-            results/ml/tuned/analysis/<COUNTRY>/slice.png + .html
-            results/ml/tuned/analysis/<COUNTRY>/3d_scatter.png
-            results/ml/tuned/analysis/<COUNTRY>/losses_all_trials
-            results/ml/tuned/analysis/<COUNTRY>/best_learning_curve.png
-            results/ml/tuned/analysis/<COUNTRY>/correlation_heatmap.png
-            results/ml/tuned/analysis/<COUNTRY>/loss_component_analysis.png
-            results/ml/tuned/analysis/multi/best_losses.png
-            results/ml/tuned/analysis/multi/best_weights.png
-            results/ml/tuned/analysis/multi/weight_loss_correlation.png
-    summary : results/ml/tuned/analysis/<COUNTRY>/trial_results.csv
-              results/ml/tuned/analysis/multi/best_losses.json
-              results/ml/tuned/analysis/multi/best_weights.json
+    PATH : results/ml/tuned/analysis/<MODEL>/<COUNTRY>
+    FILES : optimization_history.png + .html, parallel_coordinates.png + .html, param_importance.png + .html, contour.png + .html, slice.png + .html, 3d_scatter.png, losses_all_trials, best_learning_curve.png, correlation_heatmap.png, loss_component_analysis.png
+    PATH : results/ml/tuned/analysis/<MODEL>/multi
+    FILES : best_losses.png, best_weights.png, weight_loss_correlation.png, trial_results.csv, best_losses.json, best_weights.json
 
 Usage:
-    python -m app.src.pipelines.analyze_tuning [-s] [-M] <COUNTRY|all|none>
+    python -m app.src.pipelines.analyze_tuning [-s] [-M] <MODEL> <COUNTRY|all|none>
 """
 
 import json, optuna, torch
@@ -52,9 +40,6 @@ from app.src.ml.analysis.analysis import (
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
 TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
-ANALYSIS_TUNE_DIR = TUNED_DIR / "analysis"
-ANALYSIS_TUNE_DIR.mkdir(parents=True, exist_ok=True)
-
 
 #########################################
 ##               LOAD DATA             ##
@@ -87,7 +72,7 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
-    out_dir = ANALYSIS_TUNE_DIR / "_multi"
+    out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / "_multi"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     #countries.remove("KR")
@@ -97,8 +82,8 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     #countries.remove("CH")
     losses_data = {}
     for c in countries:
-        cfg_path = TUNED_DIR / f"{c}_best_params.json"
-        study_path = TUNED_DIR / f"{c}_study.db"
+        cfg_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_params.json"
+        study_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_study.db"
         if not cfg_path.exists() or not study_path.exists():
             continue
         study = load_study(c, study_path)
@@ -110,7 +95,7 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
     weights_data = {}
     for c in countries:
         try:
-            model_path = TUNED_DIR / f"{c}_best_model.pt"
+            model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_model.pt"
             if model_path.exists():
                 payload = torch.load(model_path, map_location="cpu")
                 loss_weights = payload.get("additional_info", {}).get("loss_weights", {})
@@ -137,15 +122,16 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
                 )
     print(f"[OK] Multi-country comparison completed!")
 
-def analyze_country(country: str, multi: bool = True, all: bool = False, show: bool = False):
+def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = False, show: bool = False):
     """Runs full analysis pipeline of a country model tuning."""
     print(f"\n[INFO] Analyzing {country}...")
     
-    out_dir = ANALYSIS_TUNE_DIR / country
+    out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_dir.mkdir(parents=True, exist_ok=True)
-    db_path = TUNED_DIR / f"{country}_study.db"
+    db_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_study.db"
     if not db_path.exists():
         raise FileNotFoundError(f"No study DB for {country}")
+    
     study = load_study(country, db_path)
     save_optuna_plots(study, out_dir)
 
@@ -156,21 +142,22 @@ def analyze_country(country: str, multi: bool = True, all: bool = False, show: b
     plot_loss_curves_all_trials(
         study,
         country,
-        history_dir=TUNED_DIR / "trial_history",
+        history_dir=TUNED_DIR / f"{ae_type.upper()}" / "trial_history",
         folder=out_dir,
         fname="losses_all_trials.png",
         show=show
     )
-    best_hist_path = TUNED_DIR / f"{country}_best_history.json"
+    best_hist_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_history.json"
     if best_hist_path.exists():
         with open(best_hist_path, "r") as f:
             best_history = json.load(f)
         plot_best_trial_learning_curve(best_history, out_dir, "best_learning_curve.png", show)
     if study:
         plot_loss_component_analysis(
+            ae_type,
             study,
             country, 
-            history_dir = TUNED_DIR / "trial_history",
+            history_dir = TUNED_DIR / f"{ae_type.upper()}" / "trial_history",
             folder=out_dir,
             fname="loss_component_analysis.png",
             show=show
@@ -181,15 +168,15 @@ def analyze_country(country: str, multi: bool = True, all: bool = False, show: b
     if multi and not all:
         multi_analyze(show=show)
 
-def analyze_all(multi: bool = True, show_plots: bool = False):
+def analyze_all(ae_type: str, multi: bool = True, show_plots: bool = False):
     """Runs full analysis pipeline of all country model tunings."""
     print(f"\n[INFO] Analysis of all models starting...")
 
     for c in COUNTRIES:
-        analyze_country(country=c, multi=False, all=True, show=show_plots)
+        analyze_country(ae_type=ae_type, country=c, multi=False, all=True, show=show_plots)
 
     if multi:
-        multi_analyze(show=show_plots)
+        multi_analyze(ae_type=ae_type, show=show_plots)
     print(f"\n[DONE] Analysis of all model tunings completed!")
 
 
@@ -213,6 +200,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "model",
+        help="model to train: ae, vae"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all|none> e.g. 'US' to analyse US model, or 'all' to evaluate all country models, or 'none' for switching off single-country analysis"
     )
@@ -221,12 +213,19 @@ if __name__ == "__main__":
 
     target = args.target
 
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
+
     if target.lower() == "all":
-        analyze_all(args.multi, args.show)
+        analyze_all(ae_type, args.multi, args.show)
     elif target.lower() == "none":
-        multi_analyze(show=args.show)
+        multi_analyze(ae_type, show=args.show)
     else:
         analyze_country(
+            ae_type=ae_type,
             country=target.upper(), 
             multi=args.multi, 
             all=False, 

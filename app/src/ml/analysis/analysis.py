@@ -127,6 +127,7 @@ def plot_training_curves(
     plt.close(fig2)
 
 def plot_detailed_loss_curves(
+    ae_type: str,
     country: str,
     history: dict,
     folder: Path = Path.cwd(),
@@ -136,14 +137,17 @@ def plot_detailed_loss_curves(
     """Plot separate loss curves for continuous and categorical components."""
     apply_custom_theme()
 
-    if "train_cont_loss" not in history or "train_cat_loss" not in history:
+    cont_loss_name = "cont_loss" if ae_type == "ae" else "recon_loss"
+    cat_loss_name = "cat_loss" if ae_type == "ae" else "kl_loss"
+
+    if f"train_{cont_loss_name}" not in history or f"train_{cat_loss_name}" not in history:
         print(f"[INFO] Detailed loss components not available for {country}")
         return
     
-    train_cont = np.array(history["train_cont_loss"], dtype=float)
-    train_cat = np.array(history["train_cat_loss"], dtype=float)
-    val_cont = np.array(history.get("val_cont_loss", []), dtype=float)
-    val_cat = np.array(history.get("val_cat_loss", []), dtype=float)
+    train_cont = np.array(history[f"train_{cont_loss_name}"], dtype=float)
+    train_cat = np.array(history[f"train_{cat_loss_name}"], dtype=float)
+    val_cont = np.array(history.get(f"val_{cont_loss_name}", []), dtype=float)
+    val_cat = np.array(history.get(f"val_{cat_loss_name}", []), dtype=float)
     epochs = np.arange(1, len(train_cont) + 1)
 
     # normalization for shape comparison
@@ -495,6 +499,7 @@ def plot_3d_scatter(
     plt.close(fig)
 
 def plot_loss_component_analysis(
+    ae_type: str, 
     study: optuna.Study,
     country: str, 
     history_dir: Path,
@@ -504,6 +509,9 @@ def plot_loss_component_analysis(
 ):
     """Scatter plots showing how continuous vs categorical losses contribute to total loss."""
     apply_custom_theme()
+    
+    cont_loss_name = "cont_loss" if ae_type == "ae" else "recon_loss"
+    cat_loss_name = "cat_loss" if ae_type == "ae" else "kl_loss"
     
     cont_losses = []
     cat_losses = []
@@ -516,10 +524,10 @@ def plot_loss_component_analysis(
         if not hist_file.exists():
             continue
         with open(hist_file, "r") as f:
-            hist = json.load(f)    
-        if "train_cont_loss" in hist and "train_cat_loss" in hist:
-            cont_losses.append(hist["train_cont_loss"][-1])
-            cat_losses.append(hist["train_cat_loss"][-1])
+            hist = json.load(f)
+        if f"train_{cont_loss_name}" in hist and f"train_{cat_loss_name}" in hist:
+            cont_losses.append(hist[f"train_{cont_loss_name}"][-1])
+            cat_losses.append(hist[f"train_{cat_loss_name}"][-1])
             total_losses.append(trial.value)
             trial_numbers.append(trial.number)
     if len(cont_losses) < 3:

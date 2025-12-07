@@ -17,18 +17,11 @@ Search space:
 - lr scheduler type
 
 Outputs:
-    study db : results/ml/tuned/<COUNTRY>_study.db
-    best model : results/ml/tuned/<COUNTRY>_best_model.pt
-    best hyperparams: results/ml/tuned/<COUNTRY>_best_params.json
-    best AEConfig : results/ml/tuned/<COUNTRY>_best_config.json
-    training hist : results/ml/tuned/<COUNTRY>_best_history.json
-    tuned scaler fitted on cont features: results/ml/tuned/<COUNTRY>_scaler.pkl
-    categorical dims : results/ml/tuned/<COUNTRY>_cat_dims.json
-    latent space : results/ml/tuned/<COUNTRY>_latent_space_pca_coords.csv
-                   results/ml/tuned/<COUNTRY>_latent_space.png
+    PATH : results/ml/tuned/<MODEL>
+    FILES: <COUNTRY>_study.db, <COUNTRY>_best_model.pt, <COUNTRY>_best_params.json, <COUNTRY>_best_config.json, <COUNTRY>_best_history.json, <COUNTRY>_scaler.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.tune_model [-n <int>] [-p <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all> [| tee stdout_tune.txt]
+    python -m app.src.pipelines.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 from app.src.data.feature_engineering import COUNTRIES
@@ -39,13 +32,15 @@ from app.src.ml.tuning.tune import tune_country
 ##                 RUN                 ##
 #########################################
 
-def tune_all(trials: int, pruner: str, tr: int, vr: int, latent: bool):
+def tune_all(ae_type: str, trials: int, pruner: str, metric: str, tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
             tune_country(
+                ae_type,
                 c, 
                 n_trials=trials, 
                 pruner=pruner, 
+                metric=metric,
                 tr=tr, 
                 vr=vr,
                 latent=latent
@@ -61,17 +56,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tune AE hyperparameters for single or for all countries.")
 
     parser.add_argument(
-        "-n", "--ntrials",
+        "-N", "--ntrials",
         type=int, 
         default=40, 
         help="number of Optuna trials [default: 40]"
     )
 
     parser.add_argument(
-        "-p", "--pruner",
+        "-P", "--pruner",
         type=str, 
         default="median",
         help="<median|halving|hyperband> Optuna pruner strategy [default: median]"
+    )
+
+    parser.add_argument(
+        "-M", "--metric",
+        type=str, 
+        default="elbo",
+        help="<elbo|recon|mixed> Optuna tuning metric [default: elbo]"
     )
 
     parser.add_argument(
@@ -95,6 +97,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "model",
+        help="model to train: ae, vae"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
     )
@@ -102,18 +109,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     target = args.target
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
     
-    if args.pruner not in ["median", "halving", "hyperband"]:
+    if args.pruner.lower() not in ["median", "halving", "hyperband"]:
+        parser.print_help()
+        exit(1)
+
+    if args.metric.lower() not in ["elbo", "recon", "mixed"]:
         parser.print_help()
         exit(1)
 
     if target.lower() == "all":
-        tune_all(args.ntrials, args.pruner, args.tr, args.vr, args.latent)
+        tune_all(ae_type, args.ntrials, args.pruner.lower(), args.metric.lower(), args.tr, args.vr, args.latent)
     else:
         tune_country(
+            ae_type=ae_type,
             country=target.upper(),
             n_trials=args.ntrials,
-            pruner=args.pruner,
+            pruner=args.pruner.lower(),
+            metric=args.metric.lower(),
             tr=args.tr, 
             vr=args.vr,
             latent=args.latent

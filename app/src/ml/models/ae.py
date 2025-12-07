@@ -220,4 +220,9 @@ class TabularAE(BaseTabularModel):
 
             # Weighted combination
             total_weight = cont_weight + cat_weight
+            # to prevent exploding loss
+            if total_weight <= 0:
+                total_weight = 1.0
+                cont_weight = 1.0
+                cat_weight = 0.0
             return (cont_weight * cont_error + cat_weight * cat_error) / total_weight

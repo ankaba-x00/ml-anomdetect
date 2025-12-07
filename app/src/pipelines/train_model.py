@@ -7,25 +7,13 @@ Train a autoencoder for one or all countries:
 - trains TabularAE with early stopping
 - performs latent space analysis if specified
 
-Outputs:
-    for tuning : results/ml/trained/<COUNTRY_CODE>_autoencoder.pt
-                 results/ml/trained/<COUNTRY_CODE>_scaler_cont.pkl
-                 results/ml/trained/<COUNTRY_CODE>_cat_dims.json
-                 results/ml/trained/<COUNTRY_CODE>_num_cont.json
-                 results/ml/trained/<COUNTRY_CODE>_training_history.json
-                 app/deployment/models/<COUNTRY_CODE>_latent_space_pca_coords.csv
-                 app/deployment/models/<COUNTRY_CODE>_latent_space.png
-    for inference: app/deployment/models/<COUNTRY_CODE>_autoencoder.pt
-                   app/deployment/models/<COUNTRY_CODE>_scaler_cont.pkl
-                   app/deployment/models/<COUNTRY_CODE>_cat_dims.json
-                   app/deployment/models/<COUNTRY_CODE>_num_cont.json
-                   app/deployment/models/<COUNTRY_CODE>_training_history.json
-                   app/deployment/models/<COUNTRY_CODE>_cal_threshold.json"
-                   app/deployment/models/<COUNTRY_CODE>_latent_space_pca_coords.csv
-                   app/deployment/models/<COUNTRY_CODE>_latent_space.png
+Outputs: 
+    PATH without -F: results/ml/trained/<MODEL>
+    PATH with -F: app/deployment/models/<MODEL
+    FILES: <COUNTRY_CODE>_autoencoder.pt, <COUNTRY_CODE>_scaler_cont.pkl, <COUNTRY_CODE>_cat_dims.json, <COUNTRY_CODE>_num_cont.json, <COUNTRY_CODE>_training_history.json, <COUNTRY_CODE>_latent_space_pca_coords.csv, <COUNTRY_CODE>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <COUNTRY_CODE|all> [| tee stdout_train.txt]
+    python -m app.src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY_CODE|all> [| tee stdout_train.txt]
 """
 
 import json, pickle
@@ -37,6 +25,7 @@ from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
 from app.src.ml.training.calibrate import calibrate_threshold
 from app.src.ml.models.ae import AEConfig
+from app.src.ml.models.vae import VAEConfig
 from app.src.ml.analysis.analysis import plot_latent_space
 from app.src.ml.training.train import train_autoencoder, save_autoencoder
 
@@ -57,6 +46,7 @@ BEST_MODELS_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 #########################################
 
 def train_country(
+        ae_type: str,
         country: str, 
         tr: int, 
         vr: int, 
@@ -66,10 +56,11 @@ def train_country(
         latent: bool,
         loss_weights: Optional[dict] = None,
     ):
-    global OUT_DIR
+
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
+    print(f"[INFO] Model {ae_type.upper()} selected")
     
     # ------------------------------------
     # Load feature matrix
@@ -82,16 +73,19 @@ def train_country(
     # AEConfig object: Load or construct
     # ------------------------------------
     if full or tr == 100:
-        print(f"[INFO] Reading AEConfig from best tuning run.")
-        tuned_cfg_path = BEST_MODELS_DIR / f"{country}_best_config.json"
-        tuned_params_path = BEST_MODELS_DIR / f"{country}_best_params.json"
+        print(f"[INFO] Reading {ae_type.upper()}Config from best tuning run.")
+        tuned_cfg_path = BEST_MODELS_DIR / f"{ae_type.upper()}" / f"{country}_best_config.json"
+        tuned_params_path = BEST_MODELS_DIR / f"{ae_type.upper()}" / f"{country}_best_params.json"
         if not tuned_cfg_path.exists():
             raise FileNotFoundError("[ERROR] Best config not found. Run tuning first.")
         if not tuned_params_path.exists():
             raise FileNotFoundError("[ERROR] Best params not found. Run tuning first.")
         with open(tuned_cfg_path, "r") as f:
             cfg_dict = json.load(f)
-            cfg = AEConfig(**cfg_dict)
+            if ae_type == "ae":
+                cfg = AEConfig(**cfg_dict)
+            elif ae_type == "vae":
+                cfg = VAEConfig(**cfg_dict)
         with open(tuned_params_path, "r") as f:
             best_params = json.load(f)
         try:
@@ -105,8 +99,8 @@ def train_country(
             print(f"[INFO] Using default loss weights: {loss_weights}")
 
     else:
-        print(f"[INFO] Constructing AEConfig from inital params.")
-        cfg = AEConfig(
+        print(f"[INFO] Constructing {ae_type.upper()}Config from inital params.")
+        base_cfg = dict(
             num_cont=num_cont,
             cat_dims=cat_dims,
             latent_dim=16,
@@ -128,6 +122,12 @@ def train_country(
             activation="relu",
             temperature=1.0
         )
+        config_map = {
+            "ae": AEConfig,
+            "vae": VAEConfig
+        }
+        cfg = config_map[ae_type](**base_cfg)
+            
     
     # Default loss weights if not provided
     if loss_weights is None:
@@ -153,8 +153,8 @@ def train_country(
             cfg,
             loss_weights
         )
-        OUT_DIR = FULL_OUT_DIR
-        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = FULL_OUT_DIR / f"{ae_type.upper()}"
+        out_path.mkdir(parents=True, exist_ok=True)
     else:
         # ------------------------------------
         # Split dataset
@@ -182,9 +182,10 @@ def train_country(
             cfg,
             loss_weights
         )
-        OUT_DIR.mkdir(parents=True, exist_ok=True)            
+        out_path = OUT_DIR / f"{ae_type.upper()}"
+        out_path.mkdir(parents=True, exist_ok=True)
 
-    model_path = OUT_DIR / f"{country}_autoencoder.pt"
+    model_path = out_path / f"{country}_autoencoder.pt"
     save_autoencoder(
         model=model, 
         config=cfg, 
@@ -199,22 +200,22 @@ def train_country(
         }
     )
 
-    scaler_path = OUT_DIR / f"{country}_scaler_cont.pkl"
+    scaler_path = out_path / f"{country}_scaler_cont.pkl"
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
     print(f"[OK] Saved continuous scaler to {scaler_path}")
     
-    cat_path = OUT_DIR / f"{country}_cat_dims.json"
+    cat_path = out_path / f"{country}_cat_dims.json"
     with open(cat_path, "w") as f:
         json.dump(cat_dims, f, indent=2)
     print(f"[OK] Saved categorical vocab sizes to {cat_path}")
 
-    num_path = OUT_DIR / f"{country}_num_cont.json"
+    num_path = out_path / f"{country}_num_cont.json"
     with open(num_path, "w") as f:
         json.dump({"num_cont": num_cont}, f, indent=2)
     print(f"[OK] Saved num_cont to {num_path}")
 
-    history_path = OUT_DIR / f"{country}_training_history.json"
+    history_path = out_path / f"{country}_training_history.json"
     with open(history_path, "w") as f:
         json.dump(history, f, indent=2)
     print(f"[OK] Saved training history to {history_path}")
@@ -233,7 +234,7 @@ def train_country(
             model,
             cfg.device,
             1000,
-            OUT_DIR,
+            out_path,
             f"{country}_latent_space.png"
         )
 
@@ -258,7 +259,7 @@ def train_country(
             temperature_range=[0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0]
         )
 
-        thr_path = OUT_DIR / f"{country}_cal_threshold.json"
+        thr_path = out_path / f"{country}_cal_threshold.json"
         with open(thr_path, "w") as f:
             json.dump(threshold_dict, f, indent=2)
         print(f"[OK] Saved threshold to {thr_path}")
@@ -266,10 +267,10 @@ def train_country(
         print(f"[DONE] Preparation for inference model for {country}")
 
 
-def train_all(tr: int, vr: int, full: bool, method: str, cw: int, latent: bool):
+def train_all(ae_type: str, tr: int, vr: int, full: bool, method: str, cw: int, latent: bool):
     for c in COUNTRIES:
         try:
-            train_country(c, tr, vr, full, method, cw, latent)
+            train_country(ae_type, c, tr, vr, full, method, cw, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model trainings completed!")
@@ -323,15 +324,25 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "model",
+        help="model to train: ae, vae"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
 
     args = parser.parse_args()
-
+   
     target = args.target
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
 
     if target.lower() == "all":
-        train_all(args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)
+        train_all(ae_type, args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)
     else:
-        train_country(target.upper(), args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)
+        train_country(ae_type, target.upper(), args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)

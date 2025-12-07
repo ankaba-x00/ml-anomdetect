@@ -9,14 +9,11 @@ Test model to detect anomalies in new data:
 - performs latent space analysis if specified
 
 Outputs:
-    errors : results/ml/tested/<COUNTRY>_errors_<method>.csv
-    thresholds : results/ml/tested/<COUNTRY>_threshold_<method>.json
-    anomalies : results/ml/tested/<COUNTRY>_intervals_<method>.csv
-    latent space: results/ml/tested/<COUNTRY>_latent_space_pca_coords.csv
-                  results/ml/tested/<COUNTRY>_latent_space.png
+    PATH : results/ml/tested/<MODEL>
+    FILES : <COUNTRY>_errors_<method>.csv, <COUNTRY>_errors_<method>.csv, <COUNTRY>_threshold_<method>.json, <COUNTRY>_intervals_<method>.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_test.txt]
+    python -m app.src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all> [| tee stdout_test.txt]
 """
 
 import pickle, json, torch
@@ -46,17 +43,20 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: bool = False):
+def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int = 15, latent: bool = False):
     print(f"\n==============================")
     print(f"  DETECT ANOMALIES ({country})")
     print(f"==============================")
 
+    out_path = OUT_DIR / f"{ae_type.upper()}"
+    out_path.mkdir(parents=True, exist_ok=True)
+
     # --------------------
     # Load model + config, scaler, cat_dims
     # --------------------
-    model_path = TUNED_DIR / f"{country}_best_model.pt"
-    scaler_path = TUNED_DIR / f"{country}_scaler.pkl"
-    catdims_path = TUNED_DIR / f"{country}_cat_dims.json"
+    model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_model.pt"
+    scaler_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_scaler.pkl"
+    catdims_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_cat_dims.json"
 
     if not model_path.exists():
         raise FileNotFoundError(f"[Error] Model not found: {model_path}")
@@ -162,7 +162,7 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: 
         "threshold": threshold,
     })
 
-    err_path = OUT_DIR / f"{country}_errors_{method}.csv"
+    err_path = out_path / f"{country}_errors_{method}.csv"
     df_err.to_csv(err_path, index=False)
     print(f"[OK] Saved error series to {err_path}")
 
@@ -174,14 +174,14 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: 
         "end_ts": ts_eval[ends - 1] if len(ends) else [],
         "duration_samples": (ends - starts)
     })
-    int_path = OUT_DIR / f"{country}_intervals_{method}.csv"
+    int_path = out_path / f"{country}_intervals_{method}.csv"
     df_int.to_csv(int_path, index=False)
     print(f"[OK] Saved intervals to {int_path}")
 
     # --------------------
     # Save threshold
     # --------------------
-    thr_path = OUT_DIR / f"{country}_threshold_{method}.json"
+    thr_path = out_path / f"{country}_threshold_{method}.json"
     threshold_data = {
         "country": country,
         "method": method,
@@ -219,17 +219,17 @@ def test_country(country: str, method: str, tr: int = 75, vr: int = 15, latent: 
             model,
             cfg.device,
             1000,
-            OUT_DIR,
+            out_path,
             f"{country}_latent_space.png"
         )
 
     print(f"[DONE] Tested model for {country}")
 
 
-def test_all(method: str, tr: int, vr: int, latent: bool):
+def test_all(ae_type: str, method: str, tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
-            test_country(c, method=method, tr=tr, vr=vr, latent=latent)
+            test_country(ae_type=ae_type, country=c, method=method, tr=tr, vr=vr, latent=latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model testings completed!")
@@ -270,14 +270,26 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "model",
+        help="model to train: ae, vae"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
 
     args = parser.parse_args()
 
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
+
     if args.target.lower() == "all":
         test_all(
+            ae_type=ae_type,
             method=args.method, 
             tr=args.tr,
             vr=args.vr,
@@ -285,7 +297,8 @@ if __name__ == "__main__":
         )
     else:
         test_country(
-            args.target.upper(), 
+            ae_type=ae_type,
+            country=args.target.upper(), 
             method=args.method, 
             tr=args.tr,
             vr=args.vr,

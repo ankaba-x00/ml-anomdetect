@@ -7,10 +7,11 @@ Validate a trained autoencoder:
 - performs latent space analysis if specified
 
 Outputs: 
-    error per ts : results/ml/validate/<COUNTRY_CODE>_validation.csv
+    PATH : results/ml/validate/<MODEL
+    FILES : <COUNTRY_CODE>_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.validate_model [-tr <int>] [-vr <int>] <COUNTRY_CODE|all> [| tee stdout_val.txt]
+    python -m app.src.pipelines.validate_model [-tr <int>] [-vr <int>] <MODEL> <COUNTRY_CODE|all> [| tee stdout_val.txt]
 """
 
 import pickle, json, torch
@@ -39,15 +40,19 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def validate_country(country: str, tr: int, vr: int, latent: bool):
+def validate_country(ae_type: str, country: str, tr: int, vr: int, latent: bool):
     print(f"\n==============================")
     print(f"  VALIDATE MODEL ({country})")
     print(f"==============================")
+    print(f"[INFO] Model {ae_type.upper()} selected")
 
-    model_path = MODELS_DIR / f"{country}_autoencoder.pt"
-    scaler_path = MODELS_DIR / f"{country}_scaler_cont.pkl"
-    num_path = MODELS_DIR / f"{country}_num_cont.json"
-    cat_path = MODELS_DIR / f"{country}_cat_dims.json"
+    out_path = OUT_DIR / f"{ae_type.upper()}"
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
+    scaler_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
+    num_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_num_cont.json"
+    cat_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_cat_dims.json"
 
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
@@ -144,8 +149,8 @@ def validate_country(country: str, tr: int, vr: int, latent: bool):
         "ts": ts_val,
         "error": errors,
     })
-    out_path = OUT_DIR / f"{country}_validation.csv"
-    df_out.to_csv(out_path, index=False)
+    val_path = out_path / f"{country}_validation.csv"
+    df_out.to_csv(val_path, index=False)
 
     # ------------------------------------
     # Visualize latent space
@@ -159,16 +164,16 @@ def validate_country(country: str, tr: int, vr: int, latent: bool):
             model,
             cfg.device,
             1000,
-            OUT_DIR,
+            out_path,
             f"{country}_latent_space.png"
         )
     
     print(f"[DONE] Validation CSV saved: {out_path}")
 
-def validate_all(tr: int, vr: int, latent: bool):
+def validate_all(ae_type: str, tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
-            validate_country(c, tr, vr, latent)
+            validate_country(ae_type, c, tr, vr, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model validations completed!")
@@ -202,6 +207,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "model",
+        help="model to train: ae, vae"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to validate US model, or 'all' to evaluate all country models"
     )
@@ -209,8 +219,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     target = args.target
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
+
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
 
     if target.lower() == "all":
-        validate_all(args.tr, args.vr, args.latent)
+        validate_all(ae_type, args.tr, args.vr, args.latent)
     else:
-        validate_country(target.upper(), args.tr, args.vr, args.latent)
+        validate_country(ae_type, target.upper(), args.tr, args.vr, args.latent)

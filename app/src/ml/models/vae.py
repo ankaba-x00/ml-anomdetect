@@ -259,10 +259,10 @@ class TabularVAE(BaseTabularModel):
         temperature: float = 1.0,
     ) -> torch.Tensor:
         """
-        Compute per-sample reconstruction error combining:
+        Compute pure per-sample reconstruction error combining:
           - continuous MSE
           - categorical cross-entropy averaged over categories
-        Returns tensor of shape [batch]
+        Use when recon-only optimization for tuning to debug recon quality or compate AE/VAE recon capabilities!
         """
         cont_recon, cat_logits, _, _ = self.forward(
             x_cont, x_cat, return_cat=True, temperature=temperature
@@ -287,6 +287,11 @@ class TabularVAE(BaseTabularModel):
         cat_err = cat_err / float(n_cats)
 
         total_weight = cont_weight + cat_weight
+        # to prevent exploding loss
+        if total_weight <= 0:
+            total_weight = 1.0
+            cont_weight = 1.0
+            cat_weight = 0.0
         return (cont_weight * cont_err + cat_weight * cat_err) / total_weight
 
     def elbo_loss(
@@ -329,6 +334,11 @@ class TabularVAE(BaseTabularModel):
             cat_err = torch.zeros_like(cont_err)
 
         total_weight = cont_weight + cat_weight
+        # to prevent exploding loss
+        if total_weight <= 0:
+            total_weight = 1.0
+            cont_weight = 1.0
+            cat_weight = 0.0
         recon_per_sample = (cont_weight * cont_err + cat_weight * cat_err) / max(
             total_weight, 1e-8
         )
@@ -399,6 +409,11 @@ class TabularVAE(BaseTabularModel):
                 cat_err = torch.zeros_like(cont_err)
 
             total_weight = cont_weight + cat_weight
+            # to prevent exploding loss
+            if total_weight <= 0:
+                total_weight = 1.0
+                cont_weight = 1.0
+                cat_weight = 0.0
             recon = (cont_weight * cont_err + cat_weight * cat_err) / max(
                 total_weight, 1e-8
             )

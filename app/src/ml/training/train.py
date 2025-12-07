@@ -1,11 +1,12 @@
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from app.src.ml.models.ae import AEConfig, TabularAE
+from app.src.ml.models.vae import VAEConfig, TabularVAE
 
 
 #########################################
@@ -40,15 +41,15 @@ def train_autoencoder(
     train_cat: np.ndarray,
     val_cont: Optional[np.ndarray],
     val_cat: Optional[np.ndarray],
-    config: AEConfig,
+    config: Union[AEConfig, VAEConfig],
     loss_weights: Optional[dict] = None,
-) -> tuple[TabularAE, dict[str, Any]]:
+) -> tuple[Union[TabularAE, TabularVAE], dict[str, Any]]:
     """
     Train autoencoder with continuous + categorical input features on split dataset with early stopping and val metrics OR full dataset with no early stopping.
    
     Returns
     -------
-    model : TabularAE
+    model : TabularAE or TabularVAE
     history : dict
     """
 
@@ -79,17 +80,36 @@ def train_autoencoder(
     # -------------------------
     # Build model
     # -------------------------
-    model = TabularAE(
-        num_cont=config.num_cont,
-        cat_dims=config.cat_dims,
-        latent_dim=config.latent_dim,
-        hidden_dims=config.hidden_dims,
-        dropout=config.dropout,
-        embedding_dim=config.embedding_dim,
-        continuous_noise_std=config.continuous_noise_std,
-        residual_strength=config.residual_strength,
-        activation=config.activation
-    ).to(device)
+    if isinstance(config, AEConfig):
+        model = TabularAE(
+            num_cont=config.num_cont,
+            cat_dims=config.cat_dims,
+            latent_dim=config.latent_dim,
+            hidden_dims=config.hidden_dims,
+            dropout=config.dropout,
+            embedding_dim=config.embedding_dim,
+            continuous_noise_std=config.continuous_noise_std,
+            residual_strength=config.residual_strength,
+            activation=config.activation
+        ).to(device)
+        cont_loss_name, cat_loss_name = "cont_loss", "cat_loss"
+        cont_short, cat_short = "Cont", "Cat"
+    elif isinstance(config, VAEConfig):
+        model = TabularVAE(
+            num_cont=config.num_cont,
+            cat_dims=config.cat_dims,
+            latent_dim=config.latent_dim,
+            hidden_dims=config.hidden_dims,
+            dropout=config.dropout,
+            embedding_dim=config.embedding_dim,
+            continuous_noise_std=config.continuous_noise_std,
+            residual_strength=config.residual_strength,
+            activation=config.activation
+        ).to(device)
+        cont_loss_name, cat_loss_name = "recon_loss", "kl_loss"
+        cont_short, cat_short = "Recon", "KL"
+    else: 
+        raise ValueError(f"[ERROR] Unsupported model config type; exprected AEConfig or VAEConfig.")
 
     # -------------------------
     # Optimizer
@@ -128,7 +148,6 @@ def train_autoencoder(
                 factor=0.5,
                 patience=3,
                 min_lr=1e-6,
-                verbose=True
             )
         elif config.lr_scheduler == "cosine":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -156,11 +175,11 @@ def train_autoencoder(
     # -------------------------
     history = {
         "train_loss": [],
-        "train_cont_loss": [],
-        "train_cat_loss": [],
+        f"train_{cont_loss_name}": [],
+        f"train_{cat_loss_name}": [],
         "val_loss": [] if val_loader else None,
-        "val_cont_loss": [] if val_loader else None,
-        "val_cat_loss": [] if val_loader else None,
+        f"val_{cont_loss_name}": [] if val_loader else None,
+        f"val_{cat_loss_name}": [] if val_loader else None,
         "learning_rates": [],
         "best_epoch": 0,
         "config": asdict(config),
@@ -199,25 +218,37 @@ def train_autoencoder(
             optimizer.zero_grad(set_to_none=True)
 
             # Forward pass
-            cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
-            
-            # Continuous loss (MSE)
-            cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
+            if isinstance(config, AEConfig):
+                cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
+                
+                # Continuous loss (MSE)
+                cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
 
-            # Categorical loss (Cross-entropy)
-            cat_loss = 0.0
-            for i, name in enumerate(cat_names):
-                cat_loss += F.cross_entropy(
-                    cat_recons[name],
-                    batch_Xk[:, i].long()
+                # Categorical loss (Cross-entropy)
+                cat_loss = 0.0
+                for i, name in enumerate(cat_names):
+                    cat_loss += F.cross_entropy(
+                        cat_recons[name],
+                        batch_Xk[:, i].long()
+                    )
+                cat_loss = cat_loss / len(cat_names)  # Average over categorical features
+
+                # Weighted total loss
+                total_loss = (
+                    loss_weights["cont_weight"] * cont_loss +
+                    loss_weights["cat_weight"] * cat_loss
                 )
-            cat_loss = cat_loss / len(cat_names)  # Average over categorical features
-
-            # Weighted total loss
-            total_loss = (
-                loss_weights["cont_weight"] * cont_loss +
-                loss_weights["cat_weight"] * cat_loss
-            )
+            elif isinstance(config, VAEConfig):
+                total_loss, recon_loss, kl_loss = model.elbo_loss(
+                    batch_Xc,
+                    batch_Xk,
+                    beta=config.beta,
+                    cont_weight=loss_weights["cont_weight"],
+                    cat_weight=loss_weights["cat_weight"],
+                    temperature=config.temperature,
+                    reduction="mean",
+                )
+                cont_loss, cat_loss = recon_loss, kl_loss
             
             # Backward pass
             total_loss.backward()
@@ -244,8 +275,8 @@ def train_autoencoder(
         avg_train_cat = epoch_train_cat / max(n_train_batches, 1)
         
         history["train_loss"].append(avg_train_loss)
-        history["train_cont_loss"].append(avg_train_cont)
-        history["train_cat_loss"].append(avg_train_cat)
+        history[f"train_{cont_loss_name}"].append(avg_train_cont)
+        history[f"train_{cat_loss_name}"].append(avg_train_cat)
 
         # -----------------------------
         # Validation
@@ -262,26 +293,38 @@ def train_autoencoder(
                     batch_Xc = batch_Xc.to(device, non_blocking=True)
                     batch_Xk = batch_Xk.to(device, non_blocking=True)
 
-                    # Forward pass
-                    cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
-                    
-                    # Continuous loss
-                    cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
-                    
-                    # Categorical loss
-                    cat_loss = 0.0
-                    for i, name in enumerate(cat_names):
-                        cat_loss += F.cross_entropy(
-                            cat_recons[name],
-                            batch_Xk[:, i].long()
+                    if isinstance(config, AEConfig):
+                        # Forward pass
+                        cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
+                        
+                        # Continuous loss
+                        cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
+                        
+                        # Categorical loss
+                        cat_loss = 0.0
+                        for i, name in enumerate(cat_names):
+                            cat_loss += F.cross_entropy(
+                                cat_recons[name],
+                                batch_Xk[:, i].long()
+                            )
+                        cat_loss = cat_loss / len(cat_names)
+                        
+                        # Weighted total loss
+                        total_loss = (
+                            loss_weights["cont_weight"] * cont_loss +
+                            loss_weights["cat_weight"] * cat_loss
                         )
-                    cat_loss = cat_loss / len(cat_names)
-                    
-                    # Weighted total loss
-                    total_loss = (
-                        loss_weights["cont_weight"] * cont_loss +
-                        loss_weights["cat_weight"] * cat_loss
-                    )
+                    elif isinstance(config, VAEConfig):
+                        total_loss, recon_loss, kl_loss = model.elbo_loss(
+                            batch_Xc,
+                            batch_Xk,
+                            beta=config.beta,
+                            cont_weight=loss_weights["cont_weight"],
+                            cat_weight=loss_weights["cat_weight"],
+                            temperature=config.temperature,
+                            reduction="mean",
+                        )
+                        cont_loss, cat_loss = recon_loss, kl_loss
 
                     # Accumulate
                     batch_size = batch_Xc.size(0)
@@ -296,8 +339,8 @@ def train_autoencoder(
             avg_val_cat = epoch_val_cat / max(n_val_batches, 1)
             
             history["val_loss"].append(avg_val_loss)
-            history["val_cont_loss"].append(avg_val_cont)
-            history["val_cat_loss"].append(avg_val_cat)
+            history[f"val_{cont_loss_name}"].append(avg_val_cont)
+            history[f"val_{cat_loss_name}"].append(avg_val_cat)
 
             if scheduler is not None and config.lr_scheduler != "onecycle":
                 if config.lr_scheduler == "plateau":
@@ -320,10 +363,10 @@ def train_autoencoder(
                     break
 
             print(f"Epoch {epoch + 1:3d}/{config.num_epochs}: "
-                  f"Train Loss: {avg_train_loss:.6f} "
-                  f"(C: {avg_train_cont:.6f}, K: {avg_train_cat:.6f}) | "
-                  f"Val Loss: {avg_val_loss:.6f} "
-                  f"(C: {avg_val_cont:.6f}, K: {avg_val_cat:.6f}) | "
+                  "Train loss: {avg_train_loss:.6f} "
+                  f"({cont_short}: {avg_train_cont:.6f}, {cat_short}: {avg_train_cat:.6f}) | "
+                  "Val loss: {avg_val_loss:.6f} "
+                  f"({cont_short}: {avg_val_cont:.6f}, {cat_short}: {avg_val_cat:.6f}) | "
                   f"LR: {optimizer.param_groups[0]['lr']:.2e}")
             
         # -----------------------------
@@ -346,7 +389,7 @@ def train_autoencoder(
 
             print(f"Epoch {epoch + 1:3d}/{config.num_epochs}: "
                     f"Loss: {avg_train_loss:.6f} "
-                    f"(C: {avg_train_cont:.6f}, K: {avg_train_cat:.6f}) | "
+                    f"({cont_short}: {avg_train_cont:.6f}, {cat_short}: {avg_train_cat:.6f}) | "
                     f"LR: {optimizer.param_groups[0]['lr']:.2e}")
 
         # Track learning rate
@@ -379,8 +422,8 @@ def train_autoencoder(
 #########################################
 
 def save_autoencoder(
-    model: TabularAE,
-    config: AEConfig,
+    model: Union[TabularAE, TabularVAE],
+    config: Union[AEConfig, VAEConfig],
     path: Path,
     additional_info: Optional[dict] = None
 ) -> None:
@@ -394,7 +437,7 @@ def save_autoencoder(
         "config": asdict(config),
         "cat_dims": cat_dims_from_model,
         "num_cont": model.num_cont,
-        "model_class": "TabularAE",
+        "model_class": model.__class__.__name__,
         "additional_info": additional_info or {},
     }
     torch.save(payload, path)
@@ -404,29 +447,46 @@ def save_autoencoder(
 def load_autoencoder(
         path: Path,
         device: Optional[str] = None
-    ) -> tuple[TabularAE, AEConfig]:
+    ) -> Union[tuple[TabularAE, AEConfig], tuple[TabularVAE, VAEConfig]]:
     """Load model + config from a .pt file."""
     if torch.cuda.is_available():
         payload = torch.load(path, map_location="cuda")
     else:
         payload = torch.load(path, map_location="cpu")
 
-    cfg = AEConfig(**payload["config"])
+    ae_class = payload["model_class"]
+    if ae_class == "TabularAE":
+        cfg = AEConfig(**payload["config"])
+        model = TabularAE(
+            num_cont=cfg.num_cont,
+            cat_dims=cfg.cat_dims,
+            latent_dim=cfg.latent_dim,
+            hidden_dims=cfg.hidden_dims,
+            dropout=cfg.dropout,
+            embedding_dim=cfg.embedding_dim,
+            continuous_noise_std=cfg.continuous_noise_std,
+            residual_strength=cfg.residual_strength,
+            activation=cfg.activation
+        )
+    elif ae_class == "TabularVAE":
+        cfg = VAEConfig(**payload["config"])
+        model = TabularVAE(
+            num_cont=cfg.num_cont,
+            cat_dims=cfg.cat_dims,
+            latent_dim=cfg.latent_dim,
+            hidden_dims=cfg.hidden_dims,
+            dropout=cfg.dropout,
+            embedding_dim=cfg.embedding_dim,
+            continuous_noise_std=cfg.continuous_noise_std,
+            residual_strength=cfg.residual_strength,
+            activation=cfg.activation
+        )
+    else:
+        raise ValueError(f"Unknown model_class: {ae_class}")
 
     if device is not None:
         cfg.device = device
 
-    model = TabularAE(
-        num_cont=cfg.num_cont,
-        cat_dims=cfg.cat_dims,
-        latent_dim=cfg.latent_dim,
-        hidden_dims=cfg.hidden_dims,
-        dropout=cfg.dropout,
-        embedding_dim=cfg.embedding_dim,
-        continuous_noise_std=cfg.continuous_noise_std,
-        residual_strength=cfg.residual_strength,
-        activation=cfg.activation
-    )
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
     model = model.to(target_device)

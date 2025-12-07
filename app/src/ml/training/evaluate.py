@@ -1,7 +1,8 @@
 import numpy as np
 import torch
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.vae import TabularVAE
 
 
 #########################################
@@ -9,7 +10,7 @@ from app.src.ml.models.ae import TabularAE
 #########################################
 
 def reconstruction_error(
-    model: TabularAE,
+    model: Union[TabularAE, TabularVAE],
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     device: Optional[str] = None,
@@ -126,7 +127,7 @@ def find_anomalies(mask: np.ndarray,
 #########################################
 
 def apply_model(
-    model: TabularAE,
+    model: Union[TabularAE, TabularVAE],
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     method: str = "p99",
