@@ -126,6 +126,10 @@ class TabularAE(BaseTabularModel):
         for name, card in cat_dims.items():
             self.cat_recon_heads[name] = nn.Linear(prev, card)
 
+        # weight initialization
+        self._init_weights()
+        # TODO: Benchmark AE/VAE learning curves with vs. without initialization
+
     # -------------------------------
     # Encode/Decode
     # -------------------------------

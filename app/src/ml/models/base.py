@@ -33,12 +33,11 @@ class BaseTabularModel(nn.Module):
         self.num_cont = num_cont
         self.cat_dims = cat_dims
         self.continuous_noise_std = continuous_noise_std
-
         # -----------------------
         # Activation function
         # -----------------------
         self.activation = self._make_activation(activation)
-
+        
         # -------------------------------
         # Embeddings
         # -------------------------------
@@ -74,6 +73,17 @@ class BaseTabularModel(nn.Module):
         if name not in activations:
             raise ValueError(f"[ERROR] Unknown activation: {name}.")
         return activations[name]
+    
+    def _init_weights(self):
+            """Xavier init for Linear layers, Normal init for Embeddings."""
+            for module in self.modules():
+                if isinstance(module, nn.Linear):
+                    nn.init.xavier_uniform_(module.weight)
+                    if module.bias is not None:
+                        nn.init.zeros_(module.bias)
+
+                elif isinstance(module, nn.Embedding):
+                    nn.init.normal_(module.weight, mean=0.0, std=0.01)
 
     def _embed(self, x_cat: torch.Tensor) -> torch.Tensor:
         """Embed categorical features."""
