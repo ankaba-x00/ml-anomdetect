@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from app.src.data.feature_engineering import build_feature_matrix
 from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
 from app.src.exploration.core.params import timezones
-from app.deployment.fetcher import run_fetch
 
 #########################################
 ##             HELPER BUILD            ##

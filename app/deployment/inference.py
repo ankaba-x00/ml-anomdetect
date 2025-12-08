@@ -1,8 +1,9 @@
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import json, pickle, torch
 import numpy as np
-from app.src.ml.models.ae import TabularAutoencoder
+from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.vae import TabularVAE
 from app.src.ml.training.evaluate import reconstruction_error, anomaly_mask, find_anomalies
 from app.src.ml.training.train import load_autoencoder
 
@@ -19,14 +20,14 @@ MODELS_DIR = FILE_DIR / "models"
 #           LOAD DEPENDENCIES
 #########################################
 
-def load_inference_bundle(country: str) -> Dict[str, Any]:
+def load_inference_bundle(ae_type: str, country: str) -> Dict[str, Any]:
     """Load inference bundle for prediction incl. model, scaler, cat_dims for order."""
     print(f"[INFO] Loading inference bundle for {country}...")
-    model_path = MODELS_DIR / f"{country}_autoencoder.pt"
-    scaler_path = MODELS_DIR / f"{country}_scaler_cont.pkl"
-    numcont_path = MODELS_DIR / f"{country}_num_cont.json"
-    catdims_path = MODELS_DIR / f"{country}_cat_dims.json"
-    threshold_path = MODELS_DIR / f"{country}_cal_threshold.json"
+    model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
+    scaler_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
+    numcont_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_num_cont.json"
+    catdims_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_cat_dims.json"
+    threshold_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_cal_threshold.json"
 
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
@@ -77,7 +78,7 @@ def load_inference_bundle(country: str) -> Dict[str, Any]:
 #########################################
 
 def run_inference(
-    model: TabularAutoencoder,
+    model: Union[TabularAE, TabularVAE],
     X_cont: np.ndarray,
     X_cat: np.ndarray,
     threshold: float,

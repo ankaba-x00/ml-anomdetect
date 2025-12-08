@@ -3,7 +3,7 @@
 Runs interference pipeline as CLI and predicts anomalies for specified date.
 
 Usage:
-    python -m app.deployment.pipeline [-d <date>] <COUNTRY>
+    python -m app.deployment.pipeline [-d <date>] <MODEL> <COUNTRY>
 """
 
 import numpy as np
@@ -14,12 +14,13 @@ from app.deployment.inference import load_inference_bundle, run_inference
 
 
 def detect_anomalies(
+        ae_type: str,
         country: str, 
         date_from: datetime, 
         date_to: datetime
     ):
     try: 
-        bundle = load_inference_bundle(country)
+        bundle = load_inference_bundle(ae_type, country)
 
         newdata = run_fetch(country, date_from, date_to)
         X_cont_df, X_cat_df, _, cat_dims2, = build_features(country, newdata)
@@ -123,18 +124,27 @@ if __name__=="__main__":
     )
 
     parser.add_argument(
+        "model",
+        help="model to train: ae, vae"
+    )
+
+    parser.add_argument(
         "target",
         type=str,
         help="<COUNTRY> e.g. 'US' for US model"
     )
 
     args = parser.parse_args()
+    ae_type = args.model.lower() 
+    if ae_type not in ["ae", "vae"]:
+        parser.print_help()
+        print(f"[Error] Model can either be ae or vae!")
+        exit(1)
     target, date = args.target, args.date
     if target not in COUNTRIES:
         print(f"No pre-trained model for {target}")
         print(f"Please choose from the following list: {COUNTRIES}")
         sys.exit(1)
-
     try:
         dt = datetime.strptime(date, "%m/%d/%Y").replace(tzinfo=timezone.utc)
         if dt and _is_valid_date(dt):
@@ -148,6 +158,7 @@ if __name__=="__main__":
         sys.exit(1)
 
     detect_anomalies(
+        ae_type,
         args.target.upper(), 
         DATE_FROM, 
         DATE_TO

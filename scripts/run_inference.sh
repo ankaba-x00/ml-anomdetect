@@ -7,6 +7,7 @@
 ### INFERENCE ARGUMENTS ###
 # Target country (or "all") as specified in app/src/models/models.yml
 TARGET="AT"
+MODEL="vae"  # ae | vae
 PREDICTION_DATE="11/15/2025"  # format MM/DD/YYYY
 TRAINING=false
 
@@ -25,12 +26,14 @@ ARGS_TRAIN+=" --full"
 ARGS_TRAIN+=" -M $THRESHOLD_METHOD"
 ARGS_TRAIN+=" -CW $CAL_WINDOW"
 $PLOT_LATENT && ARGS_TRAIN+=" -L"
+ARGS_TRAIN+=" $MODEL"
 ARGS_TRAIN+=" $TARGET"
 
 
 ### INFERENCE ARGUMENTS ###
 ARGS_INFER=""
 ARGS_INFER+=" -d $PREDICTION_DATE"
+ARGS_INFER+=" $MODEL"
 ARGS_INFER+=" $TARGET"
 
 ############################
