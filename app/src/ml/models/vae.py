@@ -134,6 +134,7 @@ class TabularVAE(BaseTabularModel):
         # weight initialization
         self._init_weights()
         self._init_vae_heads()
+        self._init_decoder_output_layers()
         # TODO: Benchmark AE/VAE learning curves with vs. without initialization
         
         # -------------------------------

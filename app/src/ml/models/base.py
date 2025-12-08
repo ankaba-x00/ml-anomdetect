@@ -85,6 +85,16 @@ class BaseTabularModel(nn.Module):
                 elif isinstance(module, nn.Embedding):
                     nn.init.normal_(module.weight, mean=0.0, std=0.01)
 
+    def _init_decoder_output_layers(self):
+        # continuous head
+        nn.init.xavier_uniform_(self.cont_recon.weight, gain=0.01)
+        nn.init.zeros_(self.cont_recon.bias)
+
+        # categorical heads
+        for head in self.cat_recon_heads.values():
+            nn.init.xavier_uniform_(head.weight, gain=0.01)
+            nn.init.zeros_(head.bias)
+
     def _embed(self, x_cat: torch.Tensor) -> torch.Tensor:
         """Embed categorical features."""
         parts = []
