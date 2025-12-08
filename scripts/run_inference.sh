@@ -7,7 +7,7 @@
 ### INFERENCE ARGUMENTS ###
 # Target country (or "all") as specified in app/src/models/models.yml
 TARGET="AT"
-MODEL="vae"  # ae | vae
+MODEL="ae"  # ae | vae
 PREDICTION_DATE="11/15/2025"  # format MM/DD/YYYY
 TRAINING=false
 
