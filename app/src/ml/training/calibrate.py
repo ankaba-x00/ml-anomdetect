@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import Union
 from sklearn.base import TransformerMixin
-from app.src.data.feature_engineering import build_feature_matrix
+from app.src.data.feature_engineering import load_feature_matrix
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
 from app.src.ml.training.evaluate import reconstruction_error, threshold_percentile, threshold_mad
@@ -37,7 +37,7 @@ def calibrate_threshold(
         # ------------------------------------
         # Build raw feature matrix
         # ------------------------------------ 
-        X_cont, X_cat, _, _ = build_feature_matrix(country)
+        X_cont, X_cat, _, _ = load_feature_matrix(country)
         Xc_np = X_cont.values.astype(np.float64)
         Xk_np = X_cat.values.astype(np.int64)
         ts = X_cont.index

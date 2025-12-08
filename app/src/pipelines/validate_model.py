@@ -18,7 +18,7 @@ import pickle, json, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
+from app.src.data.feature_engineering import load_feature_matrix, COUNTRIES
 from app.src.ml.training.evaluate import reconstruction_error
 from app.src.ml.training.train import load_autoencoder
 from app.src.data.split import timeseries_seq_split
@@ -82,7 +82,7 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, latent: bool)
     # --------------------
     # Load feature matrix
     # --------------------
-    X_cont_df, X_cat_df, num_cont_check, cat_dims_check = build_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont_check, cat_dims_check = load_feature_matrix(country)
 
     # Consistency check
     assert num_cont == num_cont_check, "[ERROR] num_cont mismatch between scaler and feature matrix"

@@ -20,7 +20,7 @@ import pickle, json, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from app.src.data.feature_engineering import build_feature_matrix, COUNTRIES
+from app.src.data.feature_engineering import load_feature_matrix, COUNTRIES
 from app.src.ml.training.train import load_autoencoder
 from app.src.ml.training.evaluate import apply_model
 from app.src.data.split import timeseries_seq_split
@@ -76,7 +76,7 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     # --------------------
     # Load feature matrix
     # --------------------
-    X_cont_df, X_cat_df, _, cat_dims2 = build_feature_matrix(country)
+    X_cont_df, X_cat_df, _, cat_dims2 = load_feature_matrix(country)
 
     # ensure consistent categorical structure
     assert cat_dims2 == cat_dims, "[Error] Saved cat_dims mismatch — rebuild features."

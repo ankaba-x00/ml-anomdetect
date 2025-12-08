@@ -90,6 +90,7 @@ Below is a minimal quick-start.
     
 ### 3. Model training, validation, tuning, testing
     
+    python -m app.src.pipelines.build_features -B -S AT
     python -m app.src.pipelines.train_model AT
     python -m app.src.pipelines.validate_model AT
     python -m app.src.pipelines.tune_model --trials 60 --pruner hyperband AT

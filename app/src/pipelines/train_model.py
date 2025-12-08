@@ -22,7 +22,7 @@ import numpy as np
 from typing import Optional
 from sklearn.preprocessing import RobustScaler
 from app.src.data import timeseries_seq_split
-from app.src.data.feature_engineering import COUNTRIES, build_feature_matrix
+from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.ml.training.calibrate import calibrate_threshold
 from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
@@ -65,7 +65,7 @@ def train_country(
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
-    X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
+    X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
     Xc_np = X_cont.values.astype(np.float64)
     Xk_np = X_cat.values.astype(np.int64)
       

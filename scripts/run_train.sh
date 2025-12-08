@@ -7,6 +7,7 @@
 ### TRAINING ARGUMENTS ###
 # Target country (or "all") as specified in app/src/models/models.yml
 TARGET="AT" 
+MODEL="ae"  # ae | vae
 TRAIN_RATIO=75 
 VAL_RATIO=15
 FULL_DATA=false 
@@ -32,6 +33,7 @@ $FULL_DATA && ARGS_TRAIN+=" --full"
 ARGS_TRAIN+=" -M $THRESHOLD_METHOD"
 ARGS_TRAIN+=" -CW $CAL_WINDOW"
 $PLOT_LATENT_TRAIN && ARGS_TRAIN+=" -L"
+ARGS_TRAIN+=" $MODEL"
 ARGS_TRAIN+=" $TARGET"
 
 
@@ -40,11 +42,13 @@ ARGS_VALIDATE=""
 ARGS_VALIDATE+=" -tr $TRAIN_RATIO"
 ARGS_VALIDATE+=" -vr $VAL_RATIO"
 $PLOT_LATENT_VAL && ARGS_VALIDATE+=" -L"
+ARGS_VALIDATE+=" $MODEL"
 ARGS_VALIDATE+=" $TARGET"
 
 
 ### ANALYSIS ARGUMENTS (TARGET ONLY) ###
-ARGS_ANALYZE="$TARGET"
+ARGS_ANALYZE="$MODEL"
+ARGS_ANALYZE=" $TARGET"
 $SHOW_PLOTS && ARGS_ANALYZE+=" -s"
 
 ############################
@@ -54,6 +58,7 @@ $SHOW_PLOTS && ARGS_ANALYZE+=" -s"
 echo "===================================="
 echo "[TRAIN] Executing:"
 echo "python -m app.src.pipelines.train_model $ARGS_TRAIN"
+eval python -m app.src.pipelines.build_features -B -S $TARGET
 eval python -m app.src.pipelines.train_model $ARGS_TRAIN
 echo "[TRAIN] Completed!"
 echo

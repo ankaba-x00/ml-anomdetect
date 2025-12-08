@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from sklearn.preprocessing import RobustScaler
 from dataclasses import asdict
-from app.src.data.feature_engineering import build_feature_matrix
+from app.src.data.feature_engineering import load_feature_matrix
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
@@ -56,7 +56,7 @@ def objective(
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
-    X_cont_df, X_cat_df, num_cont, cat_dims, = build_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont, cat_dims, = load_feature_matrix(country)
     Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)
 
@@ -268,7 +268,7 @@ def tune_country(
     # ------------------------------------
     # Retrain best model fully
     # ------------------------------------
-    X_cont_df, X_cat_df, num_cont, cat_dims = build_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont, cat_dims = load_feature_matrix(country)
     Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)
 

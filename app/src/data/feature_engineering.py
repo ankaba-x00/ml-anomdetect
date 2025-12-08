@@ -347,14 +347,14 @@ def load_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
     with open(fpath, "rb") as f:
         data = pickle.load(f)
 
-    X_cont = data.get("continuous")
-    X_cat  = data.get("categorical")
+    df_cont = data.get("continuous")
+    df_cat  = data.get("categorical")
     num_cont = data.get("num_cont")
     cat_dims = data.get("cat_dims")
     
-    if X_cont is None or X_cat is None: 
+    if df_cont is None or df_cat is None: 
         raise ValueError(f"[ERROR] Feature matrix file incomplete for {country}: missing feature component")
-    elif not isinstance(X_cont, pd.DataFrame) or not isinstance(X_cat, pd.DataFrame):
+    elif not isinstance(df_cont, pd.DataFrame) or not isinstance(df_cat, pd.DataFrame):
         raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong feature component type")
     if num_cont is None or cat_dims is None:
         raise ValueError(f"[ERROR] Feature matrix file incomplete for {country}: missing metadata component")
@@ -362,4 +362,4 @@ def load_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
         raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong metadata component type")
 
     print(f"[OK] Feature matrix for {country} loaded!")
-    return X_cont, X_cat, num_cont, cat_dims
+    return df_cont, df_cat, num_cont, cat_dims
