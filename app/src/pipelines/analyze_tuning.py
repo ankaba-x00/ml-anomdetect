@@ -69,7 +69,7 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
-def multi_analyze(countries: list = COUNTRIES, show: bool = False):
+def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
     out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / "_multi"
@@ -85,6 +85,7 @@ def multi_analyze(countries: list = COUNTRIES, show: bool = False):
         cfg_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_study.db"
         if not cfg_path.exists() or not study_path.exists():
+            print()
             continue
         study = load_study(c, study_path)
         losses_data[c] = study.best_value
@@ -218,11 +219,14 @@ if __name__ == "__main__":
         parser.print_help()
         print(f"[Error] Model can either be ae or vae!")
         exit(1)
-
+    
     if target.lower() == "all":
         analyze_all(ae_type, args.multi, args.show)
     elif target.lower() == "none":
-        multi_analyze(ae_type, show=args.show)
+        if args.multi:
+            multi_analyze(ae_type, show=args.show)
+        else:
+            print(f"[INFO] No analysis selected [target=none and multi=False].")
     else:
         analyze_country(
             ae_type=ae_type,
