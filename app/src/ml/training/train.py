@@ -111,6 +111,11 @@ def train_autoencoder(
     else: 
         raise ValueError(f"[ERROR] Unsupported model config type; exprected AEConfig or VAEConfig.")
 
+    # -------------------------
+    # Model-specific optiona
+    # -------------------------
+    use_beta_annealing = isinstance(config, VAEConfig) and hasattr(model, "set_beta_annealing")
+
     # -------------------------------
     # Benchmark toggles
     # -------------------------------
@@ -216,6 +221,14 @@ def train_autoencoder(
         epoch_train_cont = 0.0
         epoch_train_cat = 0.0
         n_train_batches = 0
+
+        if use_beta_annealing:
+            model.set_beta_annealing(
+                epoch=epoch,
+                total_epochs=config.num_epochs,
+                beta_max=config.beta,
+                schedule="linear"   # or "cyclic"
+            )
 
         for batch_Xc, batch_Xk in train_loader:
             batch_Xc = batch_Xc.to(device, non_blocking=True)
@@ -324,7 +337,7 @@ def train_autoencoder(
                         total_loss, recon_loss, kl_loss = model.elbo_loss(
                             batch_Xc,
                             batch_Xk,
-                            beta=config.beta,
+                            beta=None,
                             cont_weight=loss_weights["cont_weight"],
                             cat_weight=loss_weights["cat_weight"],
                             temperature=config.temperature,

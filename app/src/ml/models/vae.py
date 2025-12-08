@@ -78,7 +78,9 @@ class TabularVAE(BaseTabularModel):
 
         self.latent_dim = latent_dim
         self.residual_strength = residual_strength
-    
+        self.current_beta = None
+        self.beta_max = None
+
         # optional residual projection to latent space
         if residual_strength > 0:
             self.residual_proj = nn.Linear(self.input_dim, latent_dim)
@@ -151,6 +153,25 @@ class TabularVAE(BaseTabularModel):
         nn.init.zeros_(self.logvar_head.weight)
         nn.init.zeros_(self.logvar_head.bias)
 
+    def set_beta_annealing(self, epoch: int, total_epochs: int, beta_max: float, schedule: str = "linear"):
+        """Beta-annealing helper to give VAE time to learn reconstructions before forcing latent regularization. Function update current_beta each epoch."""
+        self.beta_max = beta_max
+
+        if schedule == "linear":
+            # ramp up over first 40% epochs
+            warmup = int(0.4 * total_epochs)
+            factor = min(1.0, epoch / max(1, warmup))
+            self.current_beta = beta_max * factor
+
+        elif schedule == "cyclic":
+            # cosine-cycle schedule
+            period = total_epochs // 4
+            phase = (epoch % period) / period
+            self.current_beta = beta_max * 0.5 * (1 - np.cos(np.pi * phase))
+
+        else:  # no annealing
+            self.current_beta = beta_max
+
     # -------------------------------
     # Encode/Decode
     # -------------------------------
@@ -188,7 +209,7 @@ class TabularVAE(BaseTabularModel):
             )
 
         # (residual_strength applies later to sampled z)
-        return mu, logvar
+        return mu, logvar, x
 
     @staticmethod
     def reparameterize(
@@ -236,14 +257,12 @@ class TabularVAE(BaseTabularModel):
         """
         Full forward pass: returns cont recon and optional cat_logits, as well as mu, logvar.
         """
-        mu, logvar = self.encode(x_cont, x_cat)
+        mu, logvar, x_enc = self.encode(x_cont, x_cat)
         z = self.reparameterize(mu, logvar)
 
         # Optional residual connection in latent space
         if self.residual_strength > 0.0 and hasattr(self, "residual_proj") and self.residual_proj is not None:
-            x_emb = self._embed(x_cat)
-            x = torch.cat([x_cont, x_emb], dim=1)
-            z = z + self.residual_strength * self.residual_proj(x)
+            z = z + self.residual_strength * self.residual_proj(x_enc)
 
         cont_recon, cat_logits = self.decode(z, temperature)
 
@@ -270,7 +289,7 @@ class TabularVAE(BaseTabularModel):
           KL_i = 0.5 * sum_j (exp(logvar) + mu^2 - 1 - logvar)
         """
         # TODO: check gradients, if extremely large/small gradients clamp!
-        # logvar = torch.clamp(logvar, min=logvar_clip[0], max=logvar_clip[1])
+        logvar = torch.clamp(logvar, min=logvar_clip[0], max=logvar_clip[1])
         var = torch.exp(logvar)
         # TODO: add eps to avoid exp(0) = 1 issues OR clamp; ergo numerical stability
         # var = logvar.exp() + eps 
@@ -402,7 +421,9 @@ class TabularVAE(BaseTabularModel):
         else:
             raise ValueError(f"[ERROR] Unknown reduction: {reduction}")
 
-        total_loss = recon_loss + beta * kl_loss
+        beta_used = self.current_beta if self.current_beta is not None else (beta or 1.0)
+
+        total_loss = recon_loss + beta_used * kl_loss
         return total_loss, recon_loss, kl_loss
 
     # -------------------------------
