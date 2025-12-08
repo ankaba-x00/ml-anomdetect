@@ -111,6 +111,12 @@ def train_autoencoder(
     else: 
         raise ValueError(f"[ERROR] Unsupported model config type; exprected AEConfig or VAEConfig.")
 
+    # -------------------------------
+    # Benchmark toggles
+    # -------------------------------
+    if hasattr(model, "debug_kl_stats"):
+        model.debug_kl_stats = False 
+
     # -------------------------
     # Optimizer
     # -------------------------

@@ -135,6 +135,11 @@ class TabularVAE(BaseTabularModel):
         self._init_weights()
         self._init_vae_heads()
         # TODO: Benchmark AE/VAE learning curves with vs. without initialization
+        
+        # -------------------------------
+        # Benchmark toggles
+        # -------------------------------
+        self.debug_kl_stats = False
 
     # -------------------------------
     # Utilities
@@ -171,6 +176,15 @@ class TabularVAE(BaseTabularModel):
 
         mu = self.mu_head(h)
         logvar = self.logvar_head(h)
+
+        # for benchmarking kl_divergence clamp values
+        # μ ~ N(0, 1) → mean near 0, std near 1
+        # logvar near 0, between ~[-4, +4]
+        if getattr(self, "debug_kl_stats", False):
+            print(
+                f"[KL DIAGNOSTICS] μ mean={mu.mean().item():.4f} std={mu.std().item():.4f} | "
+                f"logvar mean={logvar.mean().item():.4f} std={logvar.std().item():.4f}"
+            )
 
         # (residual_strength applies later to sampled z)
         return mu, logvar
@@ -244,6 +258,8 @@ class TabularVAE(BaseTabularModel):
     def kl_divergence(
         mu: torch.Tensor,
         logvar: torch.Tensor,
+        logvar_clip: Optional[tuple[float, float]] = (-20, 20),
+        eps: float = 1e-8,
         reduction: str = "mean",
     ) -> torch.Tensor:
         """
@@ -252,7 +268,13 @@ class TabularVAE(BaseTabularModel):
         per-sample KL:
           KL_i = 0.5 * sum_j (exp(logvar) + mu^2 - 1 - logvar)
         """
-        kl = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+        # TODO: check gradients, if extremely large/small gradients clamp!
+        # logvar = torch.clamp(logvar, min=logvar_clip[0], max=logvar_clip[1])
+        var = torch.exp(logvar)
+        # TODO: add eps to avoid exp(0) = 1 issues OR clamp; ergo numerical stability
+        # var = logvar.exp() + eps 
+        # var = torch.clamp(var, min=1e-12, max=1e6)
+        kl = -0.5 * (1 + logvar - mu.pow(2) - var)
         kl = kl.sum(dim=1)  # sum over latent dims -> shape [batch]
 
         if reduction == "none":
