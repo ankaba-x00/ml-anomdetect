@@ -260,7 +260,7 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 
 
 ########################################################
-##             SCALING + FINAL X MATRIX               ##
+##            FINAL COUNTRY MATRIX BUILDER            ##
 ########################################################
 
 def build_feature_matrix(
@@ -301,6 +301,28 @@ def build_feature_matrix(
     df_cat = df[categorical_cols].astype("int64")
 
     # ------------------------------------
+    # Clamp OR logscale for cont features
+    # ------------------------------------
+    # clamps extremely large raw values
+    #df_cont = df_cont.clip(lower=df_cont.quantile(0.005), upper=df_cont.quantile(0.999), axis=1)
+    
+    # transform to log scale
+    LOG_FEATURES = [
+        "l3_bitrate_avg",
+        "ratio_l3_l7",
+        "ratio_bots_http",
+        "ratio_netflow_http",
+        #"l3_duration_avg"
+        #"ratio_ai_bots_bots",
+        #"ai_bots",
+        #"bots_total",
+    ]
+    eps = 1e-6
+    for feat in LOG_FEATURES:
+        if feat in df_cont.columns:
+            df_cont[feat] = np.log1p(df_cont[feat].clip(lower=0) + eps)
+
+    # ------------------------------------
     # Generate embedding metadata
     # ------------------------------------
     num_cont = df_cont.shape[1]
@@ -309,4 +331,5 @@ def build_feature_matrix(
         col: int(df_cat[col].max()) + 1 for col in categorical_cols
     }
 
+    print(f"[OK] Feature matrix for {country} build!")
     return df_cont, df_cat, num_cont, cat_dims
