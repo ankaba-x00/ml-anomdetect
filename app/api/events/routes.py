@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from datetime import datetime, timezone
+from datetime import timezone
 from app.src.data.feature_engineering import COUNTRIES
 from app.deployment.pipeline import detect_anomalies
 from app.api.events.schema import PredictionRequest, PredictionResponse
@@ -16,8 +16,11 @@ def get_countries():
 
 @router.post("/infer", response_model=PredictionResponse)
 def infer(request: PredictionRequest):
-    country = request.country.upper()
+    model = request.model.lower()
+    if model not in ["ae", "vae"]:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {model}")
 
+    country = request.country.upper()
     if country not in COUNTRIES:
         raise HTTPException(status_code=400, detail=f"Unknown country: {country}")
 
@@ -25,7 +28,7 @@ def infer(request: PredictionRequest):
     date_to   = request.date_to.replace(tzinfo=timezone.utc)
 
     try:
-        result = detect_anomalies(country, date_from, date_to)
+        result = detect_anomalies(model, country, date_from, date_to)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
 

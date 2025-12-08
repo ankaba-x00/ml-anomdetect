@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 class PredictionRequest(BaseModel):
+    model: str
     country: str
     date_from: datetime
     date_to: datetime

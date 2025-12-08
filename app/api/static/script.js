@@ -45,9 +45,10 @@ function validateDate(dateStr) {
 
 // -------- Main inference function --------
 async function runInference() {
+    const model = document.getElementById("model").value;
     const country = document.getElementById("country").value;
-    const date    = document.getElementById("date").value;
-    const out     = document.getElementById("result");
+    const date = document.getElementById("date").value;
+    const out = document.getElementById("result");
     const loading = document.getElementById("loading");
 
     const check = validateDate(date);
@@ -67,6 +68,7 @@ async function runInference() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+                model: model,
                 country: country,
                 date_from: date,
                 date_to: date
