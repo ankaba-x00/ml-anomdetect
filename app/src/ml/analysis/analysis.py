@@ -105,8 +105,7 @@ def plot_training_curves(
     plt.tight_layout()
     fig.savefig(folder / fnames[0], dpi=160)
     print(f"[OK] Saved to {fnames[0]}")
-    if show:
-        plt.show()
+    if show: plt.show()
     plt.close(fig)
 
     # -------------------------------
@@ -122,8 +121,7 @@ def plot_training_curves(
     plt.tight_layout()
     fig2.savefig(folder / fnames[1], dpi=160)
     print(f"[OK] Saved to {fnames[1]}")
-    if show:
-        plt.show()
+    if show: plt.show()
     plt.close(fig2)
 
 def plot_detailed_loss_curves(
@@ -199,8 +197,7 @@ def plot_detailed_loss_curves(
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved detailed loss curves to {fname}")
-    if show:
-        plt.show()
+    if show: plt.show()
     plt.close(fig)
 
 #########################################
@@ -430,10 +427,7 @@ def plot_best_trial_learning_curve(
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")
-
-    if show:
-        plt.show()
-
+    if show: plt.show()
     plt.close()
 
 def plot_3d_scatter(
@@ -761,8 +755,7 @@ def plot_multi_weight_loss_correlation(
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")
-    if show:
-        plt.show()
+    if show: plt.show()
     plt.close(fig)
 
 #########################################
