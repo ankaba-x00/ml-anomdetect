@@ -20,7 +20,8 @@ import pickle, json, math
 import pandas as pd
 from app.src.data.feature_engineering import (
     COUNTRIES,
-    build_feature_matrix
+    build_feature_matrix,
+    load_feature_matrix
 )
 from app.src.ml.analysis.analysis import plot_log_candidates
 
@@ -191,31 +192,6 @@ def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame,
         )
     print(f"[OK] Feature matrix for {country} saved!")
 
-def load_feature_matrix(country: str):
-    fpath = FEATURE_DIR / f"features_{country}.pkl"
-    if not fpath.exists():
-        raise FileNotFoundError(f"[ERROR] Feature matrix does not exist: {fpath}")
-    
-    with open(fpath, "rb") as f:
-        data = pickle.load(f)
-
-    X_cont = data.get("continuous")
-    X_cat  = data.get("categorical")
-    num_cont = data.get("num_cont")
-    cat_dims = data.get("cat_dims")
-    
-    if X_cont is None or X_cat is None: 
-        raise ValueError(f"[ERROR] Feature matrix file incomplete for {country}: missing feature component")
-    elif not isinstance(X_cont, pd.DataFrame) or not isinstance(X_cat, pd.DataFrame):
-        raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong feature component type")
-    if num_cont is None or cat_dims is None:
-        raise ValueError(f"[ERROR] Feature matrix file incomplete for {country}: missing metadata component")
-    elif not isinstance(num_cont, int) or not isinstance(cat_dims, dict):
-        raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong metadata component type")
-
-    print(f"[OK] Feature matrix for {country} loaded!")
-    return X_cont, X_cat, num_cont, cat_dims
-
 
 #########################################
 ##                 RUN                 ##
@@ -230,7 +206,7 @@ def build_single_country(country: str, BUILD: bool, SAVE: bool, ANALYZE: bool, s
         if BUILD:
             X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
         else:
-            X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
+            X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country, FEATURE_DIR)
         
         if SAVE:
             save_feature_matrix(country, X_cont, X_cat, num_cont, cat_dims)

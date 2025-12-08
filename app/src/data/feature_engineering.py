@@ -1,4 +1,4 @@
-import yaml
+import yaml, pickle
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -21,6 +21,7 @@ def load_countries_from_config(models_path: Path) -> list[str]:
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
+FEATURE_DIR = PROJECT_ROOT / "datasets" / "featured"
 COUNTRIES = load_countries_from_config(FILE_DIR.parent / "ml" / "models" / "models.yml")
 
 ########################################################
@@ -260,7 +261,7 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
 
 
 ########################################################
-##            FINAL COUNTRY MATRIX BUILDER            ##
+##               COUNTRY MATRIX BUILDER               ##
 ########################################################
 
 def build_feature_matrix(
@@ -333,3 +334,32 @@ def build_feature_matrix(
 
     print(f"[OK] Feature matrix for {country} build!")
     return df_cont, df_cat, num_cont, cat_dims
+
+########################################################
+##               COUNTRY MATRIX BUILDER               ##
+########################################################
+
+def load_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
+    fpath = load_path / f"features_{country}.pkl"
+    if not fpath.exists():
+        raise FileNotFoundError(f"[ERROR] Feature matrix does not exist: {fpath}")
+    
+    with open(fpath, "rb") as f:
+        data = pickle.load(f)
+
+    X_cont = data.get("continuous")
+    X_cat  = data.get("categorical")
+    num_cont = data.get("num_cont")
+    cat_dims = data.get("cat_dims")
+    
+    if X_cont is None or X_cat is None: 
+        raise ValueError(f"[ERROR] Feature matrix file incomplete for {country}: missing feature component")
+    elif not isinstance(X_cont, pd.DataFrame) or not isinstance(X_cat, pd.DataFrame):
+        raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong feature component type")
+    if num_cont is None or cat_dims is None:
+        raise ValueError(f"[ERROR] Feature matrix file incomplete for {country}: missing metadata component")
+    elif not isinstance(num_cont, int) or not isinstance(cat_dims, dict):
+        raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong metadata component type")
+
+    print(f"[OK] Feature matrix for {country} loaded!")
+    return X_cont, X_cat, num_cont, cat_dims
