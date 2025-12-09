@@ -93,7 +93,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-L", "--latent",
         action="store_true",
-        help="generate latent space plot after training"
+        help="generate latent space plot after tuning"
     )
 
     parser.add_argument(
