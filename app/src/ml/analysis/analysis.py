@@ -16,6 +16,7 @@ from optuna.visualization import (
     plot_contour,
 )
 from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.vae import TabularVAE
 
 
 #########################################
@@ -921,7 +922,7 @@ def plot_latent_space(
     country: str,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    model: TabularAE,
+    model: Union[TabularAE, TabularVAE],
     device: str,
     max_samples: int = 1000,
     folder: Path = Path.cwd(),
@@ -942,8 +943,10 @@ def plot_latent_space(
     
     model.eval()
     with torch.no_grad():
-        z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
-    
+        if isinstance(model, TabularAE):
+            z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
+        else:
+            z = model.encode_to_latent(Xc_tensor, Xk_tensor, False).cpu().numpy()
     if len(z) < 10:
         print(f"[INFO] Not enough samples for latent space visualization: {len(z)}")
         return

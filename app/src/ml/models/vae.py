@@ -221,6 +221,19 @@ class TabularVAE(BaseTabularModel):
         eps = torch.randn_like(std)
         return mu + eps * std
 
+    def encode_to_latent(
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor, 
+        deterministic: bool = True
+    ) -> torch.Tensor:
+        """Latent extraction method."""
+        mu, logvar, _ = self.encode(x_cont, x_cat)
+        if deterministic:
+            return mu
+        z = self.reparameterize(mu, logvar)
+        return z
+
     def decode(
             self, 
             z: torch.Tensor, 
