@@ -296,7 +296,7 @@ if __name__ == "__main__":
         )
     elif target.lower() == "none":
         if args.multi:
-            multi_analyze(ae_type=ae_type, latent=args.latent, show=args.show)
+            multi_analyze(ae_type=ae_type, show=args.show)
         else:
             print(f"[INFO] No analysis selected [target=none and multi=False].")
     else:
