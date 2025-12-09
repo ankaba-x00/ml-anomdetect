@@ -16,10 +16,15 @@ Usage:
     python -m app.src.pipelines.analyze_tuning [-s] [-M] <MODEL> <COUNTRY|all|none>
 """
 
-import json, optuna, torch
+import json, optuna, torch, pickle
 import pandas as pd
+import numpy as np
 from pathlib import Path
-from app.src.data.feature_engineering import COUNTRIES
+from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
+from app.src.data import timeseries_seq_split
+from app.src.ml.training.train import load_autoencoder
+from app.src.ml.models.ae import AEConfig
+from app.src.ml.models.vae import VAEConfig
 from app.src.ml.analysis.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
@@ -29,7 +34,8 @@ from app.src.ml.analysis.analysis import (
     plot_loss_component_analysis,
     plot_multi_loss_overview,
     plot_multi_weights_overview,
-    plot_multi_weight_loss_correlation
+    plot_multi_weight_loss_correlation,
+    plot_latent_space
 )
 
 
@@ -69,6 +75,45 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
+def plot_latent(ae_type: str, country: str, out_dir: Path, show: bool):
+    """Plot latent space if flag was not set during tuning."""
+    print(f"[INFO] Preparing latent space visualization...")
+
+    model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_model.pt"
+    scaler_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_scaler.pkl"
+    if not model_path.exists():
+        raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
+    if not scaler_path.exists():
+        raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
+
+    model, cfg = load_autoencoder(model_path)
+
+    with open(scaler_path, "rb") as f:
+        scaler = pickle.load(f)
+    
+    X_cont, X_cat, _, _ = load_feature_matrix(country)
+    Xc_np = X_cont.values.astype(np.float64)
+    Xk_np = X_cat.values.astype(np.int64)
+    (train_cont, train_cat), _, _ = timeseries_seq_split(
+        Xc_np, Xk_np,
+        train_ratio=75/100,
+        val_ratio=15/100,
+    )
+    train_cont_scald = scaler.transform(train_cont).astype(np.float32)
+    
+    plot_latent_space(
+        country, 
+        train_cont_scald, 
+        train_cat,
+        model,
+        cfg.device,
+        1000,
+        out_dir,
+        f"{country}_latent_space.png",
+        show
+    )
+    print(f"[OK] Latent space plot for {country} generated.")
+    
 def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
@@ -123,7 +168,7 @@ def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False)
                 )
     print(f"[OK] Multi-country comparison completed!")
 
-def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = False, show: bool = False):
+def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = False, latent: bool = False, show: bool = False):
     """Runs full analysis pipeline of a country model tuning."""
     print(f"\n[INFO] Analyzing {country}...")
     
@@ -164,17 +209,33 @@ def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = 
             show=show
         )
 
+    if latent:
+        print("here")
+        plot_latent(ae_type, country, out_dir, show)
+    
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:
         multi_analyze(show=show)
 
-def analyze_all(ae_type: str, multi: bool = True, show_plots: bool = False):
+def analyze_all(
+        ae_type: str, 
+        multi: bool = True, 
+        latent: bool = False, 
+        show_plots: bool = False
+    ):
     """Runs full analysis pipeline of all country model tunings."""
     print(f"\n[INFO] Analysis of all models starting...")
 
     for c in COUNTRIES:
-        analyze_country(ae_type=ae_type, country=c, multi=False, all=True, show=show_plots)
+        analyze_country(
+            ae_type=ae_type, 
+            country=c, 
+            multi=False, 
+            all=True,
+            latent=latent,
+            show=show_plots
+    )
 
     if multi:
         multi_analyze(ae_type=ae_type, show=show_plots)
@@ -201,6 +262,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-L", "--latent",
+        action="store_true",
+        help="generate latent space plot for best model after tuning"
+    )
+
+    parser.add_argument(
         "model",
         help="model to train: ae, vae"
     )
@@ -221,10 +288,15 @@ if __name__ == "__main__":
         exit(1)
     
     if target.lower() == "all":
-        analyze_all(ae_type, args.multi, args.show)
+        analyze_all(
+            ae_type, 
+            args.multi, 
+            args.latent, 
+            args.show
+        )
     elif target.lower() == "none":
         if args.multi:
-            multi_analyze(ae_type, show=args.show)
+            multi_analyze(ae_type=ae_type, latent=args.latent, show=args.show)
         else:
             print(f"[INFO] No analysis selected [target=none and multi=False].")
     else:
@@ -232,6 +304,7 @@ if __name__ == "__main__":
             ae_type=ae_type,
             country=target.upper(), 
             multi=args.multi, 
-            all=False, 
+            all=False,
+            latent=args.latent,
             show=args.show
         )
