@@ -43,19 +43,21 @@ def threshold_percentile(errors: np.ndarray, p: float = 99.0) -> float:
     return float(np.percentile(errors, p))
 
 
-# TODO: test how k = 3.5, 5, 6 differ!
-# TODO: clip threshold to 99.9 (or 99.5) percentile to avoid ridiculous MAD inflation if necessary
-def threshold_mad(errors: np.ndarray, k: float = 6.0) -> float:
+def threshold_mad(errors: np.ndarray, k: float = 6.0, min_p: float = 99.5, max_p: float = 99.9) -> float:
     """
-    Computes median Absolute Deviation threshold. Scaling factor 
+    Computes normalized median absolute deviation threshold with enforced minimum threshold based on percentile. 
+    Scaling factor 
         k = 3-3.5 : used for mododerately heavy-tailed dist
         k = 6-8 : used for rare anomaly detection
         k = >10 : conservative (almost nothing flagged)
     """
     med = np.median(errors)
     mad = np.median(np.abs(errors - med)) + 1e-12
-    thr = med + k * mad
-    thr = min(thr, np.percentile(errors, 99.9)) # to avoid extreme outliers
+    nmad = 1.4826 * mad
+    thr = med + k * nmad
+    low = np.percentile(errors, min_p)
+    high = np.percentile(errors, max_p)
+    thr = np.clip(thr, low, high)
     return float(thr)
 
 
