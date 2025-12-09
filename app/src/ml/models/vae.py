@@ -489,3 +489,58 @@ class TabularVAE(BaseTabularModel):
                     f"[ERROR] Unknown score_type: {score_type}. "
                     f"Use 'recon', 'kl', or 'elbo'."
                 )
+
+    def mc_elbo_score(
+        self,
+        x_cont: torch.Tensor,
+        x_cat: torch.Tensor,
+        cont_weight: float = 1.0,
+        cat_weight: float = 0.0,
+        temperature: float = 1.0,
+        n_samples: int = 10,
+        beta: float = 1.0,
+    ) -> torch.Tensor:
+        """
+        Monte-Carlo ELBO estimate for anomaly scoring.
+        Uses multiple z~q(z|x) samples to reduce variance of ELBO estimates.
+        """
+
+        self.eval()
+        scores = torch.zeros(x_cont.size(0), device=x_cont.device)
+
+        with torch.no_grad():
+            for _ in range(n_samples):
+                cont_recon, cat_logits, mu, logvar = self.forward(
+                    x_cont, x_cat, temperature=temperature, return_cat=True
+                )
+
+                # recon per sample
+                cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
+
+                if cat_weight > 0 and len(self.cat_dims) > 0:
+                    cat_err = torch.zeros_like(cont_err)
+                    for i, name in enumerate(self.cat_dims.keys()):
+                        logits = cat_logits[name]
+                        tgt = x_cat[:, i].long()
+                        ce = F.cross_entropy(logits, tgt, reduction="none")
+                        cat_err += ce
+                    cat_err /= len(self.cat_dims)
+                else:
+                    cat_err = torch.zeros_like(cont_err)
+
+                total_weight = max(cont_weight + cat_weight, 1e-8)
+                recon = (cont_weight * cont_err + cat_weight * cat_err) / total_weight
+
+                kl = self.kl_divergence(mu, logvar, reduction="none")
+
+                # if beta annealing is active
+                beta_used = (
+                    self.current_beta 
+                    if getattr(self, "current_beta", None) is not None 
+                    else beta
+                )
+
+                scores += (recon + beta_used * kl)
+
+        return scores / n_samples
+    

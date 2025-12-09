@@ -43,7 +43,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int = 15, latent: bool = False):
+def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int = 15, use_mc_elbo: bool = False, latent: bool = False):
     print(f"\n==============================")
     print(f"  DETECT ANOMALIES ({country})")
     print(f"==============================")
@@ -123,7 +123,10 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
         method=method,
         device=cfg.device,
         cont_weight=cont_weight,
-        cat_weight=cat_weight
+        cat_weight=cat_weight,
+        temperature=cfg.temperature, 
+        use_mc_elbo=use_mc_elbo,
+        beta=getattr(cfg, "beta", 1.0)
     )
 
     errors = results["errors"]
@@ -226,10 +229,10 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     print(f"[DONE] Tested model for {country}")
 
 
-def test_all(ae_type: str, method: str, tr: int, vr: int, latent: bool):
+def test_all(ae_type: str, method: str, tr: int, vr: int, use_mc_elbo: bool, latent: bool):
     for c in COUNTRIES:
         try:
-            test_country(ae_type=ae_type, country=c, method=method, tr=tr, vr=vr, latent=latent)
+            test_country(ae_type=ae_type, country=c, method=method, tr=tr, vr=vr, use_mc_elbo=use_mc_elbo, latent=latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model testings completed!")
@@ -264,6 +267,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-MC", "--MC-score",
+        action="store_true",
+        help="use Monte-Carlo scoring for reconstruction errors"
+    )
+
+    parser.add_argument(
         "-L", "--latent",
         action="store_true",
         help="generate latent space plot after tuning"
@@ -293,6 +302,7 @@ if __name__ == "__main__":
             method=args.method, 
             tr=args.tr,
             vr=args.vr,
+            use_mc_elbo=args.MC_score,
             latent=args.latent
         )
     else:
@@ -302,5 +312,6 @@ if __name__ == "__main__":
             method=args.method, 
             tr=args.tr,
             vr=args.vr,
+            use_mc_elbo=args.MC_score,
             latent=args.latent
         )

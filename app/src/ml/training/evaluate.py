@@ -16,7 +16,9 @@ def reconstruction_error(
     device: Optional[str] = None,
     cont_weight: float = 1.0,
     cat_weight: float = 0.0,
+    use_mc_elbo: bool = False,
     temperature: float = 1.0,
+    beta: float = 1.0,
 ) -> np.ndarray:
     """Per-sample reconstruction error normalized by features."""
     if device is None:
@@ -29,7 +31,10 @@ def reconstruction_error(
     Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
 
     with torch.no_grad():
-        errors = model.anomaly_score(Xc, Xk, cont_weight, cat_weight, temperature)
+        if use_mc_elbo and isinstance(model, TabularVAE):
+            errors = model.mc_elbo_score(Xc, Xk, cont_weight, cat_weight, temperature, n_samples=20, beta=beta)
+        else:
+            errors = model.anomaly_score(Xc, Xk, cont_weight, cat_weight, temperature)
 
     return errors.cpu().numpy()
 
@@ -134,11 +139,13 @@ def apply_model(
     X_cat: np.ndarray,
     method: str = "p99",
     device: Optional[str] = None,
-    min_length: int = 1,
-    merge_gap: int = 0,
     cont_weight: float = 1.0,
     cat_weight: float = 0.0,
     temperature: float = 1.0,
+    use_mc_elbo: bool = False,
+    beta: float = 1.0,
+    min_length: int = 1,
+    merge_gap: int = 0,
 ) -> dict[str, Any]:
     """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
     errors = reconstruction_error(
@@ -148,7 +155,9 @@ def apply_model(
         device,
         cont_weight,
         cat_weight,
-        temperature
+        use_mc_elbo,
+        temperature,
+        beta
     )
     if method == "p99":
         threshold = threshold_percentile(errors, p=99)

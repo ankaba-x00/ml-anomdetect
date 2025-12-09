@@ -40,7 +40,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def validate_country(ae_type: str, country: str, tr: int, vr: int, latent: bool):
+def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: bool, latent: bool):
     print(f"\n==============================")
     print(f"  VALIDATE MODEL ({country})")
     print(f"==============================")
@@ -128,7 +128,10 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, latent: bool)
         X_cat=Xk_val,
         device=cfg.device,
         cont_weight=cont_weight,
-        cat_weight=cat_weight
+        cat_weight=cat_weight,
+        use_mc_elbo=use_mc_elbo,
+        temperature=cfg.temperature,
+        beta=getattr(cfg, "beta", 1.0),
     )
 
     # --------------------
@@ -170,10 +173,10 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, latent: bool)
     
     print(f"[DONE] Validation CSV saved: {out_path}")
 
-def validate_all(ae_type: str, tr: int, vr: int, latent: bool):
+def validate_all(ae_type: str, tr: int, vr: int, use_mc_elbo: bool, latent: bool):
     for c in COUNTRIES:
         try:
-            validate_country(ae_type, c, tr, vr, latent)
+            validate_country(ae_type, c, tr, vr, use_mc_elbo, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model validations completed!")
@@ -198,6 +201,12 @@ if __name__ == "__main__":
         type=int,
         default=15,
         help="dataset ratio for validation in %% [default: 15%%]"
+    )
+
+    parser.add_argument(
+        "-MC", "--MC-score",
+        action="store_true",
+        help="use Monte-Carlo scoring for reconstruction errors"
     )
 
     parser.add_argument(
@@ -232,6 +241,6 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        validate_all(ae_type, args.tr, args.vr, args.latent)
+        validate_all(ae_type, args.tr, args.vr, args.MC_score, args.latent)
     else:
-        validate_country(ae_type, target.upper(), args.tr, args.vr, args.latent)
+        validate_country(ae_type, target.upper(), args.tr, args.vr, args.MC_score, args.latent)

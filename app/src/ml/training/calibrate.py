@@ -30,7 +30,9 @@ def calibrate_threshold(
         cont_weight: float = 1.0,
         cat_weight: float = 0.0, 
         tune_temperature: bool = True,
-        temperature_range: list = None
+        temperature_range: list = None,
+        use_mc_elbo: bool = False,
+        beta: float = 1.0
 ) -> dict[str, Union[np.ndarray, float]]:
         """Computes anomaly threshold and temperature scaling for a given model on a specified calibration window, threshold method and temperature range."""
         
@@ -80,7 +82,9 @@ def calibrate_threshold(
                     device,
                     cont_weight,
                     cat_weight,
+                    use_mc_elbo,
                     temp,
+                    beta
                 )
                 
                 # Compute preliminary threshold with this temperature
@@ -119,7 +123,9 @@ def calibrate_threshold(
             device,
             cont_weight,
             cat_weight,
-            best_temp
+            use_mc_elbo,
+            best_temp,
+            beta
         )
         print(f"[INFO] Computed {len(errors)} errors with temp={best_temp}")
 

@@ -49,7 +49,8 @@ def train_country(
         ae_type: str,
         country: str, 
         tr: int, 
-        vr: int, 
+        vr: int,
+        use_mc_elbo: bool, 
         full: bool, 
         method: str, 
         cw: int,
@@ -256,7 +257,9 @@ def train_country(
             cont_weight=loss_weights["cont_weight"],
             cat_weight=loss_weights["cat_weight"],
             tune_temperature=True,
-            temperature_range=[0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0]
+            temperature_range=[0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0],
+            use_mc_elbo=use_mc_elbo,
+            beta=getattr(cfg, "beta", 1.0)
         )
 
         thr_path = out_path / f"{country}_cal_threshold.json"
@@ -267,10 +270,10 @@ def train_country(
         print(f"[DONE] Preparation for inference model for {country}")
 
 
-def train_all(ae_type: str, tr: int, vr: int, full: bool, method: str, cw: int, latent: bool):
+def train_all(ae_type: str, tr: int, vr: int, use_mc_elbo: bool, full: bool, method: str, cw: int, latent: bool):
     for c in COUNTRIES:
         try:
-            train_country(ae_type, c, tr, vr, full, method, cw, latent)
+            train_country(ae_type, c, tr, vr, use_mc_elbo, full, method, cw, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print(f"\n[DONE] All model trainings completed!")
@@ -295,6 +298,12 @@ if __name__ == "__main__":
         type=int,
         default=15,
         help="dataset ratio for validation in %% [default: 15%%]"
+    )
+
+    parser.add_argument(
+        "-MC", "--MC-score",
+        action="store_true",
+        help="use Monte-Carlo scoring for reconstruction errors"
     )
 
     parser.add_argument(
@@ -343,6 +352,6 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        train_all(ae_type, args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)
+        train_all(ae_type, args.tr, args.vr, args.MC_score, args.full, args.method, args.calwindow, args.latent)
     else:
-        train_country(ae_type, target.upper(), args.tr, args.vr, args.full, args.method, args.calwindow, args.latent)
+        train_country(ae_type, target.upper(), args.tr, args.vr, args.MC_score, args.full, args.method, args.calwindow, args.latent)
