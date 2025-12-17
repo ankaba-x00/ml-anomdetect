@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Train a autoencoder for one or all countries:
-- produces continuous + categorical feature matrices
+- loads continuous + categorical feature matrices
 - applies scaling to continuous features
-- builds autoencoder configuration (AEConfig)
-- trains TabularAE with early stopping
+- builds autoencoder configuration (AEConfig or VAEConfig)
+- trains TabularAE or TabularVAE with early stopping
 - performs latent space analysis if specified
 
 Outputs: 
