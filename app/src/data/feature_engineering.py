@@ -437,7 +437,10 @@ def build_supervised_feature_matrix(
 ##               COUNTRY MATRIX BUILDER               ##
 ########################################################
 
-def load_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
+def load_feature_matrix(
+    country: str, 
+    load_path: Path = FEATURE_DIR
+) -> tuple[pd.DataFrame, pd.DataFrame, int, dict]:
     fpath = load_path / f"features_{country}.pkl"
     if not fpath.exists():
         raise FileNotFoundError(f"[ERROR] Feature matrix does not exist: {fpath}")
@@ -462,7 +465,10 @@ def load_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
     print(f"[OK] Feature matrix for {country} loaded!")
     return df_cont, df_cat, num_cont, cat_dims
 
-def load_supervised_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
+def load_supervised_feature_matrix(
+    country: str, 
+    load_path: Path = FEATURE_DIR
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, int, dict]:
     fpath = load_path / f"super_features_{country}.pkl"
     if not fpath.exists():
         raise FileNotFoundError(f"[ERROR] Supervised feature matrix does not exist: {fpath}")
