@@ -6,11 +6,7 @@ from typing import Dict, Optional, Union
 
 class BaseTabularModel(nn.Module):
     """
-    Base class for tabular autoencoder models with:
-      - categorical embeddings
-      - continuous + categorical fusion
-      - activation factory
-      - optional denoising on continuous inputs
+    Base class for tabular autoencoder models that reconstruct inputs and has continuous and categorical reconstruction heads.
 
     Subclasses must implement:
         encode(x_cont, x_cat) -> latent representation
