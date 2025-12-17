@@ -21,7 +21,9 @@ import pandas as pd
 from app.src.data.feature_engineering import (
     COUNTRIES,
     build_feature_matrix,
-    load_feature_matrix
+    build_supervised_feature_matrix,
+    load_feature_matrix,
+    load_supervised_feature_matrix
 )
 from app.src.ml.analysis.analysis import plot_log_candidates
 
@@ -127,7 +129,11 @@ def _extract_log_candidates(
 ##                MAIN                 ##
 #########################################
 
-def analyze_feature_matrix(country: str, X_cont: pd.DataFrame, show: bool) -> None:
+def analyze_feature_matrix(
+        country: str, 
+        X_cont: pd.DataFrame, 
+        show: bool
+    ) -> None:
     """Analyze continuous features numerically and visually for tailing and value distribution to determine which features can be clambed and/or transformed to logscale."""
     
     cont_keys = ['l3_origin', 'l3_target', 'l7_traffic', 'http', 'http_auto',
@@ -148,7 +154,7 @@ def analyze_feature_matrix(country: str, X_cont: pd.DataFrame, show: bool) -> No
     
     results = {}
     for key in cont_keys:
-        plot_log_candidates(key, X_cont[key], out_dir, f"hist_{key}")
+        plot_log_candidates(key, X_cont[key], out_dir, f"hist_{key}", show)
         results[key] = {
             "min": X_cont[key].min(),
             "max": X_cont[key].max(),
@@ -171,11 +177,17 @@ def analyze_feature_matrix(country: str, X_cont: pd.DataFrame, show: bool) -> No
 
     print(f"[OK] Feature matrix for {country} processed!")
 
-def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame, num_cont: int, cat_dims: list[int]) -> None:
+def save_feature_matrix(
+        country: str, 
+        X_cont: pd.DataFrame, 
+        X_cat: pd.DataFrame, 
+        num_cont: int, 
+        cat_dims: list[int]
+    ) -> None:
     """
     Save:
-      - continuous scaled features (float32)
-      - categorical index features (int)
+      - continuous scaled features (float64)
+      - categorical index features (int64)
       - metadata: num_cont and cat_dims
     """
     fpath = FEATURE_DIR / f"features_{country}.pkl"
@@ -192,24 +204,73 @@ def save_feature_matrix(country: str, X_cont: pd.DataFrame, X_cat: pd.DataFrame,
         )
     print(f"[OK] Feature matrix for {country} saved!")
 
+def save_supervised_feature_matrix(
+        country: str, 
+        X_cont: pd.DataFrame, 
+        X_cat: pd.DataFrame, 
+        y_l3: pd.Series, 
+        y_l7: pd.Series, 
+        y_type: pd.Series, 
+        num_cont: int, 
+        cat_dims: list[int]
+    ) -> None:
+    """
+    Save:
+      - continuous scaled features (float64)
+      - categorical index features (int64)
+      - labels as attack intensities and types (float64, int64)
+      - metadata: num_cont and cat_dims
+    """
+    fpath = FEATURE_DIR / f"super_features_{country}.pkl"
+    with open(fpath, "wb") as f:
+        pickle.dump(
+            {
+                "continuous": X_cont,
+                "categorical": X_cat,
+                "label_l3": y_l3,
+                "label_l7": y_l7,
+                "label_type": y_type,
+                "num_cont": num_cont,
+                "cat_dims": cat_dims,
+            },
+            f,
+            protocol=pickle.HIGHEST_PROTOCOL,
+        )
+    print(f"[OK] Supervised feature matrix for {country} saved!")
 
 #########################################
 ##                 RUN                 ##
 #########################################
 
-def build_single_country(country: str, BUILD: bool, SAVE: bool, ANALYZE: bool, show: bool):
+def build_single_country(
+        country: str, 
+        fm_type: str, 
+        BUILD: bool, 
+        SAVE: bool, 
+        ANALYZE: bool, 
+        show: bool
+    ):
     print(f"\n==============================")
     print(f"  FEATURES COUNTRY = {country}")
     print(f"==============================")
 
     try:
         if BUILD:
-            X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
+            if fm_type == "super":
+                X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = build_supervised_feature_matrix(country)
+            else:
+                X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
         else:
-            X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country, FEATURE_DIR)
+            if fm_type == "super":
+                X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = load_supervised_feature_matrix(country, FEATURE_DIR)
+            else:
+                X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country, FEATURE_DIR)
         
         if SAVE:
-            save_feature_matrix(country, X_cont, X_cat, num_cont, cat_dims)
+            if fm_type == "super":
+                save_supervised_feature_matrix(country, X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims)
+            else:
+                save_feature_matrix(country, X_cont, X_cat, num_cont, cat_dims)
         if ANALYZE:
             analyze_feature_matrix(country, X_cont, show)
         
@@ -217,11 +278,18 @@ def build_single_country(country: str, BUILD: bool, SAVE: bool, ANALYZE: bool, s
         print(f"[ERROR] Could not build {country}: {e}")
 
 
-def build_all_countries(BUILD: bool = False, SAVE: bool = False, ANALYZE: bool = False, show: bool = False):
+def build_all_countries(
+        fm_type: str, 
+        BUILD: bool = False, 
+        SAVE: bool = False, 
+        ANALYZE: bool = False, 
+        show: bool = False
+    ):
     print("[INFO] Building feature matrices...")
     for c in COUNTRIES:
-        build_single_country(c, BUILD, SAVE, ANALYZE, show)
+        build_single_country(c, fm_type, BUILD, SAVE, ANALYZE, show)
     print("[DONE] All feature matrices build!")
+
 
 if __name__ == "__main__":
     import argparse
@@ -255,13 +323,37 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "type",
+        default="unsuper",
+        help="<super|unsuper> feature matrix for supervised multi-task learning or unsupervised learning [default: unsuper]"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to build US matrix, or 'all' to build all matrices"
     )
 
     args = parser.parse_args()
+    fm_type = args.type.lower()
+
+    if fm_type not in ["unsuper", "super"]:
+        parser.print_help()
+        print(f"[Error] Type not recognised, choose super or unsuper")
 
     if args.target.lower() == "all":
-        build_all_countries(args.build, args.save, args.analyze, args.show)
+        build_all_countries(
+            fm_type, 
+            args.build, 
+            args.save, 
+            args.analyze, 
+            args.show
+        )
     else:
-        build_single_country(args.target.upper(), args.build, args.save, args.analyze, args.show)
+        build_single_country(
+            args.target.upper(), 
+            fm_type, 
+            args.build, 
+            args.save, 
+            args.analyze, 
+            args.show
+        )

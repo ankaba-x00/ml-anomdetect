@@ -7,6 +7,7 @@ from typing import Optional
 from app.src.data.io_utils import conv_pkltodf
 from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
 from app.src.exploration.core.params import timezones
+from app.src.data.attack_labelling import compute_attack_thresholds, derive_attack_label
 
 
 ########################################################
@@ -86,7 +87,7 @@ def _load_weighted_dist(key: str, country: str, rename: str, mids: dict) -> pd.S
 ##           PROTOCOL FRACTIONS + ENTROPY             ##
 ########################################################
 
-def load_protocol_features(key: str, country: str) -> pd.DataFrame:
+def _load_protocol_features(key: str, country: str) -> pd.DataFrame:
     df = _load_df(key)
     if "regions" in df.columns:
         df = df[df["regions"] == country]
@@ -124,9 +125,12 @@ def load_protocol_features(key: str, country: str) -> pd.DataFrame:
 ##       MAIN COUNTRY MERGED DATAFRAME BUILDER        ##
 ########################################################
 
-def build_country_dataframe(country: str) -> pd.DataFrame:
+def build_country_dataframe(
+    country: str, 
+    attack_label: bool = False
+) -> pd.DataFrame:
     """Builds raw feature matrix as df for a given country."""
-    print(f"[INFO] Building base merged DF for country={country}")
+    print(f"[INFO] Building base DF for country={country}")
 
     # ------------------------------------
     # 1. load all base series
@@ -166,7 +170,7 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
     s_l3_duration = _load_weighted_dist("l3_origin_duration_time", country, "l3_duration_avg", dur_mids)
 
     # protocol + entropy
-    df_protocol = load_protocol_features("l3_origin_protocol_time", country)
+    df_protocol = _load_protocol_features("l3_origin_protocol_time", country)
 
     # ------------------------------------
     # 2. merge everything
@@ -257,6 +261,18 @@ def build_country_dataframe(country: str) -> pd.DataFrame:
         df[f"{col}_roll24h"] = df[col].rolling(24).mean()
 
     df = df.bfill()
+
+    # ------------------------------------
+    # 6. attack labels
+    # ------------------------------------
+    if attack_label:
+        print(f"[INFO] Computing attack labels for country={country}")
+        thresholds = compute_attack_thresholds(df)
+        df["attack_label"] = df.apply(
+            lambda r: derive_attack_label(r, thresholds),
+            axis=1
+        ).astype("int64")
+
     return df
 
 
@@ -283,7 +299,7 @@ def build_feature_matrix(
         Keys match X_cat.columns exactly and order defines embedding order.
     """
     if df is None:
-        df = build_country_dataframe(country).copy()
+        df = build_country_dataframe(country, False).copy()
 
     # ------------------------------------
     # Separate categorical vs continuous
@@ -335,6 +351,88 @@ def build_feature_matrix(
     print(f"[OK] Feature matrix for {country} build!")
     return df_cont, df_cat, num_cont, cat_dims
 
+def build_supervised_feature_matrix(
+    country: str,
+    df: Optional[pd.DataFrame] = None
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, int, dict]:
+    """
+    Builds feature matrices for a given country needed for the multi-task predictor.
+    Returns
+    -------
+    X_cont : pd.DataFrame
+        Continuous features (float64) with traffic data only, no attack information 
+    X_cat : pd.DataFrame
+        Categorical index features (int64 as required for embeddings in pytorch), columns in a FIXED order with temporal data.
+    y_l3 : pd.Series
+        L3 attack intensity for regression
+    y_l7 : pd.Series
+        L7 attack intensity for regression
+    y_attack : pd.Series
+        Attack classes for classification
+    num_cont : int
+        Number of continuous features.
+    cat_dims : dict[str, int]
+        Mapping from categorical column name -> cardinality.
+        Keys match X_cat.columns exactly and order defines embedding order.
+    """
+    if df is None:
+        df = build_country_dataframe(country, True).copy()
+    # ------------------------------------
+    # Separate categorical vs continuous
+    # ------------------------------------
+
+    continuous_traffic_cols = [
+        'http', 'http_auto', 'http_human', 'netflow', 'bots_total', 'ai_bots',
+        'ratio_auto_human', 'ratio_bots_http', 'ratio_ai_bots_bots', 'ratio_netflow_http', 'http_roll3h', 'http_roll24h', 'http_auto_roll3h', 'http_auto_roll24h', 'http_human_roll3h', 'http_human_roll24h',
+        'netflow_roll3h', 'netflow_roll24h', 'bots_total_roll3h', 'bots_total_roll24h',
+        'ai_bots_roll3h', 'ai_bots_roll24h', 'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos', 'month_sin', 'month_cos', 'week_sin', 'week_cos'
+    ]
+    categorical_cols = [
+        'weekday_idx', 'daytype_idx', 'daytime_idx', 'month_idx', 'week_idx'
+    ]
+
+    # ------------------------------------
+    # 1. Input features
+    # ------------------------------------
+    df_cont = df[continuous_traffic_cols].astype("float64")
+    df_cat = df[categorical_cols].astype("int64")
+
+    # clamps extremely large raw values
+    #df_cont = df_cont.clip(lower=df_cont.quantile(0.005), upper=df_cont.quantile(0.999), axis=1)
+    
+    # transform to log scale
+    LOG_FEATURES = [
+        "ratio_bots_http",
+        "ratio_netflow_http",
+        #"ratio_ai_bots_bots",
+        #"ai_bots",
+        #"bots_total",
+    ]
+    eps = 1e-6
+    for feat in LOG_FEATURES:
+        if feat in df_cont.columns:
+            df_cont[feat] = np.log1p(df_cont[feat].clip(lower=0) + eps)
+
+    # ------------------------------------
+    # 2. Labels
+    # ------------------------------------
+    y_l3 = df["l3_origin"].astype("float64")
+    y_l7 = df["l7_traffic"].astype("float64")
+    y_type = df["attack_label"].astype("int64")
+
+    # ------------------------------------
+    # 3. Embedding metadata
+    # ------------------------------------
+    num_cont = df_cont.shape[1]
+    # category cardinalities as a dict[col_name: cardinality]
+    cat_dims = {
+        col: int(df_cat[col].max()) + 1 for col in categorical_cols
+    }
+
+    print(f"[OK] Supervised feature matrix for {country} build!")
+    return df_cont, df_cat, y_l3, y_l7, y_type, num_cont, cat_dims
+
+
 ########################################################
 ##               COUNTRY MATRIX BUILDER               ##
 ########################################################
@@ -363,3 +461,37 @@ def load_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
 
     print(f"[OK] Feature matrix for {country} loaded!")
     return df_cont, df_cat, num_cont, cat_dims
+
+def load_supervised_feature_matrix(country: str, load_path: Path = FEATURE_DIR):
+    fpath = load_path / f"super_features_{country}.pkl"
+    if not fpath.exists():
+        raise FileNotFoundError(f"[ERROR] Supervised feature matrix does not exist: {fpath}")
+    
+    with open(fpath, "rb") as f:
+        data = pickle.load(f)
+
+    df_cont = data.get("continuous")
+    df_cat = data.get("categorical")
+    y_l3 = data.get("label_l3")
+    y_l7 = data.get("label_l7")
+    y_type = data.get("label_type")
+    num_cont = data.get("num_cont")
+    cat_dims = data.get("cat_dims")
+    
+    if df_cont is None or df_cat is None: 
+        raise ValueError(f"[ERROR] Supervised feature matrix file incomplete for {country}: missing feature component")
+    elif not isinstance(df_cont, pd.DataFrame) or not isinstance(df_cat, pd.DataFrame):
+        raise TypeError(f"[ERROR] Supervised feature matrix file incompatible for {country}: wrong feature component type")
+    
+    if y_l3 is None or y_l7 is None or y_type is None:
+        raise ValueError(f"[ERROR] Supervised feature matrix file incomplete for {country}: missing feature component")
+    elif not isinstance(y_l3, pd.Series) or not isinstance(y_l7, pd.Series) or not isinstance(y_type, pd.Series):
+        raise TypeError(f"[ERROR] Supervised feature matrix file incompatible for {country}: wrong attack label component type")    
+    
+    if num_cont is None or cat_dims is None:
+        raise ValueError(f"[ERROR] Supervised feature matrix file incomplete for {country}: missing metadata component")
+    elif not isinstance(num_cont, int) or not isinstance(cat_dims, dict):
+        raise TypeError(f"[ERROR] Supervised feature matrix file incompatible for {country}: wrong metadata component type")
+
+    print(f"[OK] Supervised feature matrix for {country} loaded!")
+    return df_cont, df_cat, y_l3, y_l7, y_type, num_cont, cat_dims
