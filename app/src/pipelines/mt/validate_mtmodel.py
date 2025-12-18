@@ -179,7 +179,7 @@ def validate_country(country: str, tr: int, vr: int, method: str, latent: bool):
             cfg.device,
             1000,
             OUT_DIR,
-            f"{country}_mt_latent_space.png"
+            f"{country}_latent_space.png"
         )
 
     print(f"[DONE] Validated model for {country}")
