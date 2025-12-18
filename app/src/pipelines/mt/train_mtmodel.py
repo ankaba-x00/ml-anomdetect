@@ -9,7 +9,7 @@ Train multi-task attack predictor for one or all countries to predict L3 and L7 
 Outputs:
     PATH without -F: results/mt_ml/trained
     PATH with -F: app/deployment/models/MTP
-    FILES: <COUNTRY>_model.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES: <COUNTRY>_model.pt, <COUNTRY>_scaler.pkl, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.mt.train_multitask_model [-tr <int>] [-vr <int>] [-F] [-L] <COUNTRY|all>
@@ -164,6 +164,8 @@ def train_country(
         out_path.mkdir(parents=True, exist_ok=True)
     
     model_path = out_path / f"{country}_multitask_model.pt"
+    if full:
+        tr, vr = 100, 0
     save_multitask_model(
         model=model, 
         config=cfg, 
@@ -172,7 +174,6 @@ def train_country(
         path=model_path,
         additional_info={
             "country": country,
-            "training_mode": "full" if full else "split",
             "train_ratio": tr,
             "val_ratio": vr,
             "loss_weights": loss_weights,
