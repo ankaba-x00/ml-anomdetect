@@ -289,7 +289,7 @@ def save_multitask_model(
 def load_multitask_model(
         path: Path,
         device: Optional[str] = "cpu"
-    ) -> tuple[TrafficAttackPredictor, MTEConfig]:
+    ) -> tuple[TrafficAttackPredictor, MTEConfig, int, dict]:
     """Load model + config from a .pt file."""
     payload = torch.load(path, map_location=device)
 
@@ -298,16 +298,7 @@ def load_multitask_model(
     num_cont = payload["num_cont"]
     cat_dims = payload["cat_dims"]
     
-    model = TrafficAttackPredictor(
-        num_cont=num_cont,
-        cat_dims=cat_dims,
-        hidden_dims=cfg.hidden_dims,
-        latent_dim=cfg.latent_dim,
-        dropout=cfg.dropout,
-        activation=cfg.activation,
-        continuous_noise_std=cfg.continuous_noise_std,
-        n_attack_types=cfg.n_attack_types,
-    )
+    model = TrafficAttackPredictor(cfg)
 
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
@@ -317,4 +308,4 @@ def load_multitask_model(
     print(f"[INFO] Loaded multi-task predictor from {path}")
     print(f"[INFO] Model moved to device: {target_device}")
     
-    return model, cfg
+    return model, cfg, num_cont, cat_dims

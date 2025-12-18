@@ -490,8 +490,8 @@ def load_autoencoder(
     elif ae_class == "TabularVAE":
         cfg = VAEConfig(**payload["config"])
         model = TabularVAE(
-            num_cont=cfg.num_cont,
-            cat_dims=cfg.cat_dims,
+            num_cont=num_cont,
+            cat_dims=cat_dims,
             latent_dim=cfg.latent_dim,
             hidden_dims=cfg.hidden_dims,
             dropout=cfg.dropout,
