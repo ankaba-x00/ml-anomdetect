@@ -10,10 +10,10 @@ Train a autoencoder for one or all countries:
 Outputs: 
     PATH without -F: results/ml/trained/<MODEL>
     PATH with -F: app/deployment/models/<MODEL
-    FILES: <COUNTRY_CODE>_autoencoder.pt, <COUNTRY_CODE>_scaler_cont.pkl, <COUNTRY_CODE>_cat_dims.json, <COUNTRY_CODE>_num_cont.json, <COUNTRY_CODE>_training_history.json, <COUNTRY_CODE>_latent_space_pca_coords.csv, <COUNTRY_CODE>_latent_space.png
+    FILES: <COUNTRY>_autoencoder.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_num_cont.json, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY_CODE|all> [| tee stdout_train.txt]
+    python -m app.src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_train.txt]
 """
 
 import json, pickle

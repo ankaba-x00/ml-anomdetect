@@ -8,10 +8,10 @@ Validate a trained autoencoder:
 
 Outputs: 
     PATH : results/ml/validate/<MODEL
-    FILES : <COUNTRY_CODE>_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES : <COUNTRY>_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.validate_model [-tr <int>] [-vr <int>] <MODEL> <COUNTRY_CODE|all> [| tee stdout_val.txt]
+    python -m app.src.pipelines.validate_model [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all> [| tee stdout_val.txt]
 """
 
 import pickle, json, torch

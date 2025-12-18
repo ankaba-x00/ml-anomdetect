@@ -7,12 +7,12 @@ Analyze training and validation performance for one or all countries:
 
 Outputs:
     PATH: results/ml/trained/<MODEL>
-    FILES : <COUNTRY_CODE>_loss_curve.png, <COUNTRY_CODE>_detailed_loss_curves.png, <COUNTRY_CODE>_lr_schedule.png
+    FILES : <COUNTRY>_loss_curve.png, <COUNTRY>_detailed_loss_curves.png, <COUNTRY>_lr_schedule.png
     PATH: results/ml/validated/<MODEL>
-    FILES : <COUNTRY_CODE>_error_hist.png, <COUNTRY_CODE>_error_timeseries.png, <COUNTRY_CODE>_summary.json
+    FILES : <COUNTRY>_error_hist.png, <COUNTRY>_error_timeseries.png, <COUNTRY>_summary.json
 
 Usage:
-    python -m app.src.pipelines.analyze_training [-s] <MODEL> <COUNTRY_CODE|all>
+    python -m app.src.pipelines.analyze_training [-s] <MODEL> <COUNTRY|all>
 """
 import json
 from pathlib import Path

@@ -9,7 +9,7 @@ Builds and saves feature matrix for all countries:
 - saves feature matrices for use during training and inference
 
 Outputs:
-    datasets/featured/features_<COUNTRY_CODE>.pkl
+    datasets/featured/features_<COUNTRY>.pkl
 
 Usage:
     python -m app.src.pipelines.build_features
