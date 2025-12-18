@@ -6,7 +6,7 @@ Visualize test-set anomaly detection results:
 - generates plots (error curve with threshold and detected anomalies, anomaly intervals, error histogram, raw target signal with error overlay)
 
 Outputs:
-    PATH : results/ml/tested/analysis/<MODEL>
+    PATH : results/ae_ml/tested/analysis/<MODEL>
     FILES : <COUNTRY>_errorcurves_<METHOD>.png, <COUNTRY>_hist_<METHOD>.png, <COUNTRY>_intervals_<METHOD>.png, <COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
 
 Usage:
@@ -33,8 +33,8 @@ from app.src.ml.analysis.analysis import (
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
-TESTED_DIR = PROJECT_ROOT / "results" / "ml" / "tested"
+PROJECT_ROOT = FILE_DIR.parents[3]
+TESTED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tested"
 
 
 #########################################

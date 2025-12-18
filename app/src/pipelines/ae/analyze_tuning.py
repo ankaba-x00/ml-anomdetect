@@ -7,9 +7,9 @@ Analyze Optuna tuning resultse for one or all countries:
 - generates plots (Optuna standard plots as html and png, trial correlation heatmap, best trial learning curves, loss curves for all trials, 3D hyperparam landscape, csv and json reports, multi-country comparison)
 
 Outputs:
-    PATH : results/ml/tuned/analysis/<MODEL>/<COUNTRY>
+    PATH : results/ae_ml/tuned/analysis/<MODEL>/<COUNTRY>
     FILES : optimization_history.png + .html, parallel_coordinates.png + .html, param_importance.png + .html, contour.png + .html, slice.png + .html, 3d_scatter.png, losses_all_trials, best_learning_curve.png, correlation_heatmap.png, loss_component_analysis.png
-    PATH : results/ml/tuned/analysis/<MODEL>/multi
+    PATH : results/ae_ml/tuned/analysis/<MODEL>/multi
     FILES : best_losses.png, best_weights.png, weight_loss_correlation.png, trial_results.csv, best_losses.json, best_weights.json
 
 Usage:
@@ -44,8 +44,8 @@ from app.src.ml.analysis.analysis import (
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
-TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
+PROJECT_ROOT = FILE_DIR.parents[3]
+TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 
 #########################################
 ##               LOAD DATA             ##

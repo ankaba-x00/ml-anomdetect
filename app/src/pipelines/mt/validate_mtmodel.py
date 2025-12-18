@@ -31,7 +31,7 @@ from app.src.data.feature_engineering import load_supervised_feature_matrix
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
+PROJECT_ROOT = FILE_DIR.parents[3]
 MODELS_DIR = PROJECT_ROOT / "results" / "mt_ml" / "trained"
 OUT_DIR = PROJECT_ROOT / "results" / "mt_ml" / "validated"
 OUT_DIR.mkdir(parents=True, exist_ok=True)

@@ -8,7 +8,7 @@ Train a autoencoder for one or all countries:
 - performs latent space analysis if specified
 
 Outputs: 
-    PATH without -F: results/ml/trained/<MODEL>
+    PATH without -F: results/ae_ml/trained/<MODEL>
     PATH with -F: app/deployment/models/<MODEL
     FILES: <COUNTRY>_autoencoder.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_num_cont.json, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
@@ -35,10 +35,10 @@ from app.src.ml.training.train import train_autoencoder, save_autoencoder
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
-OUT_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
+PROJECT_ROOT = FILE_DIR.parents[3]
+OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
 FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "models"
-BEST_MODELS_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
+BEST_MODELS_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 
 
 #########################################

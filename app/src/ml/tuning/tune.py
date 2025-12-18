@@ -18,7 +18,7 @@ from app.src.ml.analysis.analysis import plot_latent_space
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
-OUT_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
+OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 #########################################

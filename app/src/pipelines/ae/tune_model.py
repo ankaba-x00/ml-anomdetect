@@ -17,7 +17,7 @@ Search space:
 - lr scheduler type
 
 Outputs:
-    PATH : results/ml/tuned/<MODEL>
+    PATH : results/ae_ml/tuned/<MODEL>
     FILES: <COUNTRY>_study.db, <COUNTRY>_best_model.pt, <COUNTRY>_best_params.json, <COUNTRY>_best_config.json, <COUNTRY>_best_history.json, <COUNTRY>_scaler.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:

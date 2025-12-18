@@ -6,9 +6,9 @@ Analyze training and validation performance for one or all countries:
 - generates plots (loss curves, LR schedules, error histograms, error time series) and validation summary
 
 Outputs:
-    PATH: results/ml/trained/<MODEL>
+    PATH: results/ae_ml/trained/<MODEL>
     FILES : <COUNTRY>_loss_curve.png, <COUNTRY>_detailed_loss_curves.png, <COUNTRY>_lr_schedule.png
-    PATH: results/ml/validated/<MODEL>
+    PATH: results/ae_ml/validated/<MODEL>
     FILES : <COUNTRY>_error_hist.png, <COUNTRY>_error_timeseries.png, <COUNTRY>_summary.json
 
 Usage:
@@ -28,9 +28,9 @@ from app.src.ml.analysis.analysis import (
 ##                PARAMS               ##
 #########################################
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
-TRAINED_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
-VALIDATED_DIR = PROJECT_ROOT / "results" / "ml" / "validated"
+PROJECT_ROOT = FILE_DIR.parents[3]
+TRAINED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
+VALIDATED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "validated"
 
 
 #########################################

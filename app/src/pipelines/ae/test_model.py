@@ -9,7 +9,7 @@ Test model to detect anomalies in new data:
 - performs latent space analysis if specified
 
 Outputs:
-    PATH : results/ml/tested/<MODEL>
+    PATH : results/ae_ml/tested/<MODEL>
     FILES : <COUNTRY>_errors_<method>.csv, <COUNTRY>_errors_<method>.csv, <COUNTRY>_threshold_<method>.json, <COUNTRY>_intervals_<method>.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
@@ -32,10 +32,9 @@ from app.src.ml.analysis.analysis import plot_latent_space
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
-
-TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
-OUT_DIR = PROJECT_ROOT / "results" / "ml" / "tested"
+PROJECT_ROOT = FILE_DIR.parents[3]
+TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
+OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tested"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

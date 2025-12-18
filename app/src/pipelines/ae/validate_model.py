@@ -7,7 +7,7 @@ Validate a trained autoencoder:
 - performs latent space analysis if specified
 
 Outputs: 
-    PATH : results/ml/validate/<MODEL
+    PATH : results/ae_ml/validate/<MODEL
     FILES : <COUNTRY>_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
@@ -30,9 +30,9 @@ from app.src.ml.analysis.analysis import plot_latent_space
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
-MODELS_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
-OUT_DIR = PROJECT_ROOT / "results" / "ml" / "validated"
+PROJECT_ROOT = FILE_DIR.parents[3]
+MODELS_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
+OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "validated"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

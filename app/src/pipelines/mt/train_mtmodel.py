@@ -8,7 +8,7 @@ Train multi-task attack predictor for one or all countries to predict L3 and L7 
 
 Outputs:
     PATH without -F: results/mt_ml/trained
-    PATH with -F: app/deployment/mt_models
+    PATH with -F: app/deployment/models/MTP
     FILES: <COUNTRY>_model.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
@@ -33,10 +33,10 @@ from app.src.ml.training.train_mt import train_multitask_model, save_multitask_m
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = FILE_DIR.parents[2]
+PROJECT_ROOT = FILE_DIR.parents[3]
 OUT_DIR = PROJECT_ROOT / "results" / "mt_ml" / "trained"
 BEST_MODELS_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tuned"
-FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "mt_models"
+FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "models" / "MTP"
 
 
 #########################################
