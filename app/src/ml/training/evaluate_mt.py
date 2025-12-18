@@ -56,14 +56,12 @@ def prediction_errors(
             attack_pred = probs.argmax(dim=-1)
             attack_prob_max = probs.max(dim=-1).values
 
-        # total per-sample combined loss
+        # total per-sample combined loss of regression
         total = torch.zeros(Xc.size(0), device=device)
         if loss_l3 is not None:
             total = total + l3_weight * loss_l3
         if loss_l7 is not None:
             total = total + l7_weight * loss_l7
-        if loss_attack is not None:
-            total = total + attack_weight * loss_attack
 
     return {
         "loss_total": total.detach().cpu().numpy(),
