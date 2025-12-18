@@ -15,6 +15,9 @@ Search space:
 - residual_strength
 - optimizer (Adam / AdamW)
 - lr scheduler type
+- activation
+- loss weights
+- beta (for VAE)
 
 Outputs:
     PATH : results/ae_ml/tuned/<MODEL>
