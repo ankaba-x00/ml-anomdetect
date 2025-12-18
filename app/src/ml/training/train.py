@@ -465,20 +465,20 @@ def save_autoencoder(
 
 def load_autoencoder(
         path: Path,
-        device: Optional[str] = None
+        device: Optional[str] = "cpu"
     ) -> Union[tuple[TabularAE, AEConfig], tuple[TabularVAE, VAEConfig]]:
     """Load model + config from a .pt file."""
-    if torch.cuda.is_available():
-        payload = torch.load(path, map_location="cuda")
-    else:
-        payload = torch.load(path, map_location="cpu")
+    payload = torch.load(path, map_location=device)
+
+    num_cont = payload["num_cont"]
+    cat_dims = payload["cat_dims"]
 
     ae_class = payload["model_class"]
     if ae_class == "TabularAE":
         cfg = AEConfig(**payload["config"])
         model = TabularAE(
-            num_cont=cfg.num_cont,
-            cat_dims=cfg.cat_dims,
+            num_cont=num_cont,
+            cat_dims=cat_dims,
             latent_dim=cfg.latent_dim,
             hidden_dims=cfg.hidden_dims,
             dropout=cfg.dropout,
@@ -502,10 +502,7 @@ def load_autoencoder(
         )
     else:
         raise ValueError(f"Unknown model_class: {ae_class}")
-
-    if device is not None:
-        cfg.device = device
-
+    
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
     model = model.to(target_device)

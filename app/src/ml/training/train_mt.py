@@ -288,27 +288,26 @@ def save_multitask_model(
 
 def load_multitask_model(
         path: Path,
-        device: Optional[str] = None
+        device: Optional[str] = "cpu"
     ) -> tuple[TrafficAttackPredictor, MTEConfig]:
     """Load model + config from a .pt file."""
-    if torch.cuda.is_available():
-        payload = torch.load(path, map_location="cuda")
-    else:
-        payload = torch.load(path, map_location="cpu")
+    payload = torch.load(path, map_location=device)
 
     cfg = MTEConfig(**payload["config"])
+    
+    num_cont = payload["num_cont"]
+    cat_dims = payload["cat_dims"]
+    
     model = TrafficAttackPredictor(
-        num_cont=cfg.num_cont,
-        cat_dims=cfg.cat_dims,
+        num_cont=num_cont,
+        cat_dims=cat_dims,
         hidden_dims=cfg.hidden_dims,
         latent_dim=cfg.latent_dim,
         dropout=cfg.dropout,
         activation=cfg.activation,
-        continuous_noise_std=cfg.continuous_noise_std
+        continuous_noise_std=cfg.continuous_noise_std,
+        n_attack_types=cfg.n_attack_types,
     )
-
-    if device is not None:
-        cfg.device = device
 
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
