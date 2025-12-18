@@ -17,6 +17,7 @@ from optuna.visualization import (
 )
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
+from app.src.ml.models.mte import TrafficAttackPredictor
 
 
 #########################################
@@ -922,7 +923,7 @@ def plot_latent_space(
     country: str,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    model: Union[TabularAE, TabularVAE],
+    model: Union[TabularAE, TabularVAE, TrafficAttackPredictor],
     device: str,
     max_samples: int = 1000,
     folder: Path = Path.cwd(),
@@ -945,8 +946,10 @@ def plot_latent_space(
     with torch.no_grad():
         if isinstance(model, TabularAE):
             z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
-        else:
+        elif isinstance(model, TabularVAE):
             z = model.encode_to_latent(Xc_tensor, Xk_tensor, False).cpu().numpy()
+        else:
+            z = model.encoder(Xc_tensor, Xk_tensor).cpu().numpy()
     if len(z) < 10:
         print(f"[INFO] Not enough samples for latent space visualization: {len(z)}")
         return

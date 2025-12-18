@@ -15,6 +15,7 @@ app/datasets/scalers/*
 results/exploration/y2022-2023
 results/exploration/y2023-2024
 results/ml/*
+results/mt_ml/*
 results/featured/*
 
 app/deployment/models/*
