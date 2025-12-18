@@ -67,8 +67,6 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: 
     # Load model + config, scaler, num_cont
     # --------------------
     model, cfg = load_autoencoder(model_path)
-    model = model.to(cfg.device)
-    model.eval()
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
