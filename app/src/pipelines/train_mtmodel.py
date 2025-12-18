@@ -53,7 +53,7 @@ def train_country(
 ):
 
     print(f"\n==============================")
-    print(f"  TRAIN MULTI-TASK ({country})")
+    print(f"   TRAIN MT MODEL ({country}) ")
     print(f"==============================")
 
     # ------------------------------------
@@ -217,11 +217,7 @@ def train_all(tr: int, vr: int, full: bool, latent: bool):
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     print("\n[DONE] All multi-task trainings completed!")
-
-
-#########################################
-##                 CLI                 ##
-#########################################
+    
 
 if __name__ == "__main__":
     import argparse
