@@ -25,7 +25,7 @@ from app.src.data.feature_engineering import COUNTRIES
 from app.src.data.feature_engineering import load_supervised_feature_matrix
 from app.src.ml.models.mte import MTEConfig
 from app.src.ml.analysis.analysis import plot_latent_space
-from app.src.ml.training.train_mt import train_multitask_model,save_autoencoder
+from app.src.ml.training.train_mt import train_multitask_model, save_multitask_model
 
 
 #########################################
@@ -164,7 +164,7 @@ def train_country(
         out_path.mkdir(parents=True, exist_ok=True)
     
     model_path = out_path / f"{country}_multitask_model.pt"
-    save_autoencoder(
+    save_multitask_model(
         model=model, 
         config=cfg, 
         cat_dims=cat_dims,

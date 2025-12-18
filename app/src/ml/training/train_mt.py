@@ -264,7 +264,7 @@ def train_multitask_model(
 ##         SAVE / LOAD HELPERS         ##
 #########################################
 
-def save_autoencoder(
+def save_multitask_model(
     model: TrafficAttackPredictor,
     config: MTEConfig,
     cat_dims: dict,
@@ -286,7 +286,7 @@ def save_autoencoder(
     print(f"[OK] Saved multi-task predictor to {path}")
 
 
-def load_autoencoder(
+def load_multitask_model(
         path: Path,
         device: Optional[str] = None
     ) -> tuple[TrafficAttackPredictor, MTEConfig]:
