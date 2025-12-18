@@ -10,7 +10,7 @@ Outputs:
     FILES : <COUNTRY>_errorcurves_<METHOD>.png, <COUNTRY>_hist_<METHOD>.png, <COUNTRY>_intervals_<METHOD>.png, <COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
 
 Usage:
-    python -m app.src.pipelines.analyze_testing [-s] [-M] [-R] <MODEL> <COUNTRY|all|none>
+    python -m app.src.pipelines.ae.analyze_testing [-s] [-M] [-R] <MODEL> <COUNTRY|all|none>
 """
 
 import json, pickle

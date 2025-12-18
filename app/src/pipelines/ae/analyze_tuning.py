@@ -13,7 +13,7 @@ Outputs:
     FILES : best_losses.png, best_weights.png, weight_loss_correlation.png, trial_results.csv, best_losses.json, best_weights.json
 
 Usage:
-    python -m app.src.pipelines.analyze_tuning [-s] [-M] <MODEL> <COUNTRY|all|none>
+    python -m app.src.pipelines.ae.analyze_tuning [-s] [-M] <MODEL> <COUNTRY|all|none>
 """
 
 import json, optuna, torch, pickle

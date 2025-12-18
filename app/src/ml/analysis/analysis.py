@@ -96,9 +96,9 @@ def plot_training_curves(
     apply_custom_theme()
 
     train_loss = np.array(history["train_loss"], dtype=float)
-    val_loss   = np.array(history["val_loss"], dtype=float)
-    lrs        = np.array(history["learning_rates"], dtype=float)
-    epochs     = np.arange(1, len(train_loss) + 1)
+    val_loss = np.array(history["val_loss"], dtype=float)
+    lrs = np.array(history["learning_rates"], dtype=float)
+    epochs = np.arange(1, len(train_loss) + 1)
     best_epoch = history.get("best_epoch", None)
 
     # Ensure lr schedule length matches number of epochs

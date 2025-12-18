@@ -13,7 +13,7 @@ Outputs:
     FILES: <COUNTRY>_autoencoder.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_num_cont.json, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_train.txt]
+    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_train.txt]
 """
 
 import json, pickle

@@ -12,7 +12,7 @@ Outputs:
     FILES: <COUNTRY>_model.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.train_multitask_model [-tr <int>] [-vr <int>] [-F] [-L] <COUNTRY|all>
+    python -m app.src.pipelines.mt.train_multitask_model [-tr <int>] [-vr <int>] [-F] [-L] <COUNTRY|all>
 """
 
 import json, pickle

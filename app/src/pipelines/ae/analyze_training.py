@@ -12,7 +12,7 @@ Outputs:
     FILES : <COUNTRY>_error_hist.png, <COUNTRY>_error_timeseries.png, <COUNTRY>_summary.json
 
 Usage:
-    python -m app.src.pipelines.analyze_training [-s] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.analyze_training [-s] <MODEL> <COUNTRY|all>
 """
 import json
 from pathlib import Path

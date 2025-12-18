@@ -13,7 +13,7 @@ Outputs:
     FILES : <COUNTRY>_errors_<method>.csv, <COUNTRY>_errors_<method>.csv, <COUNTRY>_threshold_<method>.json, <COUNTRY>_intervals_<method>.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all> [| tee stdout_test.txt]
+    python -m app.src.pipelines.ae.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all> [| tee stdout_test.txt]
 """
 
 import pickle, json, torch

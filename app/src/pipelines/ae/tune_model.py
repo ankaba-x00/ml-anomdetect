@@ -21,7 +21,7 @@ Outputs:
     FILES: <COUNTRY>_study.db, <COUNTRY>_best_model.pt, <COUNTRY>_best_params.json, <COUNTRY>_best_config.json, <COUNTRY>_best_history.json, <COUNTRY>_scaler.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_tune.txt]
+    python -m app.src.pipelines.ae.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_tune.txt]
 """
 
 from app.src.data.feature_engineering import COUNTRIES

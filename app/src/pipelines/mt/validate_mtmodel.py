@@ -10,6 +10,9 @@ Validate a trained multi-task traffic model:
 Outputs:
     PATH : results/mt_ml/validated
     FILES : <COUNTRY>_mt_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+
+Usage:
+    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_val.txt]
 """
 
 import pickle, torch
