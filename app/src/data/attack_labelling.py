@@ -11,6 +11,19 @@ class AttackThresholds:
     AUTO_HUMAN_HIGH: float
     BOTS_HIGH: float
 
+ATTACK_LABELS = [
+    "normal",
+    "udp_amplification",
+    "tcp_syn_flood",
+    "icmp_flood",
+    "gre_flood",
+    "http_flood",
+    "multi_vector",
+    "stealth_scan",
+]
+
+ATTACK_TO_ID = {name: idx for idx, name in enumerate(ATTACK_LABELS)}
+ID_TO_ATTACK = {idx: name for idx, name in enumerate(ATTACK_LABELS)}
 
 def _safe_q(
     series: pd.Series, 
