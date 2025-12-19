@@ -114,7 +114,7 @@ def test_country(country: str, method: str, tr: int, vr: int, latent: bool):
     # --------------------
     # Print summary
     # --------------------
-    print("\n--- Test Summary (MT) ---")
+    print("\n--- MT Test Summary ---")
     print(f"Total samples: {len(errors)}")
     print(f"Threshold ({method}): {thr:.6f}")
     print(f"Flagged samples: {int(mask.sum())}")

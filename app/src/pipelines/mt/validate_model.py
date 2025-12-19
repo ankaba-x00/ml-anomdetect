@@ -138,7 +138,7 @@ def validate_country(country: str, tr: int, vr: int, method: str, latent: bool):
     # --------------------
     # Print summary
     # --------------------
-    print("\n--- Validation Summary (MT) ---")
+    print("\n--- MT Validation Summary ---")
     print(f"Total samples: {len(errors)}")
     print(f"Threshold ({method}): {thr:.6f}")
     print(f"Flagged samples: {int(mask.sum())}")
