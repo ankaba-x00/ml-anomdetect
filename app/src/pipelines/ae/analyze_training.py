@@ -115,8 +115,11 @@ def analyze_country(ae_type: str, country: str, show_plots: bool):
 
 def analyze_all(ae_type: str, show_plots: bool):
     """Runs full analysis pipeline of all country models."""
+    print(f"\n[INFO] Analysis of all models starting...")
+    
     for c in COUNTRIES:
         analyze_country(ae_type, c, show_plots)
+    
     print(f"\n[DONE] Analysis of all model trainings and validations completed!")
 
 

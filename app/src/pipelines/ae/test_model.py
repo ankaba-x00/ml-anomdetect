@@ -172,9 +172,11 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     # Save intervals
     # --------------------
     df_int = pd.DataFrame({
+        "start_idx": starts,
+        "end_idx": ends,
         "start_ts": ts_eval[starts] if len(starts) else [],
         "end_ts": ts_eval[ends - 1] if len(ends) else [],
-        "duration_samples": (ends - starts)
+        "duration_samples": ends - starts
     })
     int_path = out_path / f"{country}_intervals_{method}.csv"
     df_int.to_csv(int_path, index=False)

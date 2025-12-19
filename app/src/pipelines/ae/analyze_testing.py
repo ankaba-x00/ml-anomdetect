@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Visualize test-set anomaly detection results:
+Visualize test data anomaly detection results:
 - loads testing errors, threshold and anomaly intervals
 - plots raw signal of choice with an error overlay interactively if chosen
 - generates plots (error curve with threshold and detected anomalies, anomaly intervals, error histogram, raw target signal with error overlay)
@@ -51,7 +51,7 @@ def _load_results(
     int_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_intervals_{method}.csv"
 
     if not err_path.exists():
-        raise FileNotFoundError(f"Error not found: {err_path}")
+        raise FileNotFoundError(f"Errors not found: {err_path}")
     if not thr_path.exists():
         raise FileNotFoundError(f"Threshold dict not found: {thr_path}")
     if not int_path.exists():
@@ -63,7 +63,7 @@ def _load_results(
 
     df_int = pd.read_csv(
         int_path, 
-        parse_dates=["start_ts", "end_ts", "duration_samples"],
+        parse_dates=["start_ts", "end_ts"],
         date_format="ISO8601"
     )
     return df_err, threshold, df_int
@@ -82,7 +82,7 @@ def analyze_raw(
         show_plots: bool,
     ):
 
-    TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned" / f"{ae_type.upper()}"
+    TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned" / f"{ae_type.upper()}"
     scaler_path = TUNED_DIR / f"{country}_scaler.pkl"
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
@@ -99,6 +99,7 @@ def analyze_raw(
         train_ratio=0.75,
         val_ratio=0.15
     )
+    raw_test_scald = scaler.transform(raw_test_cont).astype(np.float32)
     ts_eval = ts[len(raw_train)+len(raw_val):]
     # extract computed testset errors and mask
     errors = df_err["error"].values
@@ -123,7 +124,7 @@ def analyze_raw(
             plot_raw_with_errors(
                 name,
                 ts_eval,
-                raw_test_cont[:, idx],
+                raw_test_scald[:, idx],
                 errors,
                 mask,
                 out_dir,
@@ -190,6 +191,7 @@ def analyze_all(ae_type: str, method: str, show_plots: bool, plot_raw: bool):
             analyze_country(ae_type, c, method, show_plots, plot_raw)
         except Exception as e:
             print(f"[ERROR] {c}: {e}")
+            
     print(f"\n[DONE] Analysis of all model testings completed!")
 
 
@@ -197,7 +199,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Analyze model training & validation performance."
+        description="Analyze model testing performance."
     )
 
     parser.add_argument(

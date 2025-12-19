@@ -110,6 +110,8 @@ def test_country(country: str, method: str, tr: int, vr: int, latent: bool):
     errors = results["loss_total"]
     thr = results["threshold"]
     mask = results["mask"]
+    starts = results["anomaly_starts"]
+    ends = results["anomaly_ends"]
 
     # --------------------
     # Print summary
@@ -133,6 +135,11 @@ def test_country(country: str, method: str, tr: int, vr: int, latent: bool):
         "loss_l3": results["loss_l3"],
         "loss_l7": results["loss_l7"],
         "loss_attack": results["loss_attack"],
+        "l3_true": y3_te,
+        "l3_pred": results["l3_pred"],
+        "l7_true": y7_te,
+        "l7_pred": results["l7_pred"],
+        "attack_true": ya_te,
         "attack_pred": results["attack_pred"],
         "attack_conf": results["attack_prob_max"],
         "threshold": thr,
@@ -140,7 +147,18 @@ def test_country(country: str, method: str, tr: int, vr: int, latent: bool):
     })
     val_path = OUT_DIR / f"{country}_errors_{method}.csv"
     df.to_csv(val_path, index=False)
-    print(f"[OK] Test results CSV saved: {val_path}")
+    print(f"[OK] Saved results CSV to {val_path}")
+
+    df_int = pd.DataFrame({
+        "start_idx": starts,
+        "end_idx": ends,
+        "start_ts": ts_te[starts] if len(starts) else [],
+        "end_ts": ts_te[ends - 1] if len(ends) else [],
+        "duration_samples": ends - starts,
+    })
+    int_path = OUT_DIR / f"{country}_intervals_{method}.csv"
+    df_int.to_csv(int_path, index=False)
+    print(f"[OK] Saved intervals CSV to {int_path}")
 
     # ------------------------------------
     # Visualize latent space

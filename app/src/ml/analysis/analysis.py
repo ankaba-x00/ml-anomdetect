@@ -91,6 +91,7 @@ def plot_training_curves(
     folder: Path = Path.cwd(),
     fnames: list[str] = ["loss_curve.png", "lr_schedule.png"],
     show: bool = False,
+    MT: bool = False
 ):
     """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
     apply_custom_theme()
@@ -117,14 +118,14 @@ def plot_training_curves(
 
     # 1) Raw losses (log-scale)
     ax = axes[0]
-    ax.plot(epochs, train_loss, label="Train Loss", linewidth=2)
-    ax.plot(epochs, val_loss, label="Val Loss", linewidth=2)
+    ax.plot(epochs, train_loss, label="Train", linewidth=2)
+    ax.plot(epochs, val_loss, label="Val", linewidth=2)
     if best_epoch:
         ax.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
 
     ax.set_title(f"{country} — Loss Curve (Raw Loss, Log Scale)")
     ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss")
+    ax.set_ylabel("Total Loss" if MT else "Loss")
     ax.set_yscale("log")
     ax.grid(True)
     ax.legend()
@@ -138,7 +139,7 @@ def plot_training_curves(
 
     ax2.set_title(f"{country} — Learning Curve (Normalized to check for overfitting)")
     ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Normalized Loss")
+    ax2.set_ylabel("Normalized Total Loss" if MT else "Normalized Loss")
     ax2.grid(True)
     ax2.legend()
 
@@ -560,9 +561,9 @@ def plot_loss_component_analysis(
             continue
         with open(hist_file, "r") as f:
             hist = json.load(f)
-        if f"train_{cont_loss_name}" in hist and f"train_{cat_loss_name}" in hist:
-            cont_losses.append(hist[f"train_{cont_loss_name}"][-1])
-            cat_losses.append(hist[f"train_{cat_loss_name}"][-1])
+        if f"val_{cont_loss_name}" in hist and f"val_{cat_loss_name}" in hist:
+            cont_losses.append(hist[f"val_{cont_loss_name}"][-1])
+            cat_losses.append(hist[f"val_{cat_loss_name}"][-1])
             total_losses.append(trial.value)
             trial_numbers.append(trial.number)
     if len(cont_losses) < 3:
@@ -861,18 +862,19 @@ def plot_intervals(
 
 def plot_error_hist(
         country: str, 
-        df_err: pd.DataFrame, 
+        df: pd.DataFrame, 
         threshold: float, 
         method: str, 
         folder: Path = Path.cwd(),
         fname: str = "plot_error_hist.png", 
-        show: bool = False
+        show: bool = False,
+        MT: bool = False
     ):
     """Histogram showing error counts and threshold."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    sns.histplot(df_err["error"], bins=60, ax=ax)
+    sns.histplot(df["loss_total"] if MT else df["error"], bins=60, ax=ax)
     ax.axvline(threshold, color="red", linestyle="--", label="Threshold")
     ax.legend()
     ax.set_yscale("log")
@@ -891,7 +893,7 @@ def plot_raw_with_errors(
         errors: np.ndarray, 
         mask: np.ndarray, 
         folder: Path = Path.cwd(),
-        fname: str = "plot_error_hist.png", 
+        fname: str = "plot_raw_with_errors.png", 
         show: bool = False
     ):
     """Lineplot showing raw target signal with smoothed error scaled on same range and detected anomalies."""

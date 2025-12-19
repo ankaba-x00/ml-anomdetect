@@ -2,42 +2,39 @@
 """
 Analyze Optuna tuning results for one or all countries:
 - loads tuning history
-- loads training error with best model
+- loads training summary with best model
 - performs multi-country comparison if chosen
-- generates plots (Optuna standard plots as html and png, trial correlation heatmap, best trial learning curves, loss curves for all trials, 3D hyperparam landscape, csv and json reports, multi-country comparison if specified, latent space if specified)
+- generates plots 
 
 Outputs:
-    PATH : results/ae_ml/tuned/analysis/<MODEL>/<COUNTRY>
+    PATH : results/mt_ml/tuned/analysis/<MODEL>/<COUNTRY>
     FILES : optimization_history.png + .html, parallel_coordinates.png + .html, param_importance.png + .html, contour.png + .html, slice.png + .html, 3d_scatter.png, losses_all_trials, best_learning_curve.png, correlation_heatmap.png, loss_component_analysis.png, trial_results.csv, <COUNTRY>_latent_space.png, <COUNTRY>_latent_space_pca_coords.csv
-    PATH : results/ae_ml/tuned/analysis/<MODEL>/_multi
+    PATH : results/mt_ml/tuned/analysis/_multi
     FILES : best_losses.png, best_weights.png, weight_loss_correlation.png, best_losses.json, best_weights.json
 
 Usage:
-    python -m app.src.pipelines.ae.analyze_tuning [-s] [-M] [-L] <MODEL> <COUNTRY|all|none>
+    python -m app.src.pipelines.mt.analyze_tuning [-s] [-M] [-L] <COUNTRY|all|none>
 """
 
 import json, optuna, torch, pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
+from app.src.data.feature_engineering import COUNTRIES, load_supervised_feature_matrix
 from app.src.data import timeseries_seq_split
-from app.src.ml.training.train import load_autoencoder
-from app.src.ml.models.ae import AEConfig
-from app.src.ml.models.vae import VAEConfig
+from app.src.ml.training.train_mt import load_multitask_model
 from app.src.ml.analysis.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
     plot_loss_curves_all_trials,
     plot_best_trial_learning_curve,
     plot_3d_scatter,
-    plot_loss_component_analysis,
     plot_multi_loss_overview,
-    plot_multi_weights_overview,
-    plot_multi_weight_loss_correlation,
     plot_latent_space
 )
-
+from app.src.ml.analysis.analysis_mt import ( 
+    plot_mt_loss_component_analysis, plot_multi_mt_weights_overview, plot_multi_mt_weight_loss_correlation
+)
 
 #########################################
 ##                PARAMS               ##
@@ -45,7 +42,7 @@ from app.src.ml.analysis.analysis import (
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
-TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
+TUNED_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tuned"
 
 #########################################
 ##               LOAD DATA             ##
@@ -55,9 +52,8 @@ def load_study(country: str, db_path: Path):
     """Load study from SQLite db."""
     return optuna.load_study(
         storage=f"sqlite:///{db_path}",
-        study_name=f"ae_tuning_{country}",
+        study_name=f"mt_tuning_{country}",
     )
-
 
 def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
     """Convert study trials into df."""
@@ -75,36 +71,44 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
-def plot_latent(ae_type: str, country: str, out_dir: Path, show: bool):
+def plot_latent(
+    country: str,
+    out_dir: Path, 
+    show: bool
+):
     """Plot latent space if flag was not set during tuning."""
     print(f"[INFO] Preparing latent space visualization...")
 
-    model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_model.pt"
-    scaler_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_scaler.pkl"
+    model_path = TUNED_DIR / f"{country}_best_model.pt"
+    scaler_path = TUNED_DIR / f"{country}_scaler.pkl"
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
     if not scaler_path.exists():
         raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
 
-    model, cfg = load_autoencoder(model_path)
+    model, cfg, model_num_cont, model_cat_dims = load_multitask_model(model_path)
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
     
-    X_cont, X_cat, _, _ = load_feature_matrix(country)
-    Xc_np = X_cont.values.astype(np.float64)
-    Xk_np = X_cat.values.astype(np.int64)
-    (train_cont, train_cat), _, _ = timeseries_seq_split(
-        Xc_np, Xk_np,
-        train_ratio=75/100,
-        val_ratio=15/100,
+    X_cont, X_cat, _, _, _, num_cont, cat_dims = load_supervised_feature_matrix(country)
+
+    assert num_cont == model_num_cont, "[ERROR] num_cont mismatch between cfg and supervised matrix"
+    assert cat_dims == model_cat_dims, "[ERROR] cat_dims mismatch between cfg and supervised matrix"
+
+    Xc = X_cont.values.astype(np.float64)
+    Xk = X_cat.values.astype(np.int64)
+
+    (Xc_tr, Xk_tr), _, _ = timeseries_seq_split(
+        Xc, Xk, 
+        train_ratio=75/100, 
+        val_ratio=15/100
     )
-    train_cont_scald = scaler.transform(train_cont).astype(np.float32)
-    
+    Xc_tr_scald = scaler.transform(Xc_tr).astype(np.float32)
     plot_latent_space(
         country, 
-        train_cont_scald, 
-        train_cat,
+        Xc_tr_scald, 
+        Xk_tr,
         model,
         cfg.device,
         1000,
@@ -114,10 +118,13 @@ def plot_latent(ae_type: str, country: str, out_dir: Path, show: bool):
     )
     print(f"[OK] Latent space plot for {country} generated.")
     
-def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False):
+def multi_analyze(
+    countries: list = COUNTRIES, 
+    show: bool = False
+):
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
-    out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / "_multi"
+    out_dir = TUNED_DIR / "analysis" / "_multi"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     #countries.remove("KR")
@@ -127,8 +134,8 @@ def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False)
     #countries.remove("CH")
     losses_data = {}
     for c in countries:
-        cfg_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_params.json"
-        study_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_study.db"
+        cfg_path = TUNED_DIR / f"{c}_best_params.json"
+        study_path = TUNED_DIR / f"{c}_study.db"
         if not cfg_path.exists() or not study_path.exists():
             print()
             continue
@@ -141,41 +148,51 @@ def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False)
     weights_data = {}
     for c in countries:
         try:
-            model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_model.pt"
+            model_path = TUNED_DIR / f"{c}_best_model.pt"
             if model_path.exists():
                 payload = torch.load(model_path, map_location="cpu")
                 loss_weights = payload.get("additional_info", {}).get("loss_weights", {})
+                reg_weights = loss_weights.get("l3", 0.0) + loss_weights.get("l7", 0.0)
                 weights_data[c] = {
-                    "cont_weight": loss_weights.get("cont_weight", 1.0),
-                    "cat_weight": loss_weights.get("cat_weight", 0.0),
-                    "ratio": loss_weights["cat_weight"] / max(loss_weights["cont_weight"], 1e-8)
+                    "l3": loss_weights.get("l3", 1.0),
+                    "l7": loss_weights.get("l7", 1.0),
+                    "class": loss_weights.get("attack", 1.0),
+                    "reg": reg_weights,
+                    "ratio": loss_weights["attack"] / max(reg_weights, 1e-8)
                 }
         except Exception as e:
             print(f"[ERROR] Failed loading weights for {c}:", e)
             continue
-    plot_multi_weights_overview(weights_data, out_dir, "best_weights.png", show)
+    plot_multi_mt_weights_overview(weights_data, out_dir, "best_weights.png", show)
     with open(out_dir / "best_weights.json", "w") as f:
         json.dump(weights_data, f, indent=2)
 
     if weights_data and losses_data:
         common_countries = set(weights_data.keys()) & set(losses_data.keys())
         if len(common_countries) >= 3:
-            plot_multi_weight_loss_correlation(
-                weights_data, 
-                losses_data, 
-                out_dir,
-                "weight_loss_correlation.png", 
-                show
-            )
+            plot_multi_mt_weight_loss_correlation(
+                    weights_data, 
+                    losses_data, 
+                    out_dir,
+                    "weight_loss_correlation.png", 
+                    show
+                )
     print(f"[OK] Multi-country comparison completed!")
 
-def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = False, latent: bool = False, show: bool = False):
-    """Runs full analysis pipeline of a country model tuning."""
+def analyze_country(
+    country: str, 
+    multi: bool = True, 
+    all: bool = False, 
+    latent: bool = False, 
+    show: bool = False
+):
+    """Runs full analysis pipeline of a country MT model tuning."""
     print(f"\n[INFO] Analyzing {country}...")
     
-    out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / country
+    out_dir = TUNED_DIR / "analysis" / country
     out_dir.mkdir(parents=True, exist_ok=True)
-    db_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_study.db"
+
+    db_path = TUNED_DIR / f"{country}_study.db"
     if not db_path.exists():
         raise FileNotFoundError(f"No study DB for {country}")
     
@@ -189,29 +206,28 @@ def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = 
     plot_loss_curves_all_trials(
         study,
         country,
-        history_dir=TUNED_DIR / f"{ae_type.upper()}" / "trial_history",
+        history_dir=TUNED_DIR / "trial_history",
         folder=out_dir,
         fname="losses_all_trials.png",
         show=show
     )
-    best_hist_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_history.json"
+    best_hist_path = TUNED_DIR / f"{country}_best_history.json"
     if best_hist_path.exists():
         with open(best_hist_path, "r") as f:
             best_history = json.load(f)
         plot_best_trial_learning_curve(best_history, out_dir, "best_learning_curve.png", show)
     if study:
-        plot_loss_component_analysis(
-            ae_type,
+        plot_mt_loss_component_analysis(
             study,
             country, 
-            history_dir = TUNED_DIR / f"{ae_type.upper()}" / "trial_history",
+            history_dir = TUNED_DIR / "trial_history",
             folder=out_dir,
             fname="loss_component_analysis.png",
             show=show
         )
 
     if latent:
-        plot_latent(ae_type, country, out_dir, show)
+        plot_latent(country, out_dir, show)
     
     print(f"[OK] Analysis for {country} completed!")
 
@@ -219,17 +235,15 @@ def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = 
         multi_analyze(show=show)
 
 def analyze_all(
-        ae_type: str, 
-        multi: bool = True, 
-        latent: bool = False, 
-        show_plots: bool = False
-    ):
-    """Runs full analysis pipeline of all country model tunings."""
-    print(f"\n[INFO] Analysis of all models starting...")
-
+    multi: bool = True, 
+    latent: bool = False, 
+    show_plots: bool = False
+):
+    """Runs full analysis pipeline of all country MT model tunings."""
+    print(f"\n[INFO] Analysis of all MT models starting...")
+    
     for c in COUNTRIES:
         analyze_country(
-            ae_type=ae_type, 
             country=c, 
             multi=False, 
             all=True,
@@ -238,16 +252,16 @@ def analyze_all(
     )
 
     if multi:
-        multi_analyze(ae_type=ae_type, show=show_plots)
+        multi_analyze(show=show_plots)
         
-    print(f"\n[DONE] Analysis of all model tunings completed!")
+    print(f"\n[DONE] Analysis of all MT model tunings completed!")
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Analyze model tuning performance."
+        description="Analyze MT model tuning performance."
     )
 
     parser.add_argument(
@@ -269,11 +283,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "model",
-        help="model to train: ae, vae"
-    )
-
-    parser.add_argument(
         "target",
         help="<COUNTRY|all|none> e.g. 'US' to analyse US model, or 'all' to evaluate all country models, or 'none' for switching off single-country analysis"
     )
@@ -281,28 +290,20 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     target = args.target
-
-    ae_type = args.model.lower() 
-    if ae_type not in ["ae", "vae"]:
-        parser.print_help()
-        print(f"[Error] Model can either be ae or vae!")
-        exit(1)
     
     if target.lower() == "all":
         analyze_all(
-            ae_type, 
             args.multi, 
             args.latent, 
             args.show
         )
     elif target.lower() == "none":
         if args.multi:
-            multi_analyze(ae_type=ae_type, show=args.show)
+            multi_analyze(show=args.show)
         else:
             print(f"[INFO] No analysis selected [target=none and multi=False].")
     else:
         analyze_country(
-            ae_type=ae_type,
             country=target.upper(), 
             multi=args.multi, 
             all=False,

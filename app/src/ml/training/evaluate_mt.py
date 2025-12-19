@@ -68,6 +68,8 @@ def prediction_errors(
         "loss_l3": loss_l3.detach().cpu().numpy() if loss_l3 is not None else None,
         "loss_l7": loss_l7.detach().cpu().numpy() if loss_l7 is not None else None,
         "loss_attack": loss_attack.detach().cpu().numpy() if loss_attack is not None else None,
+        "l3_pred": l3_hat.detach().cpu().numpy(),
+        "l7_pred": l7_hat.detach().cpu().numpy(),
         "attack_pred": attack_pred.detach().cpu().numpy() if attack_pred is not None else None,
         "attack_prob_max": attack_prob_max.detach().cpu().numpy() if attack_prob_max is not None else None,
     }
