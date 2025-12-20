@@ -5,8 +5,8 @@ import numpy as np
 
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from app.src.ml.training.evaluate import reconstruction_error, anomaly_mask, find_anomalies
-from app.src.ml.training.train import load_autoencoder
+from app.src.ml.training.evaluate_ae import reconstruction_error, anomaly_mask, find_anomalies
+from app.src.ml.training.train_ae import load_autoencoder
 
 
 #########################################

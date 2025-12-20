@@ -32,7 +32,7 @@ from app.src.ml.training.calibrate import calibrate_threshold
 from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
 from app.src.ml.analysis import plot_latent_space
-from app.src.ml.training.train import train_autoencoder, save_autoencoder
+from app.src.ml.training.train_ae import train_autoencoder, save_autoencoder
 
 
 #########################################

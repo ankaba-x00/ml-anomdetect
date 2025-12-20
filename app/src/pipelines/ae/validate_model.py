@@ -22,8 +22,8 @@ import pandas as pd
 from pathlib import Path
 
 from app.src.data.feature_engineering import load_feature_matrix, COUNTRIES
-from app.src.ml.training.evaluate import reconstruction_error
-from app.src.ml.training.train import load_autoencoder
+from app.src.ml.training.evaluate_ae import reconstruction_error
+from app.src.ml.training.train_ae import load_autoencoder
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.analysis import plot_latent_space
 

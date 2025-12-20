@@ -7,7 +7,7 @@ from app.src.data.feature_engineering import load_feature_matrix
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
-from app.src.ml.training.train import train_autoencoder
+from app.src.ml.training.train_ae import train_autoencoder
 
 
 #########################################

@@ -6,7 +6,7 @@ from sklearn.base import TransformerMixin
 from app.src.data.feature_engineering import load_feature_matrix
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from app.src.ml.training.evaluate import (
+from app.src.ml.training.evaluate_ae import (
     reconstruction_error, 
     threshold_percentile, 
     threshold_mad

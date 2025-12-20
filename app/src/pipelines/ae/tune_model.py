@@ -49,8 +49,8 @@ from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
-from app.src.ml.tuning.tune import set_global_seeds, objective
-from app.src.ml.training.train import train_autoencoder, save_autoencoder
+from app.src.ml.tuning.tune_ae import set_global_seeds, objective
+from app.src.ml.training.train_ae import train_autoencoder, save_autoencoder
 from app.src.ml.analysis import plot_latent_space
 
 #########################################
