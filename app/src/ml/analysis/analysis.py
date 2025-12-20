@@ -333,7 +333,7 @@ def summarize_validation(
 ##             TUNING PLOTS            ##
 #########################################
 
-def save_optuna_plots(study: optuna.Study, folder: Path):
+def save_optuna_plots(study: optuna.Study, folder: Path, html_out: bool = True, png_out: bool = False):
     """Save Optuna-provided visualizations as png if kaleido is installed and/or html file which requires no add package and has nicer formatting."""
 
     figs = {
@@ -344,11 +344,13 @@ def save_optuna_plots(study: optuna.Study, folder: Path):
         "contour": plot_contour(study),
     }
     for fname, fig in figs.items():
-        png_fname = folder / f"{fname}.png"
-        html_fname = folder / f"{fname}.html"
         try:
-            fig.write_html(str(html_fname))
-            fig.write_image(str(png_fname), scale=2)
+            if png_out: 
+                png_fname = folder / f"{fname}.png"
+                fig.write_image(str(png_fname), scale=2)
+            if html_out:
+                html_fname = folder / f"{fname}.html"
+                fig.write_html(str(html_fname))
         except Exception:
             pass
 

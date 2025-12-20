@@ -197,7 +197,7 @@ def analyze_country(
         raise FileNotFoundError(f"No study DB for {country}")
     
     study = load_study(country, db_path)
-    save_optuna_plots(study, out_dir)
+    save_optuna_plots(study, out_dir, html_out=True, png_out=False)
 
     df = trial_dataframe(study)
     df.to_csv(out_dir / "trial_results.csv", index=False)
