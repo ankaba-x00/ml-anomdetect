@@ -82,7 +82,8 @@ def tune_country(
     print(f"   OPTUNA TUNING FOR {country}")
     print(f"==============================\n")
     print(f"[INFO] Model {ae_type.upper()} selected")
-    print(f"[INFO] Tuning metric {metric.upper()} selected")
+    if ae_type == "vae":
+        print(f"[INFO] Tuning metric {metric.upper()} selected")
 
     set_global_seeds(42)
 
