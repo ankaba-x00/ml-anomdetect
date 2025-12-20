@@ -43,8 +43,8 @@ ARGS_INFER+=" $TARGET"
 if [ "$TRAINING" = true ]; then
     echo "===================================="
     echo "[TRAIN] Executing:"
-    echo "python -m app.src.pipelines.train_model $ARGS_TRAIN"
-    eval python -m app.src.pipelines.train_model $ARGS_TRAIN
+    echo "python -m app.src.pipelines.ae.train_model $ARGS_TRAIN"
+    eval python -m app.src.pipelines.ae.train_model $ARGS_TRAIN
     echo "[TRAIN] Completed!"
     echo
 else

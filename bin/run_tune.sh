@@ -72,29 +72,29 @@ ARGS_ANALYZE_TEST+=" $TARGET"
 
 echo "===================================="
 echo "[TUNE] Executing:"
-echo "python -m app.src.pipelines.tune_model $ARGS_TUNE"
-eval python -m app.src.pipelines.tune_model $ARGS_TUNE
+echo "python -m app.src.pipelines.ae.tune_model $ARGS_TUNE"
+eval python -m app.src.pipelines.ae.tune_model $ARGS_TUNE
 echo "[TUNE] Completed!"
 echo
 
 echo "===================================="
 echo "[ANALYZE] Executing:"
-echo "python -m app.src.pipelines.analyze_tuning $ARGS_ANALYZE_TUNE"
-eval python -m app.src.pipelines.analyze_tuning $ARGS_ANALYZE_TUNE
+echo "python -m app.src.pipelines.ae.analyze_tuning $ARGS_ANALYZE_TUNE"
+eval python -m app.src.pipelines.ae.analyze_tuning $ARGS_ANALYZE_TUNE
 echo "[ANALYZE] Completed!"
 echo
 
 echo "===================================="
 echo "[TEST] Executing:"
-echo "python -m app.src.pipelines.test_model $ARGS_TEST"
-eval python -m app.src.pipelines.test_model $ARGS_TEST
+echo "python -m app.src.pipelines.ae.test_model $ARGS_TEST"
+eval python -m app.src.pipelines.ae.test_model $ARGS_TEST
 echo "[TEST] Completed!"
 echo
 
 echo "===================================="
 echo "[ANALYZE] Executing:"
-echo "python -m app.src.pipelines.analyze_testing $ARGS_ANALYZE_TEST"
-eval python -m app.src.pipelines.analyze_testing $ARGS_ANALYZE_TEST
+echo "python -m app.src.pipelines.ae.analyze_testing $ARGS_ANALYZE_TEST"
+eval python -m app.src.pipelines.ae.analyze_testing $ARGS_ANALYZE_TEST
 echo "[ANALYZE] Completed!"
 echo
 

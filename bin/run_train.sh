@@ -58,9 +58,9 @@ $SHOW_PLOTS && ARGS_ANALYZE+=" -s"
 
 echo "===================================="
 echo "[TRAIN] Executing:"
-echo "python -m app.src.pipelines.train_model $ARGS_TRAIN"
-eval python -m app.src.pipelines.build_features -B -S $TARGET
-eval python -m app.src.pipelines.train_model $ARGS_TRAIN
+echo "python -m app.src.pipelines.ae.train_model $ARGS_TRAIN"
+eval python -m app.src.pipelines.ae.build_features -B -S $TARGET
+eval python -m app.src.pipelines.ae.train_model $ARGS_TRAIN
 echo "[TRAIN] Completed!"
 echo
 
@@ -68,15 +68,15 @@ if [ "$FULL_DATA" = false ] && [ "$TRAIN_RATIO" -ne 100 ]; then
 
     echo "===================================="
     echo "[VALIDATE] Executing:"
-    echo "python -m app.src.pipelines.validate_model $ARGS_VALIDATE"
-    eval python -m app.src.pipelines.validate_model $ARGS_VALIDATE
+    echo "python -m app.src.pipelines.ae.validate_model $ARGS_VALIDATE"
+    eval python -m app.src.pipelines.ae.validate_model $ARGS_VALIDATE
     echo "[VALIDATE] Completed!"
     echo
 
     echo "===================================="
     echo "[ANALYZE] Executing:"
-    echo "python -m app.src.pipelines.analyze_training $ARGS_ANALYZE"
-    eval python -m app.src.pipelines.analyze_training $ARGS_ANALYZE
+    echo "python -m app.src.pipelines.ae.analyze_training $ARGS_ANALYZE"
+    eval python -m app.src.pipelines.ae.analyze_training $ARGS_ANALYZE
     echo "[ANALYZE] Completed!"
     echo
 
