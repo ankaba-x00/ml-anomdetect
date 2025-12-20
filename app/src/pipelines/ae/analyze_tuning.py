@@ -289,7 +289,7 @@ def analyze_country(
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:
-        multi_analyze(show=show)
+        multi_analyze(ae_type=ae_type, show=show)
 
 
 def analyze_all(
