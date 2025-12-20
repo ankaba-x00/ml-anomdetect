@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Any, Optional, Dict
+from typing import Optional, Union
+
 from app.src.ml.models.mte import TrafficAttackPredictor
 
 
@@ -19,9 +20,9 @@ def prediction_errors(
     device: Optional[str] = None,
     l3_weight: float = 1.0,
     l7_weight: float = 1.0,
-    attack_weight: float = 1.0,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Union[np.ndarray, None]]:
     """Compute per-sample prediction errors."""
+    
     if device is None:
         device = next(model.parameters()).device
     else:
@@ -79,11 +80,19 @@ def prediction_errors(
 ##          THRESHOLD METHODS          ##
 #########################################
 
-def threshold_percentile(errors: np.ndarray, p: float = 99.0) -> float:
+def threshold_percentile(
+    errors: np.ndarray, 
+    p: float = 99.0
+) -> float:
     return float(np.percentile(errors, p))
 
 
-def threshold_mad(errors: np.ndarray, k: float = 6.0, min_p: float = 99.5, max_p: float = 99.9) -> float:
+def threshold_mad(
+    errors: np.ndarray, 
+    k: float = 6.0, 
+    min_p: float = 99.5, 
+    max_p: float = 99.9
+) -> float:
     med = np.median(errors)
     mad = np.median(np.abs(errors - med)) + 1e-12
     nmad = 1.4826 * mad
@@ -98,11 +107,18 @@ def threshold_mad(errors: np.ndarray, k: float = 6.0, min_p: float = 99.5, max_p
 ##          ANOMALY DETECTION          ##
 #########################################
 
-def anomaly_mask(errors: np.ndarray, threshold: float) -> np.ndarray:
+def anomaly_mask(
+    errors: np.ndarray, 
+    threshold: float
+) -> np.ndarray:
     return errors > threshold
 
 
-def find_anomalies(mask: np.ndarray, min_length: int = 1, merge_gap: int = 0) -> list[tuple[int, int]]:
+def find_anomalies(
+    mask: np.ndarray, 
+    min_length: int = 1, 
+    merge_gap: int = 0
+) -> list[tuple[int, int]]:
     mask = mask.astype(bool)
     N = len(mask)
     if N == 0:
@@ -156,11 +172,11 @@ def apply_multitask_model(
     device: Optional[str] = None,
     l3_weight: float = 1.0,
     l7_weight: float = 1.0,
-    attack_weight: float = 1.0,
     min_length: int = 1,
     merge_gap: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Union[np.ndarray, None]]:
     """Computes per-sample combined loss and (optional) anomaly intervals based on a threshold."""
+    
     out = prediction_errors(
         model=model,
         X_cont=X_cont,
@@ -171,7 +187,6 @@ def apply_multitask_model(
         device=device,
         l3_weight=l3_weight,
         l7_weight=l7_weight,
-        attack_weight=attack_weight,
     )
 
     errors = out["loss_total"]
@@ -186,8 +201,7 @@ def apply_multitask_model(
         raise ValueError(f"[Error] Unknown threshold method: {method}")
 
     mask = anomaly_mask(errors, threshold)
-    intervals = find_anomalies(mask, min_length=min_length, merge_gap=merge_gap)
-
+    intervals = find_anomalies(mask, min_length, merge_gap)
     starts = np.array([s for s, _ in intervals], dtype=int)
     ends = np.array([e for _, e in intervals], dtype=int)
 

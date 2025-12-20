@@ -8,10 +8,10 @@ def timeseries_seq_split(
     train_ratio: float = 0.75,
     val_ratio: float = 0.10,
 ) -> tuple[
-    tuple[np.ndarray, np.ndarray],  # train
-    tuple[np.ndarray, np.ndarray],  # val
-    tuple[np.ndarray, np.ndarray],  # test
-]:
+        tuple[np.ndarray, np.ndarray],
+        tuple[np.ndarray, np.ndarray],
+        tuple[np.ndarray, np.ndarray],
+    ]:
     """
     Deterministic sequential split where timeseries data is split chronologically
         train set : first 70% of data
@@ -32,6 +32,7 @@ def timeseries_seq_split(
         train = (D1[:n_train], D2[:n_train])
         val = (D1[n_train:n_train + n_val], D2[n_train:n_train + n_val])
         test = (D1[n_train + n_val:], D2[n_train + n_val:])
+
     return train, val, test
 
 def timeseries_cv_splits(
@@ -83,4 +84,5 @@ def timeseries_cv_splits(
         train = (D1[offset:train_end], D2[offset:train_end])
         val = (D1[train_end:val_end], D2[train_end:val_end])
         test = (D1[val_end:test_end], D2[val_end:test_end])
+
         yield train, val, test

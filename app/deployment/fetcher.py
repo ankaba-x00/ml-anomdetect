@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+
 from app.src.data.fetch import _headers, _requests_session
 
 
@@ -6,7 +7,13 @@ from app.src.data.fetch import _headers, _requests_session
 ##            HELPER FETCH             ##
 #########################################
 
-def _fetch_timedata(TITLE: str, URL: str, BASE_PARAMS: dict, date_from: datetime, date_to: datetime):
+def _fetch_timedata(
+    TITLE: str, 
+    URL: str, 
+    BASE_PARAMS: dict, 
+    date_from: datetime, 
+    date_to: datetime
+) -> dict:
     """
     Fetches timeseries data in memory for country from Cloudflare API in 1-hour buckets.
     """
@@ -81,6 +88,7 @@ def run_fetch(country: str, date_from: datetime, date_to: datetime) -> dict:
         - DATE_TO: incl. end e.g. (2024-12-15); automatically sets time to 23:45
     """
     print(f"[INFO] Fetching data for {country}...")
+    
     results = {}
     
     params = {"name": "main", "location": country}

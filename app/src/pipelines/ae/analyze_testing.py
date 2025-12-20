@@ -3,11 +3,14 @@
 Visualize test data anomaly detection results:
 - loads testing errors, threshold and anomaly intervals
 - plots raw signal of choice with an error overlay interactively if chosen
-- generates plots (error curve with threshold and detected anomalies, anomaly intervals, error histogram, raw target signal with error overlay)
+- generates plots
 
 Outputs:
     PATH : results/ae_ml/tested/analysis/<MODEL>
-    FILES : <COUNTRY>_errorcurves_<METHOD>.png, <COUNTRY>_hist_<METHOD>.png, <COUNTRY>_intervals_<METHOD>.png, <COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
+    FILES : <COUNTRY>_errorcurves_<METHOD>.png, 
+            <COUNTRY>_hist_<METHOD>.png, 
+            <COUNTRY>_intervals_<METHOD>.png, 
+            <COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
 
 Usage:
     python -m app.src.pipelines.ae.analyze_testing [-s] [-M] [-R] <MODEL> <COUNTRY|all|none>
@@ -17,6 +20,7 @@ import json, pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
 from app.src.data.feature_engineering import build_country_dataframe
 from app.src.data.split import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES
@@ -42,10 +46,10 @@ TESTED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tested"
 #########################################
 
 def _load_results(
-        ae_type: str,
-        country: str, 
-        method: str
-    ) -> tuple[pd.DataFrame, float, pd.DataFrame]:
+    ae_type: str,
+    country: str, 
+    method: str
+) -> tuple[pd.DataFrame, float, pd.DataFrame]:
     err_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_errors_{method}.csv"
     thr_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_threshold_{method}.json"
     int_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_intervals_{method}.csv"
@@ -74,16 +78,16 @@ def _load_results(
 #########################################
 
 def analyze_raw(
-        ae_type: str,
-        country: str, 
-        method: str, 
-        df_err: pd.DataFrame, 
-        out_dir: Path,
-        show_plots: bool,
-    ):
-
+    ae_type: str,
+    country: str, 
+    method: str, 
+    df_err: pd.DataFrame, 
+    out_dir: Path,
+    show_plots: bool,
+) -> None:
     TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned" / f"{ae_type.upper()}"
     scaler_path = TUNED_DIR / f"{country}_scaler.pkl"
+
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
     
@@ -93,17 +97,21 @@ def analyze_raw(
     cont_data = df_raw[df_raw.columns.difference(cat_cols)]
     raw_cont = cont_data.values
     ts = df_raw.index
+
     # extract test set
     (raw_train, _), (raw_val, _), (raw_test_cont, _) = timeseries_seq_split(
         raw_cont, np.zeros_like(raw_cont),
-        train_ratio=0.75,
-        val_ratio=0.15
+        0.75,
+        0.15
     )
+
     raw_test_scald = scaler.transform(raw_test_cont).astype(np.float32)
     ts_eval = ts[len(raw_train)+len(raw_val):]
+    
     # extract computed testset errors and mask
     errors = df_err["error"].values
     mask = df_err["is_anomaly"].astype(bool).values
+    
     # plot interactively
     while True:
         print("\nFeature signal options for plotting:")
@@ -113,11 +121,13 @@ def analyze_raw(
                 print(f"{i} {options[i]:<25} {i+1} {options[i+1]}")
             else:
                 print(f"{i} {options[i]:<25}")
+        
         print("Enter index [int] or press [ENTER] to exit.")
         signal_idx = input(">>> ")
         if signal_idx == "":
             print("[INFO] No signal selected, exiting prompt.")
             break
+    
         try:
             idx = int(signal_idx)
             name = options[int(signal_idx)]
@@ -134,20 +144,22 @@ def analyze_raw(
         except (ValueError, IndexError):
             print("[Error] Invalid index. Please enter valid integer from signal list.")
 
+
 def analyze_country(
-        ae_type: str,
-        country: str, 
-        method: str, 
-        show_plots: bool,
-        plot_raw: bool
-    ):
+    ae_type: str,
+    country: str, 
+    method: str, 
+    show_plots: bool,
+    plot_raw: bool
+) -> None:
     """Runs full analysis pipeline of a country model testing."""
     print(f"[INFO] Analyzing {country} with {method}...")
 
-    out_dir = TESTED_DIR / f"{ae_type.upper()}" / "analysis"
+    out_dir = TESTED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_dir.mkdir(parents=True, exist_ok=True)
 
     df_err, threshold, df_int = _load_results(ae_type, country, method)
+
     plot_error_curve(
         country, 
         df_err, 
@@ -177,12 +189,24 @@ def analyze_country(
     )
 
     if plot_raw:
-        analyze_raw(ae_type, country, method, df_err, out_dir, show_plots)
+        analyze_raw(
+            ae_type, 
+            country, 
+            method, 
+            df_err, 
+            out_dir, 
+            show_plots
+        )
 
     print(f"[OK] Analysis for {country} completed!")
 
 
-def analyze_all(ae_type: str, method: str, show_plots: bool, plot_raw: bool):
+def analyze_all(
+    ae_type: str, 
+    method: str, 
+    show_plots: bool, 
+    plot_raw: bool
+) -> None:
     """Runs full analysis pipeline of all country model testings."""
     print(f"\n[INFO] Analysis of all models starting...")
 

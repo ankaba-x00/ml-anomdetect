@@ -45,7 +45,6 @@ function validateDate(dateStr) {
   return { ok: true };
 }
 
-
 // -------- Main inference function --------
 async function runInference() {
   const model = document.getElementById("model").value;

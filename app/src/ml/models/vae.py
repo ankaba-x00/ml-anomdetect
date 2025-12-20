@@ -1,9 +1,12 @@
 import json, torch
+import numpy as np
 from dataclasses import dataclass, asdict
 from typing import Sequence, Optional
 import torch.nn as nn
 import torch.nn.functional as F
+
 from app.src.ml.models.base import BaseTabularModel
+
 
 ################################################
 ##                  CONFIG                    ##
@@ -13,7 +16,7 @@ from app.src.ml.models.base import BaseTabularModel
 class VAEConfig:
     num_cont: int
     cat_dims: dict[str, int]
-    latent_dim: int = 8   # bottleneck size
+    latent_dim: int = 8 # bottleneck size
     hidden_dims: Sequence[int] = (64, 32)
     dropout: float = 0.1
     embedding_dim: Optional[int] = None
@@ -147,13 +150,19 @@ class TabularVAE(BaseTabularModel):
     # -------------------------------
     # Utilities
     # -------------------------------
-    def _init_vae_heads(self):
+    def _init_vae_heads(self) -> None:
         nn.init.zeros_(self.mu_head.weight)
         nn.init.zeros_(self.mu_head.bias)
         nn.init.zeros_(self.logvar_head.weight)
         nn.init.zeros_(self.logvar_head.bias)
 
-    def set_beta_annealing(self, epoch: int, total_epochs: int, beta_max: float, schedule: str = "linear"):
+    def set_beta_annealing(
+        self, 
+        epoch: int, 
+        total_epochs: int, 
+        beta_max: float, 
+        schedule: str = "linear"
+    ) -> None:
         """Beta-annealing helper to give VAE time to learn reconstructions before forcing latent regularization. Function update current_beta each epoch."""
         self.beta_max = beta_max
 
@@ -176,10 +185,10 @@ class TabularVAE(BaseTabularModel):
     # Encode/Decode
     # -------------------------------
     def encode(
-            self, 
-            x_cont: torch.Tensor, 
-            x_cat: torch.Tensor
-        ) -> tuple[torch.Tensor, torch.Tensor]:
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Encode (x_cont, x_cat) -> (mu, logvar)
         """
@@ -235,10 +244,10 @@ class TabularVAE(BaseTabularModel):
         return z
 
     def decode(
-            self, 
-            z: torch.Tensor, 
-            temperature: float = 1.0
-        ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        self, 
+        z: torch.Tensor, 
+        temperature: float = 1.0
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Decode latent z -> continuous reconstruction + categorical logits."""
         h = z
         for layer in self.decoder_layers:
@@ -334,7 +343,10 @@ class TabularVAE(BaseTabularModel):
         Use when recon-only optimization for tuning to debug recon quality or compate AE/VAE recon capabilities!
         """
         cont_recon, cat_logits, _, _ = self.forward(
-            x_cont, x_cat, return_cat=True, temperature=temperature
+            x_cont, 
+            x_cat, 
+            return_cat=True, 
+            temperature=temperature
         )
 
         # Continuous MSE per sample
@@ -378,11 +390,12 @@ class TabularVAE(BaseTabularModel):
           recon_loss  = E_q[ -log p(x|z) ]  (here: weighted recon error)
           kl_loss     = KL(q(z|x) || p(z))
           total_loss  = recon_loss + beta * kl_loss
-
-        Returns (total_loss, recon_loss, kl_loss)
         """
         cont_recon, cat_logits, mu, logvar = self.forward(
-            x_cont, x_cat, return_cat=True, temperature=temperature
+            x_cont, 
+            x_cat, 
+            return_cat=True, 
+            temperature=temperature
         )
 
         # -------------------------------
@@ -461,7 +474,10 @@ class TabularVAE(BaseTabularModel):
         self.eval()
         with torch.no_grad():
             cont_recon, cat_logits, mu, logvar = self.forward(
-                x_cont, x_cat, return_cat=True, temperature=temperature
+                x_cont, 
+                x_cat, 
+                return_cat=True, 
+                temperature=temperature
             )
 
             # recon per sample
@@ -485,9 +501,7 @@ class TabularVAE(BaseTabularModel):
                 total_weight = 1.0
                 cont_weight = 1.0
                 cat_weight = 0.0
-            recon = (cont_weight * cont_err + cat_weight * cat_err) / max(
-                total_weight, 1e-8
-            )
+            recon = (cont_weight * cont_err + cat_weight * cat_err) / max(total_weight, 1e-8)
 
             kl = self.kl_divergence(mu, logvar, reduction="none")
 
@@ -524,7 +538,10 @@ class TabularVAE(BaseTabularModel):
         with torch.no_grad():
             for _ in range(n_samples):
                 cont_recon, cat_logits, mu, logvar = self.forward(
-                    x_cont, x_cat, temperature=temperature, return_cat=True
+                    x_cont, 
+                    x_cat, 
+                    temperature=temperature, 
+                    return_cat=True
                 )
 
                 # recon per sample

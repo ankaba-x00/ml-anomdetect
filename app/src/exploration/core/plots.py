@@ -8,7 +8,9 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Patch
 import matplotlib as mpl
 from sklearn.decomposition import PCA
+
 from .time_utils import conv_iso_to_utc
+
 warnings.filterwarnings("ignore", message=".*tight_layout.*")
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -33,6 +35,7 @@ custom_rc = {
     "grid.linestyle": "--",
 }
 
+
 def apply_custom_theme() -> None:
     """Apply consistent Seaborn + Matplotlib styling."""
     sns.set_theme(style="whitegrid", rc=custom_rc)
@@ -55,7 +58,7 @@ def boxplot_valdist(
     folder: Path = Path.cwd(),
     fname: str = "boxplot_valdist.png",
     show: bool = False
-):
+) -> None:
     """Boxplot showing value distribution by country."""
     apply_custom_theme()
     
@@ -99,8 +102,9 @@ def boxplot_valdist(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close(fig)
     if show: plt.show()
+    plt.close(fig)
+
 
 def boxplot_valdist_daytypes(
     df: pd.DataFrame,
@@ -115,7 +119,7 @@ def boxplot_valdist_daytypes(
     folder: Path = Path.cwd(),
     fname: str = "boxplot_valdist_daytypes.png",
     show: bool = False
-):
+) -> None:
     """Boxplot showing value distribution by country split into the following day types: 
         - weekdays: Mon-Fri
         - weekends: Sat-Sun
@@ -166,8 +170,9 @@ def boxplot_valdist_daytypes(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close(fig)
     if show: plt.show()
+    plt.close(fig)
+
 
 def boxplot_valdist_daytimes(
     df: pd.DataFrame,
@@ -188,7 +193,7 @@ def boxplot_valdist_daytimes(
     folder: Path = Path.cwd(),
     fname: str = "boxplot_valdist_daytimes.png",
     show: bool = False
-):
+) -> None:
     """Boxplot showing value distribution by country split into the following local daytimes:
         - Deep night: 00-06
         - Morning: 06-09
@@ -248,8 +253,8 @@ def boxplot_valdist_daytimes(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close(fig)
     if show: plt.show()
+    plt.close(fig)
 
 
 #########################################
@@ -269,7 +274,7 @@ def heatmap_activity_fluctuations(
     folder: Path = Path.cwd(),
     fname: str = "heatmap_activity_fluctuations.png",
     show: bool = False
-):
+) -> None:
     """
     Plot heatmap of median activity per country across daytimes.
     """
@@ -303,22 +308,23 @@ def heatmap_activity_fluctuations(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close()
     if show: plt.show()
+    plt.close()
+
 
 def heatmap_anomalies(
-        df: pd.DataFrame,
-        title: str = "",
-        xlabel: str = "",
-        ylabel: str = "",
-        col1: str = "#DC5B37",
-        palette1: list = ["#C9F89E", "#46AD62", "#2F8F4B", "#1E603A"],
-        col2: str = "#3EA25A",
-        palette2: list = ["#F9A506", "#E86B3F", "#C53B2A", "#A9282E"],
-        folder: Path = Path.cwd(),
-        fname: str = "heatmap_anomalies.png",
-        show: bool = False
-    ):
+    df: pd.DataFrame,
+    title: str = "",
+    xlabel: str = "",
+    ylabel: str = "",
+    col1: str = "#DC5B37",
+    palette1: list = ["#C9F89E", "#46AD62", "#2F8F4B", "#1E603A"],
+    col2: str = "#3EA25A",
+    palette2: list = ["#F9A506", "#E86B3F", "#C53B2A", "#A9282E"],
+    folder: Path = Path.cwd(),
+    fname: str = "heatmap_anomalies.png",
+    show: bool = False
+) -> None:
     """Heatmap with anomalies by location and date. Color coding differentiates between type (Location vs. AS) and duration."""
     apply_custom_theme()
 
@@ -427,20 +433,21 @@ def heatmap_anomalies(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close(fig)
     if show: plt.show()
+    plt.close(fig)
+
 
 def heatmap_log10_attack_profile(
-        norm_matrix: pd.DataFrame,
-        name: str = "l3_origin",
-        xlabel: str = "Dates",
-        ylabel: str = "Countries",
-        cmap: str = "viridis",
-        folder: Path = Path.cwd(),
-        fname: str = "heatmap_log10_attack_profile.png",
-        show: bool = False
-    ):
-    """"""
+    norm_matrix: pd.DataFrame,
+    name: str = "l3_origin",
+    xlabel: str = "Dates",
+    ylabel: str = "Countries",
+    cmap: str = "viridis",
+    folder: Path = Path.cwd(),
+    fname: str = "heatmap_log10_attack_profile.png",
+    show: bool = False
+) -> None:
+    """Heatmap showing attack profiles for all countries in given time."""
     apply_custom_theme()
 
     cols_converted = [conv_iso_to_utc(str(c)) for c in norm_matrix.columns]
@@ -481,8 +488,8 @@ def heatmap_log10_attack_profile(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close()
     if show: plt.show()
+    plt.close()
 
 
 #########################################
@@ -501,7 +508,7 @@ def barplot_activity_fluctuations(
     folder: Path = Path.cwd(),
     fname: str = "barplot_activity_fluctuations.png",
     show: bool = False
-):
+) -> None:
     """
     Plot bar chart of top countries by daytime fluctuation metric (range/std/ratio).
     """
@@ -533,8 +540,9 @@ def barplot_activity_fluctuations(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close()
     if show: plt.show()
+    plt.close()
+
 
 def barplot_top_attackers(
     df: pd.DataFrame,
@@ -546,7 +554,7 @@ def barplot_top_attackers(
     folder: Path = Path.cwd(),
     fname: str = "barplot_top_attackers.png",
     show: bool = False
-):
+) -> None:
     """Plot barplot with top attack countries worldwide."""
     apply_custom_theme()
 
@@ -577,8 +585,8 @@ def barplot_top_attackers(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close()
     if show: plt.show()
+    plt.close()
 
 
 #########################################
@@ -586,12 +594,12 @@ def barplot_top_attackers(
 #########################################
 
 def lineplot_clustering_eval_curves(
-        df: pd.DataFrame,
-        col: str = "blue",
-        folder: Path = Path.cwd(),
-        fname: str = "lineplot_clustering_eval_curves.png",
-        show: bool = False
-    ):
+    df: pd.DataFrame,
+    col: str = "blue",
+    folder: Path = Path.cwd(),
+    fname: str = "lineplot_clustering_eval_curves.png",
+    show: bool = False
+) -> None:
     """Plot clustering eval curves to determine ideal k value."""
     apply_custom_theme()
 
@@ -633,8 +641,8 @@ def lineplot_clustering_eval_curves(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close(fig)
     if show: plt.show()
+    plt.close(fig)
 
 
 #########################################
@@ -642,15 +650,15 @@ def lineplot_clustering_eval_curves(
 #########################################
 
 def pca_clusterplot(
-        X: np.ndarray, 
-        labels: np.ndarray, 
-        countries: list[str],
-        k: int,
-        name: str = "l3_origin",
-        folder: Path = Path.cwd(),
-        fname: str = "pca_clusterplot.png",
-        show: bool = False
-    ):
+    X: np.ndarray, 
+    labels: np.ndarray, 
+    countries: list[str],
+    k: int,
+    name: str = "l3_origin",
+    folder: Path = Path.cwd(),
+    fname: str = "pca_clusterplot.png",
+    show: bool = False
+) -> None:
     apply_custom_theme()
 
     pca = PCA(n_components=2)
@@ -677,8 +685,8 @@ def pca_clusterplot(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close()
     if show: plt.show()
+    plt.close()
 
 
 #########################################
@@ -691,18 +699,19 @@ def _safe_normalize(arr: np.ndarray) -> np.ndarray:
     vmax = arr.max()
     return arr / vmax if vmax > 0 else arr
 
+
 def radarchart_attack_fingerprint(
-        L3: pd.DataFrame,
-        L7: pd.DataFrame,
-        country: str = "US",
-        dir: str = "origin",
-        top_n: int = 30,
-        col1= "#133a88",
-        col2= "#971613",
-        folder: Path = Path.cwd(),
-        fname: str = "radarchart_attack_fingerprint.png",
-        show: bool = False
-    ):
+    L3: pd.DataFrame,
+    L7: pd.DataFrame,
+    country: str = "US",
+    dir: str = "origin",
+    top_n: int = 30,
+    col1= "#133a88",
+    col2= "#971613",
+    folder: Path = Path.cwd(),
+    fname: str = "radarchart_attack_fingerprint.png",
+    show: bool = False
+) -> None:
     """
     Plot attack fingerprint for a given country based on L3 and L3 normalized share for the top_n attacking countries.
     """
@@ -750,5 +759,5 @@ def radarchart_attack_fingerprint(
         dpi=300
     )
     print(f"[OK] Saved to {fname}")
-    plt.close(fig)
     if show: plt.show()
+    plt.close(fig)

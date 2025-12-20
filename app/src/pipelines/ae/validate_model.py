@@ -8,16 +8,19 @@ Validate a trained autoencoder:
 
 Outputs: 
     PATH : results/ae_ml/validate/<MODEL
-    FILES : <COUNTRY>_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES : <COUNTRY>_validation.csv, 
+            <COUNTRY>_latent_space_pca_coords.csv, 
+            <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all> [| tee stdout_val.txt]
+    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all>
 """
 
 import pickle, json, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
 from app.src.data.feature_engineering import load_feature_matrix, COUNTRIES
 from app.src.ml.training.evaluate import reconstruction_error
 from app.src.ml.training.train import load_autoencoder
@@ -40,7 +43,14 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: bool, latent: bool):
+def validate_country(
+    ae_type: str, 
+    country: str, 
+    tr: int, 
+    vr: int, 
+    use_mc_elbo: bool, 
+    latent: bool
+) -> None:
     print(f"\n==============================")
     print(f"  VALIDATE MODEL ({country})")
     print(f"==============================")
@@ -96,8 +106,8 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: 
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_train, _), (Xc_val, Xk_val), _ = timeseries_seq_split(
         Xc_np, Xk_np,
-        train_ratio=tr/100,
-        val_ratio=vr/100
+        tr/100,
+        vr/100
     )
     ts_val = ts[len(Xc_train): len(Xc_train) + len(Xc_val)]
     
@@ -110,7 +120,9 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: 
     # Load loss weights
     # --------------------
     payload = torch.load(model_path, map_location="cpu")
-    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 0.0})
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {
+        "cont_weight": 1.0, "cat_weight": 0.0
+    })
 
     cont_weight = loss_weights["cont_weight"]
     cat_weight = loss_weights["cat_weight"]
@@ -158,6 +170,8 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: 
     # ------------------------------------
     if latent:
         print(f"[INFO] Preparing latent space visualization...")
+        out_path = out_path / "analysis" / country
+        out_path.mkdir(parents=True, exist_ok=True)
         plot_latent_space(
             country, 
             Xc_val_scald,
@@ -171,12 +185,20 @@ def validate_country(ae_type: str, country: str, tr: int, vr: int, use_mc_elbo: 
     
     print(f"[DONE] Validation CSV saved: {out_path}")
 
-def validate_all(ae_type: str, tr: int, vr: int, use_mc_elbo: bool, latent: bool):
+
+def validate_all(
+    ae_type: str, 
+    tr: int, 
+    vr: int, 
+    use_mc_elbo: bool, 
+    latent: bool
+) -> None:
     for c in COUNTRIES:
         try:
             validate_country(ae_type, c, tr, vr, use_mc_elbo, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+
     print(f"\n[DONE] All model validations completed!")
 
 
@@ -226,11 +248,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     target = args.target
-    ae_type = args.model.lower() 
-    if ae_type not in ["ae", "vae"]:
-        parser.print_help()
-        print(f"[Error] Model can either be ae or vae!")
-        exit(1)
 
     ae_type = args.model.lower() 
     if ae_type not in ["ae", "vae"]:
@@ -239,6 +256,19 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        validate_all(ae_type, args.tr, args.vr, args.MC_score, args.latent)
+        validate_all(
+            ae_type, 
+            args.tr, 
+            args.vr, 
+            args.MC_score, 
+            args.latent
+        )
     else:
-        validate_country(ae_type, target.upper(), args.tr, args.vr, args.MC_score, args.latent)
+        validate_country(
+            ae_type, 
+            target.upper(), 
+            args.tr, 
+            args.vr, 
+            args.MC_score, 
+            args.latent
+        )

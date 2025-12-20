@@ -10,10 +10,16 @@ Train a autoencoder for one or all countries:
 Outputs: 
     PATH without -F: results/ae_ml/trained/<MODEL>
     PATH with -F: app/deployment/models/<MODEL
-    FILES: <COUNTRY>_autoencoder.pt, <COUNTRY>_scaler_cont.pkl, <COUNTRY>_cat_dims.json, <COUNTRY>_num_cont.json, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES: <COUNTRY>_autoencoder.pt, 
+           <COUNTRY>_scaler_cont.pkl, 
+           <COUNTRY>_cat_dims.json, 
+           <COUNTRY>_num_cont.json, 
+           <COUNTRY>_training_history.json, 
+           <COUNTRY>_latent_space_pca_coords.csv, 
+           <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all> [| tee stdout_train.txt]
+    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all>
 """
 
 import json, pickle
@@ -21,6 +27,7 @@ from pathlib import Path
 import numpy as np
 from typing import Optional
 from sklearn.preprocessing import RobustScaler
+
 from app.src.data import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.ml.training.calibrate import calibrate_threshold
@@ -46,18 +53,17 @@ BEST_MODELS_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 #########################################
 
 def train_country(
-        ae_type: str,
-        country: str, 
-        tr: int, 
-        vr: int,
-        use_mc_elbo: bool, 
-        full: bool, 
-        method: str, 
-        cw: int,
-        latent: bool,
-        loss_weights: Optional[dict] = None,
-    ):
-
+    ae_type: str,
+    country: str, 
+    tr: int, 
+    vr: int,
+    use_mc_elbo: bool, 
+    full: bool, 
+    method: str, 
+    cw: int,
+    latent: bool,
+    loss_weights: Optional[dict] = None,
+) -> None:
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
     print(f"==============================")
@@ -75,20 +81,25 @@ def train_country(
     # ------------------------------------
     if full or tr == 100:
         print(f"[INFO] Reading {ae_type.upper()}Config from best tuning run.")
+
         tuned_cfg_path = BEST_MODELS_DIR / f"{ae_type.upper()}" / f"{country}_best_config.json"
         tuned_params_path = BEST_MODELS_DIR / f"{ae_type.upper()}" / f"{country}_best_params.json"
+        
         if not tuned_cfg_path.exists():
             raise FileNotFoundError("[ERROR] Best config not found. Run tuning first.")
         if not tuned_params_path.exists():
             raise FileNotFoundError("[ERROR] Best params not found. Run tuning first.")
+        
         with open(tuned_cfg_path, "r") as f:
             cfg_dict = json.load(f)
             if ae_type == "ae":
                 cfg = AEConfig(**cfg_dict)
             elif ae_type == "vae":
                 cfg = VAEConfig(**cfg_dict)
+                
         with open(tuned_params_path, "r") as f:
             best_params = json.load(f)
+        
         try:
             loss_weights = {
                 "cont_weight": best_params.get("cont_weight", 1.0),
@@ -154,6 +165,7 @@ def train_country(
             cfg,
             loss_weights
         )
+
         out_path = FULL_OUT_DIR / f"{ae_type.upper()}"
         out_path.mkdir(parents=True, exist_ok=True)
     else:
@@ -163,8 +175,8 @@ def train_country(
         print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test.")
         (train_cont, train_cat), (val_cont, val_cat), _ = timeseries_seq_split(
             Xc_np, Xk_np,
-            train_ratio=tr/100,
-            val_ratio=vr/100,
+            tr/100,
+            vr/100,
         )
 
         # ------------------------------------
@@ -183,6 +195,7 @@ def train_country(
             cfg,
             loss_weights
         )
+
         out_path = OUT_DIR / f"{ae_type.upper()}"
         out_path.mkdir(parents=True, exist_ok=True)
 
@@ -228,6 +241,9 @@ def train_country(
         print(f"[INFO] Preparing latent space visualization...")
         if full or tr == 100:
             train_cont_scald, train_cat, = Xc_np_scald, Xk_np
+        else: 
+            out_path = out_path / "analysis" / country
+            out_path.mkdir(parents=True, exist_ok=True)
         plot_latent_space(
             country, 
             train_cont_scald, 
@@ -246,7 +262,7 @@ def train_country(
     # ------------------------------------
     if full or tr == 100:
         print(f"[INFO] Computing threshold on calibration window...")
-        
+
         threshold_dict, _ = calibrate_threshold(
             country, 
             model, 
@@ -270,12 +286,22 @@ def train_country(
         print(f"[DONE] Preparation for inference model for {country}")
 
 
-def train_all(ae_type: str, tr: int, vr: int, use_mc_elbo: bool, full: bool, method: str, cw: int, latent: bool):
+def train_all(
+    ae_type: str, 
+    tr: int, 
+    vr: int, 
+    use_mc_elbo: bool, 
+    full: bool, 
+    method: str, 
+    cw: int, 
+    latent: bool
+) -> None:
     for c in COUNTRIES:
         try:
             train_country(ae_type, c, tr, vr, use_mc_elbo, full, method, cw, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+
     print(f"\n[DONE] All model trainings completed!")
 
 
@@ -345,6 +371,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
    
     target = args.target
+
     ae_type = args.model.lower() 
     if ae_type not in ["ae", "vae"]:
         parser.print_help()
@@ -352,6 +379,25 @@ if __name__ == "__main__":
         exit(1)
 
     if target.lower() == "all":
-        train_all(ae_type, args.tr, args.vr, args.MC_score, args.full, args.method, args.calwindow, args.latent)
+        train_all(
+            ae_type, 
+            args.tr, 
+            args.vr, 
+            args.MC_score, 
+            args.full, 
+            args.method, 
+            args.calwindow, 
+            args.latent
+        )
     else:
-        train_country(ae_type, target.upper(), args.tr, args.vr, args.MC_score, args.full, args.method, args.calwindow, args.latent)
+        train_country(
+            ae_type, 
+            target.upper(), 
+            args.tr, 
+            args.vr, 
+            args.MC_score, 
+            args.full, 
+            args.method, 
+            args.calwindow, 
+            args.latent
+        )

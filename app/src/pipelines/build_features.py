@@ -6,18 +6,22 @@ Builds and saves feature matrix for all countries:
 - splits into:
         a) continuous features (scaled)
         b) categorical index features
+- generates attack labels if type = supervised is specified
 - saves feature matrices for use during training and inference
 
 Outputs:
-    datasets/featured/features_<COUNTRY>.pkl
+    FILES for super: datasets/featured/super_features_<COUNTRY>.pkl  
+    FILES for unsuper: datasets/featured/features_<COUNTRY>.pkl
 
 Usage:
-    python -m app.src.pipelines.build_features
+    python -m app.src.pipelines.build_features [-B] [-S] [-A] [-s] <super|unsuper> <COUNTRY|all>
 """
 
 from pathlib import Path
 import pickle, json, math
 import pandas as pd
+from typing import Union
+
 from app.src.data.feature_engineering import (
     COUNTRIES,
     build_feature_matrix,
@@ -50,7 +54,7 @@ def _extract_log_candidates(
     std_ratio_thresh: float = 3.0,
     tail_ratio_thresh: float = 2.0,
     order_mag_thresh: float = 2.0
-):
+) -> dict[str, Union[list, dict]]:
     """
     Analyze feature stats and returns a list of features recommended
     for log-scaling based on
@@ -130,20 +134,27 @@ def _extract_log_candidates(
 #########################################
 
 def analyze_feature_matrix(
-        country: str, 
-        X_cont: pd.DataFrame, 
-        show: bool
-    ) -> None:
-    """Analyze continuous features numerically and visually for tailing and value distribution to determine which features can be clambed and/or transformed to logscale."""
+    country: str, 
+    X_cont: pd.DataFrame, 
+    show: bool
+) -> None:
+    """
+    Analyze continuous features numerically and visually for tailing and value
+    distribution to determine which features can be clambed and/or transformed 
+    to logscale.
+    """
     
-    cont_keys = ['l3_origin', 'l3_target', 'l7_traffic', 'http', 'http_auto',
+    cont_keys = [
+       'l3_origin', 'l3_target', 'l7_traffic', 'http', 'http_auto',
        'http_human', 'netflow', 'bots_total', 'ai_bots', 'l3_bitrate_avg',
-       'l3_duration_avg', 'ratio_l3_l7', 'ratio_auto_human', 'ratio_bots_http', 'ratio_ai_bots_bots', 'ratio_netflow_http', 'l3_origin_roll3h', 'l3_origin_roll24h',
-       'l3_target_roll3h', 'l3_target_roll24h', 'l7_traffic_roll3h',
-       'l7_traffic_roll24h', 'http_roll3h', 'http_roll24h', 'http_auto_roll3h',
-       'http_auto_roll24h', 'http_human_roll3h', 'http_human_roll24h',
-       'netflow_roll3h', 'netflow_roll24h', 'bots_total_roll3h',
-       'bots_total_roll24h', 'ai_bots_roll3h', 'ai_bots_roll24h',
+       'l3_duration_avg', 'ratio_l3_l7', 'ratio_auto_human', 'ratio_bots_http', 
+       'ratio_ai_bots_bots', 'ratio_netflow_http', 'l3_origin_roll3h', 
+       'l3_origin_roll24h', 'l3_target_roll3h', 'l3_target_roll24h', 
+       'l7_traffic_roll3h', 'l7_traffic_roll24h', 'http_roll3h', 'http_roll24h', 
+       'http_auto_roll3h', 'http_auto_roll24h', 'http_human_roll3h', 
+       'http_human_roll24h', 'netflow_roll3h', 'netflow_roll24h', 
+       'bots_total_roll3h', 'bots_total_roll24h', 'ai_bots_roll3h', 
+       'ai_bots_roll24h',
        #'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos', 'month_sin', 'month_cos',
        #'week_sin', 'week_cos', 'udp_frac', 'tcp_frac', 'icmp_frac', 'gre_frac',
        # 'protocol_entropy'
@@ -177,15 +188,16 @@ def analyze_feature_matrix(
 
     print(f"[OK] Feature matrix for {country} processed!")
 
+
 def save_feature_matrix(
-        country: str, 
-        X_cont: pd.DataFrame, 
-        X_cat: pd.DataFrame, 
-        num_cont: int, 
-        cat_dims: list[int]
-    ) -> None:
+    country: str, 
+    X_cont: pd.DataFrame, 
+    X_cat: pd.DataFrame, 
+    num_cont: int, 
+    cat_dims: list[int]
+) -> None:
     """
-    Save:
+    Saves:
       - continuous scaled features (float64)
       - categorical index features (int64)
       - metadata: num_cont and cat_dims
@@ -204,18 +216,19 @@ def save_feature_matrix(
         )
     print(f"[OK] Feature matrix for {country} saved!")
 
+
 def save_supervised_feature_matrix(
-        country: str, 
-        X_cont: pd.DataFrame, 
-        X_cat: pd.DataFrame, 
-        y_l3: pd.Series, 
-        y_l7: pd.Series, 
-        y_type: pd.Series, 
-        num_cont: int, 
-        cat_dims: list[int]
-    ) -> None:
+    country: str, 
+    X_cont: pd.DataFrame, 
+    X_cat: pd.DataFrame, 
+    y_l3: pd.Series, 
+    y_l7: pd.Series, 
+    y_type: pd.Series, 
+    num_cont: int, 
+    cat_dims: list[int]
+) -> None:
     """
-    Save:
+    Saves:
       - continuous scaled features (float64)
       - categorical index features (int64)
       - labels as attack intensities and types (float64, int64)
@@ -238,18 +251,19 @@ def save_supervised_feature_matrix(
         )
     print(f"[OK] Supervised feature matrix for {country} saved!")
 
+
 #########################################
 ##                 RUN                 ##
 #########################################
 
 def build_single_country(
-        country: str, 
-        fm_type: str, 
-        BUILD: bool, 
-        SAVE: bool, 
-        ANALYZE: bool, 
-        show: bool
-    ):
+    country: str, 
+    fm_type: str, 
+    BUILD: bool, 
+    SAVE: bool, 
+    ANALYZE: bool, 
+    show: bool
+) -> None:
     print(f"\n==============================")
     print(f"  FEATURES COUNTRY = {country}")
     print(f"==============================")
@@ -257,37 +271,61 @@ def build_single_country(
     try:
         if BUILD:
             if fm_type == "super":
-                X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = build_supervised_feature_matrix(country)
+                X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = (
+                    build_supervised_feature_matrix(country)
+                )
             else:
                 X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
         else:
             if fm_type == "super":
-                X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = load_supervised_feature_matrix(country, FEATURE_DIR)
+                X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = (
+                    load_supervised_feature_matrix(country, FEATURE_DIR)
+                )
             else:
-                X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country, FEATURE_DIR)
+                X_cont, X_cat, num_cont, cat_dims = (
+                    load_feature_matrix(country, FEATURE_DIR)
+                )
         
         if SAVE:
             if fm_type == "super":
-                save_supervised_feature_matrix(country, X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims)
+                save_supervised_feature_matrix(
+                    country, 
+                    X_cont, 
+                    X_cat, 
+                    y_l3, 
+                    y_l7, 
+                    y_attack, 
+                    num_cont, 
+                    cat_dims
+                )
             else:
-                save_feature_matrix(country, X_cont, X_cat, num_cont, cat_dims)
+                save_feature_matrix(
+                    country, 
+                    X_cont, 
+                    X_cat, 
+                    num_cont, 
+                    cat_dims
+                )
         if ANALYZE:
-            analyze_feature_matrix(country, X_cont, show)
-        
+            analyze_feature_matrix(
+                country, 
+                X_cont, 
+                show
+            ) 
     except Exception as e:
         print(f"[ERROR] Could not build {country}: {e}")
 
 
 def build_all_countries(
-        fm_type: str, 
-        BUILD: bool = False, 
-        SAVE: bool = False, 
-        ANALYZE: bool = False, 
-        show: bool = False
-    ):
-    print("[INFO] Building feature matrices...")
+    fm_type: str, 
+    BUILD: bool = False, 
+    SAVE: bool = False, 
+    ANALYZE: bool = False, 
+    show: bool = False
+) -> None:
     for c in COUNTRIES:
         build_single_country(c, fm_type, BUILD, SAVE, ANALYZE, show)
+
     print("[DONE] All feature matrices build!")
 
 
@@ -334,6 +372,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    
     fm_type = args.type.lower()
 
     if fm_type not in ["unsuper", "super"]:

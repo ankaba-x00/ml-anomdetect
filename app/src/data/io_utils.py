@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import os, pickle
+import pickle
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 
 #########################################
@@ -43,11 +44,11 @@ DSFILE_MAP = {
 ##            SANITY CHECK             ##
 #########################################
 
-def check_dsfiles_exist(file: str, folder: str) -> str:
-    path = os.path.join(folder, file)
-    if not os.path.isfile(path):
+def check_dsfiles_exist(file: str, folder: Path) -> Path:
+    file_path = folder / file
+    if not file_path.is_file():
         raise FileNotFoundError(f"[ERROR] FileNotFound: {file}")
-    return path
+    return file_path
 
 
 #########################################
@@ -103,6 +104,7 @@ def conv_maxlayer_3(data: dict) -> pd.DataFrame:
 
     return pd.concat(records, ignore_index=True)
 
+
 def conv_maxlayer_2(data: dict) -> pd.DataFrame:
     """
     Vectorized flattening of 2-layered data dictionary into dataframe. 
@@ -123,7 +125,7 @@ def conv_maxlayer_2(data: dict) -> pd.DataFrame:
 ##               HELPER                ##
 #########################################
 
-def _detect_nesting_level(data):
+def _detect_nesting_level(data) -> int:
     if not isinstance(data, dict) or not data:
         return 1
     
@@ -139,7 +141,8 @@ def _detect_nesting_level(data):
     else:
         return 1
 
-def _load_dsfile(file: str, folder: str) -> dict:
+
+def _load_dsfile(file: str, folder: Path) -> dict:
     path = check_dsfiles_exist(DSFILE_MAP[file], folder)
     with open(path, "rb") as f:
         data = pickle.load(f)
@@ -150,7 +153,7 @@ def _load_dsfile(file: str, folder: str) -> dict:
 ##                MAIN                 ##
 #########################################
 
-def conv_pkltodf(file: str, folder: str) -> pd.DataFrame:
+def conv_pkltodf(file: str, folder: Path) -> pd.DataFrame:
     data = _load_dsfile(file, folder)
     max_layer = _detect_nesting_level(data)
     if max_layer == 3:
@@ -162,7 +165,6 @@ def conv_pkltodf(file: str, folder: str) -> pd.DataFrame:
 
 
 if __name__=="__main__":
-    from pathlib import Path
     import argparse
 
     parser = argparse.ArgumentParser(

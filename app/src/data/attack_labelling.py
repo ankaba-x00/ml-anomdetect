@@ -11,6 +11,7 @@ class AttackThresholds:
     AUTO_HUMAN_HIGH: float
     BOTS_HIGH: float
 
+
 ATTACK_LABELS = [
     "normal",
     "udp_amplification",
@@ -25,6 +26,7 @@ ATTACK_LABELS = [
 ATTACK_TO_ID = {name: idx for idx, name in enumerate(ATTACK_LABELS)}
 ID_TO_ATTACK = {idx: name for idx, name in enumerate(ATTACK_LABELS)}
 
+
 def _safe_q(
     series: pd.Series, 
     q: float, 
@@ -32,6 +34,7 @@ def _safe_q(
 ) -> float:
     s = series.dropna()
     return float(s.quantile(q)) if len(s) > 0 else default
+
 
 def compute_attack_thresholds(
     df: pd.DataFrame
@@ -45,6 +48,7 @@ def compute_attack_thresholds(
         AUTO_HUMAN_HIGH=_safe_q(df["ratio_auto_human"], 0.90),
         BOTS_HIGH=_safe_q(df["bots_total"], 0.90),
     )
+
 
 def derive_attack_label(
     row: pd.Series, 

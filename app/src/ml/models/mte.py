@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, asdict
-from typing import Sequence, Dict, Optional
+from typing import Sequence, Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -104,7 +104,7 @@ class TrafficEncoder(nn.Module):
     # -----------------------------
     # Utilities
     # -----------------------------
-    def _make_activation(self, name: str):
+    def _make_activation(self, name: str) -> nn.Module:
         activations = {
             "relu": nn.ReLU(inplace=True),
             "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
@@ -117,7 +117,7 @@ class TrafficEncoder(nn.Module):
             raise ValueError(f"[ERROR] Unknown activation: {name}.")
         return activations[name]
 
-    def _init_weights(self):
+    def _init_weights(self) -> None:
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.kaiming_normal_(m.weight, nonlinearity="relu")
@@ -174,7 +174,7 @@ class TrafficAttackPredictor(nn.Module):
             continuous_noise_std=0.01,
         )
 
-        def make_head(out_dim: int):
+        def make_head(out_dim: int) -> nn.Module:
             if config.head_hidden_dim > 0:
                 return nn.Sequential(
                     nn.Linear(config.latent_dim, config.head_hidden_dim),
@@ -191,16 +191,19 @@ class TrafficAttackPredictor(nn.Module):
 
         self._init_heads()
 
-    def _init_heads(self):
+    def _init_heads(self) -> None:
         for head in [self.l3_head, self.l7_head, self.attack_head]:
             for m in head.modules():
                 if isinstance(m, nn.Linear):
                     nn.init.xavier_uniform_(m.weight)
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x_cont: torch.Tensor, x_cat: torch.Tensor) -> dict:
+    def forward(
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
         z = self.encoder(x_cont, x_cat)
-
         return {
             "z": z,
             "l3": self.l3_head(z).squeeze(-1),
@@ -214,7 +217,7 @@ class TrafficAttackPredictor(nn.Module):
         y_l3: torch.Tensor,
         y_l7: torch.Tensor,
         y_attack: torch.Tensor,
-    ) -> dict:
+    ) -> dict[str, torch.Tensor]:
         l3_loss = F.mse_loss(outputs["l3"], y_l3)
         l7_loss = F.mse_loss(outputs["l7"], y_l7)
         attack_loss = F.cross_entropy(outputs["attack_logits"], y_attack)

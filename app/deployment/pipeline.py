@@ -8,17 +8,18 @@ Usage:
 
 import numpy as np
 from datetime import datetime, timezone
+
 from app.deployment.fetcher import run_fetch
 from app.deployment.features import build_features
 from app.deployment.inference import load_inference_bundle, run_inference
 
 
 def detect_anomalies(
-        ae_type: str,
-        country: str, 
-        date_from: datetime, 
-        date_to: datetime
-    ):
+    ae_type: str,
+    country: str, 
+    date_from: datetime, 
+    date_to: datetime
+) -> dict:
     try: 
         bundle = load_inference_bundle(ae_type, country)
 
@@ -101,6 +102,7 @@ def detect_anomalies(
 if __name__=="__main__":
     import argparse, sys
     from datetime import datetime, timezone, timedelta
+
     from app.src.data.feature_engineering import COUNTRIES
 
 
@@ -135,16 +137,19 @@ if __name__=="__main__":
     )
 
     args = parser.parse_args()
+
     ae_type = args.model.lower() 
     if ae_type not in ["ae", "vae"]:
         parser.print_help()
         print(f"[Error] Model can either be ae or vae!")
         exit(1)
+    
     target, date = args.target, args.date
     if target not in COUNTRIES:
         print(f"No pre-trained model for {target}")
         print(f"Please choose from the following list: {COUNTRIES}")
         sys.exit(1)
+    
     try:
         dt = datetime.strptime(date, "%m/%d/%Y").replace(tzinfo=timezone.utc)
         if dt and _is_valid_date(dt):

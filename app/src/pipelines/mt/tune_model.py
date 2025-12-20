@@ -4,6 +4,8 @@ Hyperparameter tuning for TrafficAttackPredictor using Optuna.
 
 Search space:
 - hidden_dims (depth + width)
+- latent_dim
+- head_hidden_dim
 - dropout
 - learning rate
 - weight decay
@@ -13,20 +15,31 @@ Search space:
 
 Outputs:
     PATH : results/mt_ml/tuned/<MODEL>
-    FILES: <COUNTRY>_study.db, <COUNTRY>_best_model.pt, <COUNTRY>_best_params.json, <COUNTRY>_best_config.json, <COUNTRY>_best_history.json, <COUNTRY>_scaler.pkl, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES: <COUNTRY>_study.db, 
+           <COUNTRY>_best_model.pt, 
+           <COUNTRY>_best_params.json, 
+           <COUNTRY>_best_config.json, 
+           <COUNTRY>_best_history.json, 
+           <COUNTRY>_scaler.pkl, 
+           <COUNTRY>_latent_space_pca_coords.csv, 
+           <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all> [| tee stdout_tune.txt]
+    python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all>
 """
 
 import json, pickle, torch, optuna
-from optuna.pruners import MedianPruner, SuccessiveHalvingPruner, HyperbandPruner
+from optuna.pruners import (
+    MedianPruner, 
+    SuccessiveHalvingPruner, 
+    HyperbandPruner
+)
 from pathlib import Path
 import numpy as np
 from sklearn.preprocessing import RobustScaler
 from dataclasses import asdict
-from app.src.data.feature_engineering import COUNTRIES
-from app.src.data.feature_engineering import load_supervised_feature_matrix
+
+from app.src.data.feature_engineering import COUNTRIES, load_supervised_feature_matrix
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.models.mte import MTEConfig
 from app.src.ml.tuning.tune_mt import set_global_seeds, objective
@@ -49,26 +62,24 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 #########################################
 
 def tune_country(
-        country: str,
-        n_trials: int = 40,
-        pruner: str = "median",
-        tr: int = 75,
-        vr: int = 15,
-        latent: bool = False
-    ):
-    """Full Optuna tuning incl. creating study, running optimization, retraining best model fully"""
-    set_global_seeds(42)
-
+    country: str,
+    n_trials: int = 40,
+    pruner: str = "median",
+    tr: int = 75,
+    vr: int = 15,
+    latent: bool = False
+) -> None:
     print(f"\n==============================")
     print(f" OPTUNA MT TUNING FOR {country}")
     print(f"==============================\n")
+    
+    set_global_seeds(42)
 
     pr = {
         "median": MedianPruner(n_startup_trials=5),
         "halving": SuccessiveHalvingPruner(),
         "hyperband": HyperbandPruner(),
     }.get(pruner)
-
     if pr is None:
         raise ValueError(f"Unknown pruner: {pruner}")
 
@@ -106,8 +117,8 @@ def tune_country(
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
         Xc, Xk,
-        train_ratio=tr/100,
-        val_ratio=vr/100
+        tr/100,
+        vr/100
     )
     y3_tr, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
     y7_tr, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
@@ -120,7 +131,6 @@ def tune_country(
     p = study.best_trial.params
     depth = p["depth"]
     hidden_dims = [p[f"h{i}"] for i in range(depth)]
-
     lambda_l3 = p.get("lambda_l3", 1.0)
     lambda_l7 = p.get("lambda_l7", 1.0)
     lambda_attack = p.get("lambda_attack", 1.0)
@@ -207,7 +217,14 @@ def tune_country(
         
     print(f"[DONE] Saved best model to {out_model_path}")
 
-def tune_all(trials: int, pruner: str, tr: int, vr: int, latent: bool):
+
+def tune_all(
+    trials: int, 
+    pruner: str, 
+    tr: int, 
+    vr: int, 
+    latent: bool
+) -> None:
     for c in COUNTRIES:
         try:
             tune_country(
@@ -220,13 +237,16 @@ def tune_all(trials: int, pruner: str, tr: int, vr: int, latent: bool):
             )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+
     print(f"\n[DONE] All model tunings completed!")
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Tune MT hyperparameters for single or for all countries.")
+    parser = argparse.ArgumentParser(
+        description="Tune MT hyperparameters for single or for all countries."
+    )
 
     parser.add_argument(
         "-N", "--ntrials",

@@ -8,7 +8,7 @@ Outputs:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m app.src.data.preprocess <all|key>
+    python -m app.src.data.preprocess <all|FILE_KEY>
 """
 
 import json
@@ -59,16 +59,18 @@ DSFILE_MAP = {
 ##            INTIAL CHECK             ##
 #########################################
 
-def _dsfile_exists(value: list):
+def _dsfile_exists(value: list) -> None:
     prefix = value[-1]
     match = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not match:
         raise FileNotFoundError(f"[Error] No JSON file starting with '{prefix}' found. Aborting preprocessing stage.")
 
-def check_dsfiles_exist(file_map: dict):
+
+def check_dsfiles_exist(file_map: dict) -> None:
     for name in file_map:
         _dsfile_exists(file_map[name])
     print("[INFO] All dataset prefixes validated. Starting preprocessing stage...")
+
 
 def find_latest_pull(prefix: str) -> Path:
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
@@ -82,7 +84,11 @@ def find_latest_pull(prefix: str) -> Path:
 ##              EXTRACTION             ##
 #########################################
 
-def nontemp_extraction(data: dict, field_map: dict, result_key: str = "main") -> dict:
+def nontemp_extraction(
+    data: dict, 
+    field_map: dict, 
+    result_key: str = "main"
+) -> dict:
     data_dict = {}
 
     for day_entry in data:
@@ -113,7 +119,12 @@ def nontemp_extraction(data: dict, field_map: dict, result_key: str = "main") ->
 
     return data_dict
 
-def nontemp_csplit_extraction(data: dict, field_map: dict, result_key: str = "main") -> dict:
+
+def nontemp_csplit_extraction(
+    data: dict, 
+    field_map: dict, 
+    result_key: str = "main"
+) -> dict:
     data_dict = {}
 
     for region, region_data in data.items():
@@ -123,7 +134,12 @@ def nontemp_csplit_extraction(data: dict, field_map: dict, result_key: str = "ma
 
     return data_dict
 
-def temp_csplit_extraction(data: dict, fields: list, result_key: str = "main") -> dict:
+
+def temp_csplit_extraction(
+    data: dict, 
+    fields: list, 
+    result_key: str = "main"
+) -> dict:
     data_dict = {}
 
     for region, region_data in data.items():
@@ -170,6 +186,7 @@ def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
 
+
 def read_json_notime(data: dict, name: str) -> dict:
     print(f"[INFO] {name}\t processed as non-temporal data...")
     
@@ -202,6 +219,7 @@ def read_json_notime(data: dict, name: str) -> dict:
     
     return data_dict
 
+
 def read_json_notime_csplit(data: dict, name: str) -> dict:
     print(f"[INFO] {name}\t processed as non-temporal, country-resolved data...")
         
@@ -220,6 +238,7 @@ def read_json_notime_csplit(data: dict, name: str) -> dict:
     )
     
     return data_dict
+
 
 def read_json_time_csplit(data: dict, name: str) -> dict:
     print(f"[INFO] {name}\t processed as temporal, country-resolved data...")
@@ -285,7 +304,7 @@ def read_json_time_csplit(data: dict, name: str) -> dict:
 ##             PRINT-OUT               ##
 #########################################
 
-def save_data(data: dict, name: str):
+def save_data(data: dict, name: str) -> None:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     outfile = PROCESSED_DIR / f"{name}.pkl"
     with open(outfile, "wb") as f:
@@ -297,14 +316,14 @@ def save_data(data: dict, name: str):
 ##                MAIN                 ##
 #########################################
 
-def preprocess_all():
+def preprocess_all() -> None:
     check_dsfiles_exist(DSFILE_MAP)
     
     for key in DSFILE_MAP:
         preprocess_single(key, check=False)
 
 
-def preprocess_single(name: str, check: bool = True):
+def preprocess_single(name: str, check: bool = True) -> None:
     value = DSFILE_MAP[name]
 
     if check:

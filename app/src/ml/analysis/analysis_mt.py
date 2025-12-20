@@ -1,6 +1,5 @@
 import json, optuna
 from pathlib import Path
-from typing import Union
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -14,7 +13,9 @@ from sklearn.metrics import (
     root_mean_squared_error,
 )
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
 from app.src.data.attack_labelling import ATTACK_LABELS, ID_TO_ATTACK
+
 
 #########################################
 ##                CONFIG               ##
@@ -33,6 +34,7 @@ custom_rc = {
     "grid.linestyle": "--",
 }
 
+
 def apply_custom_theme() -> None:
     """Apply consistent Matplotlib styling."""
     mpl.rcParams.update(custom_rc)
@@ -43,14 +45,13 @@ def apply_custom_theme() -> None:
 ##           TRAINING PLOTS            ##
 #########################################
 
-
 def plot_detailed_mt_loss_curves(
     country: str,
     history: dict,
     folder: Path = Path.cwd(),
     fname: str = "plot_detailed_mt_loss_curves.png",
     show: bool = False,
-):
+) -> None:
     """Plot separate loss curves for L3 and l7 regression losses and attack classification loss."""
     apply_custom_theme()
 
@@ -166,9 +167,9 @@ def summarize_mt_validation(
     df: pd.DataFrame,
     folder: Path = Path.cwd(),
     fname: str = "summarize_mt_validation.png",
-) -> dict:
+) -> None:
     """Summary statistics for MT validation output as json."""
-    summary: dict = {"country": country}
+    summary = {"country": country}
 
     # -------------------------------
     # 1. Anomaly / total loss statistics
@@ -254,7 +255,7 @@ def summarize_mt_validation(
     with open(folder / fname, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"[OK] Saved MT val summary to {fname}")
-    return summary
+
 
 def plot_regression_scatter(
     y_true: np.ndarray,
@@ -264,7 +265,7 @@ def plot_regression_scatter(
     folder: Path = Path.cwd(),
     fname: str = "plot_regression_scatter.png",
     show: bool = False,
-):
+) -> None:
     """Scatter plot of true vs predicted regression target."""
     apply_custom_theme()
 
@@ -299,7 +300,7 @@ def plot_attack_confusion_matrix(
     folder: Path = Path.cwd(),
     fname: str = "plot_attack_confusion_matrix.png",
     show: bool = False,
-):
+) -> None:
     """Confusion matrix for attack classification head."""
     required = ["attack_pred", "attack_true"]
     if not all(k in df for k in required):
@@ -361,13 +362,14 @@ def plot_attack_confusion_matrix(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_attack_confidence_hist(
     country: str,
     df: pd.DataFrame,
     folder: Path = Path.cwd(),
     fname: str = "plot_attack_confidence_hist.png",
     show: bool = False,
-):
+) -> None:
     """Histogram of max softmax confidence for attack predictions."""
     required = ["attack_conf", "attack_true"]
     if not all(k in df for k in required):
@@ -409,6 +411,7 @@ def plot_attack_confidence_hist(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_mt_anomaly_timeseries(
     country: str,
     df: pd.DataFrame,
@@ -417,7 +420,7 @@ def plot_mt_anomaly_timeseries(
     show: bool = False,
     show_components: bool = True,
     show_attack_conf: bool = True,
-):
+) -> None:
     """
     Plot MT anomaly score over time with:
       - threshold
@@ -555,7 +558,6 @@ def plot_mt_anomaly_timeseries(
 ##             TUNING PLOTS            ##
 #########################################
 
-
 def plot_mt_loss_component_analysis(
     study: optuna.Study,
     country: str, 
@@ -563,7 +565,7 @@ def plot_mt_loss_component_analysis(
     folder: Path = Path.cwd(),
     fname: str = "plot_mt_loss_component_analysis.png",
     show: bool = False
-):
+) -> None:
     """Scatter plots showing how MT loss components contribute to total loss."""
     apply_custom_theme()
     
@@ -677,7 +679,7 @@ def plot_multi_mt_weights_overview(
     folder: Path = Path.cwd(),
     fname: str = "plot_multi_mt_weights_overview.png",
     show: bool = False,
-):
+) -> None:
     """Bar and scatter plots comparing loss weights (regression vs classification) and their ratio across countries."""
     apply_custom_theme()
     
@@ -741,13 +743,14 @@ def plot_multi_mt_weights_overview(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_multi_mt_weight_loss_correlation(
     weights_data: dict,
     losses_data: dict,
     folder: Path = Path.cwd(),
     fname: str = "plot_multi_mt_weight_loss_correlation.png",
     show: bool = False,
-):
+) -> None:
     """Scatter plots showing relationship between MT loss weights and validation performance."""
     apply_custom_theme()
 
@@ -849,7 +852,7 @@ def plot_true_pred_anomalies(
     folder: Path = Path.cwd(),
     fname: str = "plot_true_pred_anomalies.png", 
     show: bool = False
-):
+) -> None:
     """Lineplot showing raw signal with predicted signal and flagged anomalies."""
     apply_custom_theme()
 
@@ -903,12 +906,13 @@ def plot_true_pred_anomalies(
     if show: plt.show()
     plt.close()
 
+
 def plot_attack_timeline(
-        df, 
-        folder: Path = Path.cwd(), 
-        fname: str = "plot_attack_timeline.png", 
-        show: bool = False
-    ):
+    df, 
+    folder: Path = Path.cwd(), 
+    fname: str = "plot_attack_timeline.png", 
+    show: bool = False
+) -> None:
     """Scatter plot of attack type over time"""
     apply_custom_theme()
 
@@ -930,12 +934,13 @@ def plot_attack_timeline(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_loss_components_timeseries(
-        df, 
-        folder: Path = Path.cwd(), 
-        fname: str = "plot_loss_components_timeseries.png", 
-        show: bool = False
-    ):
+    df, 
+    folder: Path = Path.cwd(), 
+    fname: str = "plot_loss_components_timeseries.png", 
+    show: bool = False
+) -> None:
     """Lineplot with loss decomposition over time"""
     apply_custom_theme()
 

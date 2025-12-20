@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from datetime import timezone
+
 from app.src.data.feature_engineering import COUNTRIES
 from app.deployment.pipeline import detect_anomalies
 from app.api.events.schema import PredictionRequest, PredictionResponse
+
 
 router = APIRouter()
 

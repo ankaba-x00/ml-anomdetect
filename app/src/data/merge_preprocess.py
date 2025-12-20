@@ -10,12 +10,14 @@ Outputs:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m app.src.data.merge_preprocess
+    python -m app.src.data.merge_preprocess [-S] [-N <int>] <all|FILE_KEY> <MERGE_DIR>
 """
 
 import json
 from pathlib import Path
+
 from app.src.data.preprocess import  read_json_time_csplit, save_data
+
 
 #########################################
 ##                PARAMS               ##
@@ -47,22 +49,25 @@ TIME_DSFILE_MAP = {
     "l7_mitigations_time": [True, None, "l7attack_mitigations_time_pull"],
 } # name: time_data, csplit, file
 
+
 #########################################
 ##            INTIAL CHECK             ##
 #########################################
 
-def _pullversions_exist(value: list):
+def _pullversions_exist(value: list) -> None:
     prefix = value[-1]
     match = list(RAW_DIR.glob(f"{prefix}*.json"))
     if len(match) <= 1:
         raise FileNotFoundError(f"[Error] Pull versions starting with '{prefix}' not found. Aborting preprocessing stage.")
 
-def check_pullversions_exist(file_map: dict):
+
+def check_pullversions_exist(file_map: dict) -> None:
     for name in file_map:
         _pullversions_exist(file_map[name])
     print("[INFO] All dataset prefix pull versions validated. Starting merging stage...")
 
-def check_ts_order(l1: list, l2: list):
+
+def check_ts_order(l1: list, l2: list) -> None:
     ts1 = l1[-1]["fetch"]["value"]["result"]["main"]["timestamps"][-1]
     ts2 = l2[0]["fetch"]["value"]["result"]["main"]["timestamps"][0]
     if ts1 >= ts2:
@@ -72,6 +77,7 @@ def check_ts_order(l1: list, l2: list):
             f"\n   first timestamp in file2: {ts2}" \
             "\nExpected: last_ts_file1 < first_ts_file2. Use different merge dir."
         )
+
 
 #########################################
 ##             MERGE HELPER            ##
@@ -84,9 +90,11 @@ def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
     matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[i], matches[j]
 
+
 def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
+
 
 def _merge_dicts(d1: dict, d2: dict) -> dict:
     merged = {}
@@ -105,38 +113,40 @@ def _merge_dicts(d1: dict, d2: dict) -> dict:
         merged[region] = combined
     return merged
 
+
 def run_merger(prefix: str, dir: int, n: int, d: dict = None) -> dict:
-        if n == 1:
-            if dir:
-                p1, p2 = _find_latest_pulls(prefix, n-1, n)
-            else:
-                p1, p2 = _find_latest_pulls(prefix, n, n-1)
-            d1, d2 = _read_file(p1), _read_file(p2)
-            return _merge_dicts(d1, d2)
-        
-        if d is None:
-            raise ValueError("[ERROR] Multi-pull merger failed. Merge dictionary is of NoneType!")
+    if n == 1:
         if dir:
-            _, p2 = _find_latest_pulls(prefix, n-1, n)
-            d2 = _read_file(p2)
-            return _merge_dicts(d, d2)
+            p1, p2 = _find_latest_pulls(prefix, n-1, n)
         else:
-            p1, _ = _find_latest_pulls(prefix, n, n-1)
-            d1 = _read_file(p1)
-            return _merge_dicts(d1, d)
+            p1, p2 = _find_latest_pulls(prefix, n, n-1)
+        d1, d2 = _read_file(p1), _read_file(p2)
+        return _merge_dicts(d1, d2)
+    
+    if d is None:
+        raise ValueError("[ERROR] Multi-pull merger failed. Merge dictionary is of NoneType!")
+    if dir:
+        _, p2 = _find_latest_pulls(prefix, n-1, n)
+        d2 = _read_file(p2)
+        return _merge_dicts(d, d2)
+    else:
+        p1, _ = _find_latest_pulls(prefix, n, n-1)
+        d1 = _read_file(p1)
+        return _merge_dicts(d1, d)
             
 
 #########################################
 ##          POST MERGE HELPER          ##
 #########################################
 
-def save_merged_data(data: dict, name: str):
+def save_merged_data(data: dict, name: str) -> None:
     outfile = RAW_DIR / f"{name}_merged.json"
     with open(outfile, "w") as f:
         json.dump(data, f, indent=2)
     print(f"[DONE] {name}\t saved to {outfile}!")
 
-def preprocess_merged_data(data: dict, name: str):
+
+def preprocess_merged_data(data: dict, name: str) -> None:
     conv_data = read_json_time_csplit(data, name)
     if conv_data:
         save_data(conv_data, name)
@@ -148,7 +158,13 @@ def preprocess_merged_data(data: dict, name: str):
 ##                MERGE                ##
 #########################################
 
-def merge_single(name: str, dir: int, n_pulls: int, save_only: bool = False, check: bool = True):
+def merge_single(
+    name: str, 
+    dir: int, 
+    n_pulls: int, 
+    save_only: bool = False, 
+    check: bool = True
+) -> None:
     value = TIME_DSFILE_MAP[name]
     if check:
         _pullversions_exist(value)
@@ -169,13 +185,15 @@ def merge_single(name: str, dir: int, n_pulls: int, save_only: bool = False, che
         preprocess_merged_data(merged, name)
 
 
-def merge_all(dir: int, save_only: bool = False, n_pulls: int = 2):
+def merge_all(dir: int, save_only: bool = False, n_pulls: int = 2) -> None:
     print(f"[INFO] Multi-pull merger starting...")
     check_pullversions_exist(TIME_DSFILE_MAP)
 
     for key in TIME_DSFILE_MAP:
         merge_single(name=key, dir=dir, n_pulls=n_pulls, save_only=save_only, check=False)
+        
     print(f"[DONE] Multi-pull merger for all file keys completed!")
+
 
 if __name__=='__main__':
     import argparse

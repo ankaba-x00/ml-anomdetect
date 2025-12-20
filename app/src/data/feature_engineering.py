@@ -4,8 +4,13 @@ import pandas as pd
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional
+
 from app.src.data.io_utils import conv_pkltodf
-from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
+from app.src.exploration.core.time_utils import (
+    conv_iso_to_local, 
+    conv_iso_to_local_with_daytype, 
+    conv_iso_to_local_with_daytimes
+)
 from app.src.exploration.core.params import timezones
 from app.src.data.attack_labelling import compute_attack_thresholds, derive_attack_label
 
@@ -23,7 +28,9 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 FEATURE_DIR = PROJECT_ROOT / "datasets" / "featured"
+
 COUNTRIES = load_countries_from_config(FILE_DIR.parent / "ml" / "models" / "models.yml")
+
 
 ########################################################
 ##            LOADING + NORMALIZATION HELPERS         ##
@@ -55,7 +62,12 @@ def _load_time_series(key: str, country: str, rename: str) -> pd.Series:
 ## BITRATE + DURATION AVG HELPERS (weighted averages) ##
 ########################################################
 
-def _load_weighted_dist(key: str, country: str, rename: str, mids: dict) -> pd.Series:
+def _load_weighted_dist(
+    key: str, 
+    country: str, 
+    rename: str, 
+    mids: dict
+) -> pd.Series:
     """
     Convert multi-bucket distributions (bitrate, duration) into a series
     of weighted averages.
@@ -93,12 +105,17 @@ def _load_protocol_features(key: str, country: str) -> pd.DataFrame:
         df = df[df["regions"] == country]
     df = df.sort_values("timestamps")
 
-    df_p = df.pivot_table(index="timestamps", columns="metric", values="values", aggfunc="first").rename(columns={
-        "UDP": "udp",
-        "TCP": "tcp",
-        "ICMP": "icmp",
-        "GRE": "gre"
-    }).astype(float)
+    df_p = df.pivot_table(
+        index="timestamps", 
+        columns="metric", 
+        values="values", 
+        aggfunc="first").rename(columns={
+            "UDP": "udp",
+            "TCP": "tcp",
+            "ICMP": "icmp",
+            "GRE": "gre"
+        }
+    ).astype(float)
 
     pcols = ["udp", "tcp", "icmp", "gre"]
     df_p["total"] = df_p[pcols].sum(axis=1).replace(0, 1e-6)
@@ -156,7 +173,12 @@ def build_country_dataframe(
         "_10_GBPS_TO_100_GBPS": 55000,
         "OVER_100_GBPS": 100000
     }
-    s_l3_bitrate = _load_weighted_dist("l3_origin_bitrate_time", country, "l3_bitrate_avg", bitrate_mids)
+    s_l3_bitrate = _load_weighted_dist(
+        "l3_origin_bitrate_time", 
+        country, 
+        "l3_bitrate_avg", 
+        bitrate_mids
+    )
 
     # weighted duration avg
     dur_mids = {
@@ -167,7 +189,12 @@ def build_country_dataframe(
         "_1_HOUR_TO_3_HOURS": 120,
         "OVER_3_HOURS": 300
     }
-    s_l3_duration = _load_weighted_dist("l3_origin_duration_time", country, "l3_duration_avg", dur_mids)
+    s_l3_duration = _load_weighted_dist(
+        "l3_origin_duration_time", 
+        country, 
+        "l3_duration_avg", 
+        dur_mids
+    )
 
     # protocol + entropy
     df_protocol = _load_protocol_features("l3_origin_protocol_time", country)
@@ -349,7 +376,9 @@ def build_feature_matrix(
     }
 
     print(f"[OK] Feature matrix for {country} build!")
+
     return df_cont, df_cat, num_cont, cat_dims
+
 
 def build_supervised_feature_matrix(
     country: str,
@@ -383,9 +412,13 @@ def build_supervised_feature_matrix(
 
     continuous_traffic_cols = [
         'http', 'http_auto', 'http_human', 'netflow', 'bots_total', 'ai_bots',
-        'ratio_auto_human', 'ratio_bots_http', 'ratio_ai_bots_bots', 'ratio_netflow_http', 'http_roll3h', 'http_roll24h', 'http_auto_roll3h', 'http_auto_roll24h', 'http_human_roll3h', 'http_human_roll24h',
-        'netflow_roll3h', 'netflow_roll24h', 'bots_total_roll3h', 'bots_total_roll24h',
-        'ai_bots_roll3h', 'ai_bots_roll24h', 'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos', 'month_sin', 'month_cos', 'week_sin', 'week_cos'
+        'ratio_auto_human', 'ratio_bots_http', 'ratio_ai_bots_bots', 
+        'ratio_netflow_http', 'http_roll3h', 'http_roll24h', 'http_auto_roll3h', 
+        'http_auto_roll24h', 'http_human_roll3h', 'http_human_roll24h',
+        'netflow_roll3h', 'netflow_roll24h', 'bots_total_roll3h', 
+        'bots_total_roll24h', 'ai_bots_roll3h', 'ai_bots_roll24h', 'hour_sin', 
+        'hour_cos', 'dow_sin', 'dow_cos', 'month_sin', 'month_cos', 'week_sin', 
+        'week_cos'
     ]
     categorical_cols = [
         'weekday_idx', 'daytype_idx', 'daytime_idx', 'month_idx', 'week_idx'
@@ -430,6 +463,7 @@ def build_supervised_feature_matrix(
     }
 
     print(f"[OK] Supervised feature matrix for {country} build!")
+
     return df_cont, df_cat, y_l3, y_l7, y_type, num_cont, cat_dims
 
 
@@ -463,7 +497,9 @@ def load_feature_matrix(
         raise TypeError(f"[ERROR] Feature matrix file incompatible for {country}: wrong metadata component type")
 
     print(f"[OK] Feature matrix for {country} loaded!")
+
     return df_cont, df_cat, num_cont, cat_dims
+
 
 def load_supervised_feature_matrix(
     country: str, 
@@ -500,4 +536,5 @@ def load_supervised_feature_matrix(
         raise TypeError(f"[ERROR] Supervised feature matrix file incompatible for {country}: wrong metadata component type")
 
     print(f"[OK] Supervised feature matrix for {country} loaded!")
+
     return df_cont, df_cat, y_l3, y_l7, y_type, num_cont, cat_dims

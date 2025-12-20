@@ -4,13 +4,30 @@ Analyze Optuna tuning results for one or all countries:
 - loads tuning history
 - loads training error with best model
 - performs multi-country comparison if chosen
-- generates plots (Optuna standard plots as html and png, trial correlation heatmap, best trial learning curves, loss curves for all trials, 3D hyperparam landscape, csv and json reports, multi-country comparison if specified, latent space if specified)
+- performs latent space analysis if specified
+- generates plots and summary
 
 Outputs:
     PATH : results/ae_ml/tuned/analysis/<MODEL>/<COUNTRY>
-    FILES : optimization_history.png + .html, parallel_coordinates.png + .html, param_importance.png + .html, contour.png + .html, slice.png + .html, 3d_scatter.png, losses_all_trials, best_learning_curve.png, correlation_heatmap.png, loss_component_analysis.png, trial_results.csv, <COUNTRY>_latent_space.png, <COUNTRY>_latent_space_pca_coords.csv
+    FILES : optimization_history.png | .html, 
+            parallel_coordinates.png | .html, 
+            param_importance.png | .html, 
+            contour.png | .html, 
+            slice.png | .html, 
+            3d_scatter.png, 
+            losses_all_trials, 
+            best_learning_curve.png, 
+            correlation_heatmap.png, 
+            loss_component_analysis.png, 
+            trial_results.csv, 
+            <COUNTRY>_latent_space.png, 
+            <COUNTRY>_latent_space_pca_coords.csv
     PATH : results/ae_ml/tuned/analysis/<MODEL>/_multi
-    FILES : best_losses.png, best_weights.png, weight_loss_correlation.png, best_losses.json, best_weights.json
+    FILES : best_losses.png, 
+            best_weights.png, 
+            weight_loss_correlation.png, 
+            best_losses.json, 
+            best_weights.json
 
 Usage:
     python -m app.src.pipelines.ae.analyze_tuning [-s] [-M] [-L] <MODEL> <COUNTRY|all|none>
@@ -20,11 +37,10 @@ import json, optuna, torch, pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
 from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.data import timeseries_seq_split
 from app.src.ml.training.train import load_autoencoder
-from app.src.ml.models.ae import AEConfig
-from app.src.ml.models.vae import VAEConfig
 from app.src.ml.analysis.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
@@ -47,11 +63,12 @@ FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
 TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 
+
 #########################################
 ##               LOAD DATA             ##
 #########################################
 
-def load_study(country: str, db_path: Path):
+def load_study(country: str, db_path: Path) -> optuna.Study:
     """Load study from SQLite db."""
     return optuna.load_study(
         storage=f"sqlite:///{db_path}",
@@ -75,12 +92,18 @@ def trial_dataframe(study: optuna.Study) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
-def plot_latent(ae_type: str, country: str, out_dir: Path, show: bool):
+def plot_latent(
+    ae_type: str, 
+    country: str, 
+    out_dir: Path, 
+    show: bool
+) -> None:
     """Plot latent space if flag was not set during tuning."""
     print(f"[INFO] Preparing latent space visualization...")
 
     model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_model.pt"
     scaler_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_scaler.pkl"
+
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
     if not scaler_path.exists():
@@ -94,10 +117,11 @@ def plot_latent(ae_type: str, country: str, out_dir: Path, show: bool):
     X_cont, X_cat, _, _ = load_feature_matrix(country)
     Xc_np = X_cont.values.astype(np.float64)
     Xk_np = X_cat.values.astype(np.int64)
+
     (train_cont, train_cat), _, _ = timeseries_seq_split(
         Xc_np, Xk_np,
-        train_ratio=75/100,
-        val_ratio=15/100,
+        75/100,
+        15/100,
     )
     train_cont_scald = scaler.transform(train_cont).astype(np.float32)
     
@@ -112,11 +136,18 @@ def plot_latent(ae_type: str, country: str, out_dir: Path, show: bool):
         f"{country}_latent_space.png",
         show
     )
+
     print(f"[OK] Latent space plot for {country} generated.")
-    
-def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False):
+
+
+def multi_analyze(
+    ae_type: str, 
+    countries: list = COUNTRIES, 
+    show: bool = False
+) -> None:
     """Compare best validation losses across countries."""
     print(f"\n[INFO] Multi-country analysis...")
+
     out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / "_multi"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -129,12 +160,20 @@ def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False)
     for c in countries:
         cfg_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_study.db"
+
         if not cfg_path.exists() or not study_path.exists():
             print()
             continue
+        
         study = load_study(c, study_path)
         losses_data[c] = study.best_value
-    plot_multi_loss_overview(losses_data, out_dir, "best_losses.png", show)
+
+    plot_multi_loss_overview(
+        losses_data, 
+        out_dir, 
+        "best_losses.png", 
+        show
+    )
     with open(out_dir / "best_losses.json", "w") as f:
         json.dump(losses_data, f, indent=2)
 
@@ -153,7 +192,13 @@ def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False)
         except Exception as e:
             print(f"[ERROR] Failed loading weights for {c}:", e)
             continue
-    plot_multi_weights_overview(weights_data, out_dir, "best_weights.png", show)
+    
+    plot_multi_weights_overview(
+        weights_data, 
+        out_dir, 
+        "best_weights.png", 
+        show
+    )
     with open(out_dir / "best_weights.json", "w") as f:
         json.dump(weights_data, f, indent=2)
 
@@ -167,24 +212,45 @@ def multi_analyze(ae_type: str, countries: list = COUNTRIES, show: bool = False)
                 "weight_loss_correlation.png", 
                 show
             )
+
     print(f"[OK] Multi-country comparison completed!")
 
-def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = False, latent: bool = False, show: bool = False):
+
+def analyze_country(
+    ae_type: str, 
+    country: str, 
+    multi: bool = True, 
+    all: bool = False, 
+    latent: bool = False, 
+    show: bool = False
+) -> None:
     """Runs full analysis pipeline of a country model tuning."""
     print(f"\n[INFO] Analyzing {country}...")
     
     out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_dir.mkdir(parents=True, exist_ok=True)
+
     db_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_study.db"
     if not db_path.exists():
         raise FileNotFoundError(f"No study DB for {country}")
     
     study = load_study(country, db_path)
-    save_optuna_plots(study, out_dir, html_out=True, png_out=False)
+    save_optuna_plots(
+        study, 
+        out_dir, 
+        html_out=True, 
+        png_out=False
+    )
 
     df = trial_dataframe(study)
     df.to_csv(out_dir / "trial_results.csv", index=False)
-    plot_correlation_heatmap(df, out_dir, "correlation_heatmap.png", show)
+    
+    plot_correlation_heatmap(
+        df, 
+        out_dir, 
+        "correlation_heatmap.png", 
+        show
+    )
     plot_3d_scatter(df, out_dir, "3d_scatter.png", show)
     plot_loss_curves_all_trials(
         study,
@@ -194,11 +260,18 @@ def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = 
         fname="losses_all_trials.png",
         show=show
     )
+
     best_hist_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_history.json"
     if best_hist_path.exists():
         with open(best_hist_path, "r") as f:
             best_history = json.load(f)
-        plot_best_trial_learning_curve(best_history, out_dir, "best_learning_curve.png", show)
+        plot_best_trial_learning_curve(
+            best_history, 
+            out_dir, 
+            "best_learning_curve.png", 
+            show
+        )
+
     if study:
         plot_loss_component_analysis(
             ae_type,
@@ -218,12 +291,13 @@ def analyze_country(ae_type: str, country: str, multi: bool = True, all: bool = 
     if multi and not all:
         multi_analyze(show=show)
 
+
 def analyze_all(
-        ae_type: str, 
-        multi: bool = True, 
-        latent: bool = False, 
-        show_plots: bool = False
-    ):
+    ae_type: str, 
+    multi: bool = True, 
+    latent: bool = False, 
+    show_plots: bool = False
+) -> None:
     """Runs full analysis pipeline of all country model tunings."""
     print(f"\n[INFO] Analysis of all models starting...")
 
@@ -235,7 +309,7 @@ def analyze_all(
             all=True,
             latent=latent,
             show=show_plots
-    )
+        )
 
     if multi:
         multi_analyze(ae_type=ae_type, show=show_plots)

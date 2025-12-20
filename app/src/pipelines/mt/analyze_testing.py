@@ -5,10 +5,16 @@ Visualize test data amulti-task prediction results:
 - generates plots 
 
 Outputs:
-    PATH : results/mt_ml/tested/analysis
-    FILES : <COUNTRY>_mt_anomaly_timeseries_<method>.png", <COUNTRY>_attack_confidence_hist_<method>.png", <COUNTRY>_attack_confusion_matrix_<method>.png", <COUNTRY>_intervals_<method>.png",
-    <COUNTRY>_hist_<method>.png", <COUNTRY>_raw_l3_erroroverlay_<method>.png", <COUNTRY>_raw_l7_erroroverlay_<method>.png", <COUNTRY>_attack_timeline_<method>.png",
-    <COUNTRY>_loss_timeseries_<method>.png"
+    PATH : results/mt_ml/tested/analysis/<COUNTRY>
+    FILES : <COUNTRY>_mt_anomaly_timeseries_<method>.png", 
+            <COUNTRY>_attack_confidence_hist_<method>.png", 
+            <COUNTRY>_attack_confusion_matrix_<method>.png", 
+            <COUNTRY>_intervals_<method>.png",
+            <COUNTRY>_hist_<method>.png", 
+            <COUNTRY>_raw_l3_erroroverlay_<method>.png", 
+            <COUNTRY>_raw_l7_erroroverlay_<method>.png", 
+            <COUNTRY>_attack_timeline_<method>.png",
+            <COUNTRY>_loss_timeseries_<method>.png"
 
 Usage:
     python -m app.src.pipelines.mt.analyze_testing [-s] [-M] [-R] <COUNTRY|all|none>
@@ -16,6 +22,7 @@ Usage:
 
 import pandas as pd
 from pathlib import Path
+
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.ml.analysis.analysis import (
     plot_intervals,
@@ -30,6 +37,7 @@ from app.src.ml.analysis.analysis_mt import (
     plot_loss_components_timeseries
 )
 
+
 #########################################
 ##                PARAMS               ##
 #########################################
@@ -40,16 +48,16 @@ TESTED_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tested"
 OUT_DIR = TESTED_DIR / "analysis"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+
 #########################################
 ##               LOAD DATA             ##
 #########################################
 
 def _load_results(
-        country: str, 
-        method: str
-    ) -> tuple[pd.DataFrame, float, pd.DataFrame]:
+    country: str, 
+    method: str
+) -> tuple[pd.DataFrame, float, pd.DataFrame]:
     result_path = TESTED_DIR / f"{country}_errors_{method}.csv"
-
     intervals_path = TESTED_DIR / f"{country}_intervals_{method}.csv"
 
     if not result_path.exists():
@@ -73,11 +81,11 @@ def _load_results(
 #########################################
 
 def analyze_country(
-        country: str, 
-        method: str, 
-        show_plots: bool,
-    ):
-    """Runs full analysis pipeline of a country model testing."""
+    country: str, 
+    method: str, 
+    show_plots: bool,
+) -> None:
+    """Runs full analysis pipeline of a country MT model testing."""
     print(f"[INFO] Analyzing {country} with {method}...")
 
     out_dir = OUT_DIR / country
@@ -165,7 +173,10 @@ def analyze_country(
     print(f"[OK] Analysis for {country} completed!")
 
 
-def analyze_all(method: str, show_plots: bool):
+def analyze_all(
+    method: str, 
+    show_plots: bool
+) -> None:
     """Runs full analysis pipeline of all country MT model testings."""
     print(f"\n[INFO] Analysis of all MT models starting...")
 

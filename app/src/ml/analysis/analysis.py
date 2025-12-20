@@ -15,6 +15,7 @@ from optuna.visualization import (
     plot_slice,
     plot_contour,
 )
+
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
 from app.src.ml.models.mte import TrafficAttackPredictor
@@ -37,6 +38,7 @@ custom_rc = {
     "grid.linestyle": "--",
 }
 
+
 def apply_custom_theme() -> None:
     """Apply consistent Matplotlib styling."""
     mpl.rcParams.update(custom_rc)
@@ -48,12 +50,12 @@ def apply_custom_theme() -> None:
 #########################################
 
 def plot_log_candidates(
-        feature_name: str, 
-        feature_values: pd.Series, 
-        folder: Path, 
-        fname: str = "plot_log_candidates.png", 
-        show: bool = False,
-    ):
+    feature_name: str, 
+    feature_values: pd.Series, 
+    folder: Path, 
+    fname: str = "plot_log_candidates.png", 
+    show: bool = False,
+) -> None:
     """Histograms of value distribution for raw signals and log-transformed signals."""
     apply_custom_theme()
 
@@ -92,7 +94,7 @@ def plot_training_curves(
     fnames: list[str] = ["loss_curve.png", "lr_schedule.png"],
     show: bool = False,
     MT: bool = False
-):
+) -> None:
     """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
     apply_custom_theme()
 
@@ -165,6 +167,7 @@ def plot_training_curves(
     if show: plt.show()
     plt.close(fig2)
 
+
 def plot_detailed_loss_curves(
     ae_type: str,
     country: str,
@@ -172,7 +175,7 @@ def plot_detailed_loss_curves(
     folder: Path = Path.cwd(),
     fname: str = "detailed_loss_curves.png",
     show: bool = False,
-):
+) -> None:
     """Plot separate loss curves for continuous and categorical components."""
     apply_custom_theme()
 
@@ -252,7 +255,7 @@ def plot_error_histogram(
     folder: Path = Path.cwd(),
     fname: str = "plot_error_histogram.png",
     show: bool = False,
-):
+) -> None:
     """Histogram of log errors with percentile lines."""
     apply_custom_theme()
 
@@ -279,6 +282,7 @@ def plot_error_histogram(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_error_timeseries(
     country: str,
     df: pd.DataFrame,
@@ -286,7 +290,7 @@ def plot_error_timeseries(
     folder: Path = Path.cwd(),
     fname: str = "plot_error_timeseries.png",
     show: bool = False,
-):
+) -> None:
     """Lineplot error over time with optional threshold line."""
     apply_custom_theme()
 
@@ -305,14 +309,16 @@ def plot_error_timeseries(
     if show: plt.show()
     plt.close(fig)
 
+
 def summarize_validation(
     country: str,
     df: pd.DataFrame,
     folder: Path = Path.cwd(),
     fname: str = "summarize_validation.png",
-) -> dict:
+) -> None:
     """Summary statistics for validation error distribution as json."""
     errors = df["error"].values
+
     summary = {
         "country": country,
         "count": int(len(errors)),
@@ -324,17 +330,26 @@ def summarize_validation(
         "p99": float(np.percentile(errors, 99)),
         "p995": float(np.percentile(errors, 99.5)),
     }
+
     with open(folder / fname, "w") as f:
         json.dump(summary, f, indent=2)
-    return summary
+    print(f"[OK] Saved val summary to {fname}")
 
 
 #########################################
 ##             TUNING PLOTS            ##
 #########################################
 
-def save_optuna_plots(study: optuna.Study, folder: Path, html_out: bool = True, png_out: bool = False):
-    """Save Optuna-provided visualizations as png if kaleido is installed and/or html file which requires no add package and has nicer formatting."""
+def save_optuna_plots(
+    study: optuna.Study, 
+    folder: Path, 
+    html_out: bool = True, 
+    png_out: bool = False
+) -> None:
+    """
+    Save Optuna-provided visualizations as png if kaleido is installed and/or 
+    html file which requires no add package and has nicer formatting.
+    """
 
     figs = {
         "optimization_history": plot_optimization_history(study),
@@ -354,12 +369,13 @@ def save_optuna_plots(study: optuna.Study, folder: Path, html_out: bool = True, 
         except Exception:
             pass
 
+
 def plot_correlation_heatmap(
-        df: pd.DataFrame, 
-        folder: Path = Path.cwd(), 
-        fname: str = "plot_correlation_heatmap.png",
-        show: bool = False
-    ):
+    df: pd.DataFrame, 
+    folder: Path = Path.cwd(), 
+    fname: str = "plot_correlation_heatmap.png",
+    show: bool = False
+) -> None:
     """Heatmaps to show correlation between hyperparameters and val loss."""
     apply_custom_theme()
 
@@ -373,14 +389,15 @@ def plot_correlation_heatmap(
     if show: plt.show()
     plt.close()
 
+
 def plot_loss_curves_all_trials(
-        study: optuna.Study, 
-        country: str, 
-        history_dir: Path, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_loss_curves_all_trials.png", 
-        show: bool = False
-    ):
+    study: optuna.Study, 
+    country: str, 
+    history_dir: Path, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_loss_curves_all_trials.png", 
+    show: bool = False
+) -> None:
     """Lineplot train/val loss curves for each finished trial. Skipped if not saved during tuning."""
     apply_custom_theme()
 
@@ -418,12 +435,13 @@ def plot_loss_curves_all_trials(
     if show: plt.show()
     plt.close()
 
+
 def plot_best_trial_learning_curve(
-        best_history: dict, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_best_trial_learning_curve.png",
-        show: bool = False
-    ):
+    best_history: dict, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_best_trial_learning_curve.png",
+    show: bool = False
+) -> None:
     """Lineplot train/val learning curves of best trial."""
     apply_custom_theme()
 
@@ -474,12 +492,13 @@ def plot_best_trial_learning_curve(
     if show: plt.show()
     plt.close()
 
+
 def plot_3d_scatter(
-        df: pd.DataFrame, 
-        folder: Path = Path.cwd(), 
-        fname: str = "plot_3d_scatter.png",
-        show: bool = False
-    ):
+    df: pd.DataFrame, 
+    folder: Path = Path.cwd(), 
+    fname: str = "plot_3d_scatter.png",
+    show: bool = False
+) -> None:
     """Scatter plot 3D (dropout, lr, val_loss) of hyperparameter landscape with annotated marking of best trial in red."""
     apply_custom_theme()
 
@@ -536,6 +555,7 @@ def plot_3d_scatter(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_loss_component_analysis(
     ae_type: str, 
     study: optuna.Study,
@@ -544,7 +564,7 @@ def plot_loss_component_analysis(
     folder: Path = Path.cwd(),
     fname: str = "loss_component_analysis.png",
     show: bool = False
-):
+) -> None:
     """Scatter plots showing how continuous vs categorical losses contribute to total loss."""
     apply_custom_theme()
     
@@ -625,12 +645,13 @@ def plot_loss_component_analysis(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_multi_loss_overview(
-        best_losses: dict, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_multi_loss_overview.png",
-        show: bool = False
-    ):
+    best_losses: dict, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_multi_loss_overview.png",
+    show: bool = False
+) -> None:
     """Barplot comparing best val losses across countries."""
     apply_custom_theme()
 
@@ -665,12 +686,13 @@ def plot_multi_loss_overview(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_multi_weights_overview(
     best_weights: dict,
     folder: Path = Path.cwd(),
     fname: str = "plot_multi_weights_overview.png",
     show: bool = False,
-):
+) -> None:
     """Bar and scatter plots comparing loss weights and their ratio across countries."""
     apply_custom_theme()
     
@@ -724,13 +746,14 @@ def plot_multi_weights_overview(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_multi_weight_loss_correlation(
     weights_data: dict,
     losses_data: dict,
     folder: Path = Path.cwd(),
     fname: str = "plot_multi_weight_loss_correlation.png",
     show: bool = False,
-):
+) -> None:
     """Scatter plots showing relationship between loss weights and validation performance."""
     apply_custom_theme()
 
@@ -808,14 +831,14 @@ def plot_multi_weight_loss_correlation(
 #########################################
 
 def plot_error_curve(
-        country: str, 
-        df_err: pd.DataFrame, 
-        threshold: float, 
-        method: str, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_error_curve.png", 
-        show: bool = False
-    ):
+    country: str, 
+    df_err: pd.DataFrame, 
+    threshold: float, 
+    method: str, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_error_curve.png", 
+    show: bool = False
+) -> None:
     """Lineplot reconstruction error over timestamps with color-coded error predictions, smoothed error curve, threshold and detected anomalies."""
     apply_custom_theme()
 
@@ -838,15 +861,16 @@ def plot_error_curve(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_intervals(
-        country: str, 
-        df_err: pd.DataFrame, 
-        df_int: pd.DataFrame, 
-        method: str, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_intervals.png", 
-        show: bool = False
-    ):
+    country: str, 
+    df_err: pd.DataFrame, 
+    df_int: pd.DataFrame, 
+    method: str, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_intervals.png", 
+    show: bool = False
+) -> None:
     """Lineplot with detected anomalies over timestamps."""
     apply_custom_theme()
 
@@ -862,16 +886,17 @@ def plot_intervals(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_error_hist(
-        country: str, 
-        df: pd.DataFrame, 
-        threshold: float, 
-        method: str, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_error_hist.png", 
-        show: bool = False,
-        MT: bool = False
-    ):
+    country: str, 
+    df: pd.DataFrame, 
+    threshold: float, 
+    method: str, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_error_hist.png", 
+    show: bool = False,
+    MT: bool = False
+) -> None:
     """Histogram showing error counts and threshold."""
     apply_custom_theme()
 
@@ -888,16 +913,17 @@ def plot_error_hist(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_raw_with_errors(
-        signal_name: str,
-        ts: Union[np.ndarray, pd.Index, pd.Series], 
-        raw_signal: np.ndarray, 
-        errors: np.ndarray, 
-        mask: np.ndarray, 
-        folder: Path = Path.cwd(),
-        fname: str = "plot_raw_with_errors.png", 
-        show: bool = False
-    ):
+    signal_name: str,
+    ts: Union[np.ndarray, pd.Index, pd.Series], 
+    raw_signal: np.ndarray, 
+    errors: np.ndarray, 
+    mask: np.ndarray, 
+    folder: Path = Path.cwd(),
+    fname: str = "plot_raw_with_errors.png", 
+    show: bool = False
+) -> None:
     """Lineplot showing raw target signal with smoothed error scaled on same range and detected anomalies."""
     apply_custom_theme()
 
@@ -933,7 +959,7 @@ def plot_latent_space(
     folder: Path = Path.cwd(),
     fname: str = "plot_latent_space.png",
     show: bool = False,
-):
+) -> None:
     """Scatter plot showing latent space using PCA/t-SNE."""
     apply_custom_theme()
     

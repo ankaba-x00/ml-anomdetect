@@ -5,14 +5,16 @@ Validate a trained multi-task traffic model:
 - computes per-sample loss_total and head losses
 - prints summary stats
 - saves validation CSV
-- optionally plots latent space
+- performs latent space analysis if specified
 
 Outputs:
     PATH : results/mt_ml/validated
-    FILES : <COUNTRY>_mt_validation.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES : <COUNTRY>_mt_validation.csv, 
+            <COUNTRY>_latent_space_pca_coords.csv, 
+            <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] <COUNTRY|all> [| tee stdout_val.txt]
+    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] <COUNTRY|all>
 """
 
 import pickle, torch
@@ -23,7 +25,6 @@ from pathlib import Path
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.analysis.analysis import plot_latent_space
-
 from app.src.ml.training.evaluate_mt import apply_multitask_model
 from app.src.ml.training.train_mt import load_multitask_model
 from app.src.data.feature_engineering import load_supervised_feature_matrix
@@ -44,7 +45,13 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def validate_country(country: str, tr: int, vr: int, method: str, latent: bool):
+def validate_country(
+    country: str, 
+    tr: int, 
+    vr: int, 
+    method: str, 
+    latent: bool
+) -> None:
     print(f"\n==============================")
     print(f"  VALIDATE MT MODEL ({country})")
     print(f"==============================")
@@ -86,14 +93,14 @@ def validate_country(country: str, tr: int, vr: int, method: str, latent: bool):
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_tr, _), (Xc_val, Xk_val), _ = timeseries_seq_split(
         Xc, Xk, 
-        train_ratio=tr/100, 
-        val_ratio=vr/100
+        tr/100, 
+        vr/100
     )
     ts_val = ts[len(Xc_tr): len(Xc_tr) + len(Xc_val)]
     
-    _, y3_val, _ = timeseries_seq_split(y3, None, train_ratio=tr/100, val_ratio=vr/100)
-    _, y7_val, _ = timeseries_seq_split(y7, None, train_ratio=tr/100, val_ratio=vr/100)
-    _, ya_val, _ = timeseries_seq_split(ya, None, train_ratio=tr/100, val_ratio=vr/100)    
+    _, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
+    _, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
+    _, ya_val, _ = timeseries_seq_split(ya, None, tr/100, vr/100)    
 
     # --------------------
     # Scale cont features
@@ -128,7 +135,8 @@ def validate_country(country: str, tr: int, vr: int, method: str, latent: bool):
         device=cfg.device,
         l3_weight=l3_w,
         l7_weight=l7_w,
-        attack_weight=att_w,
+        min_length=1,
+        merge_gap=0,
     )
 
     errors = res["loss_total"]
@@ -192,12 +200,18 @@ def validate_country(country: str, tr: int, vr: int, method: str, latent: bool):
     print(f"[DONE] Validated model for {country}")
 
 
-def validate_all(tr: int, vr: int, method: str, latent: bool):
+def validate_all(
+    tr: int, 
+    vr: int, 
+    method: str, 
+    latent: bool
+) -> None:
     for c in COUNTRIES:
         try:
             validate_country(c, tr, vr, method, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+    
     print(f"\n[DONE] All multi-task validations completed!")
 
 
@@ -241,6 +255,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.target.lower() == "all":
-        validate_all(args.tr, args.vr, args.method, args.latent)
+        validate_all(
+            args.tr, 
+            args.vr, 
+            args.method, 
+            args.latent
+        )
     else:
-        validate_country(args.target.upper(), args.tr, args.vr, args.method, args.latent)
+        validate_country(
+            args.target.upper(), 
+            args.tr, 
+            args.vr, 
+            args.method, 
+            args.latent
+        )

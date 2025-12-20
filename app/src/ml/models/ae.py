@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from typing import Sequence, Optional
 import torch.nn as nn
 import torch.nn.functional as F
+
 from app.src.ml.models.base import BaseTabularModel
 
 
@@ -134,10 +135,10 @@ class TabularAE(BaseTabularModel):
     # Encode/Decode
     # -------------------------------
     def encode(
-            self, 
-            x_cont: torch.Tensor, 
-            x_cat: torch.Tensor
-        ) -> torch.Tensor:
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor
+    ) -> torch.Tensor:
         """Encode cont and cat to latent space z."""
         x_emb = self._embed(x_cat)
         
@@ -161,10 +162,10 @@ class TabularAE(BaseTabularModel):
         return z
     
     def decode(
-            self, 
-            z: torch.Tensor, 
-            temperature: float = 1.0
-        ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        self, 
+        z: torch.Tensor, 
+        temperature: float = 1.0
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Decode from latent space to cont reconstruction + cat logits with temperature scaling"""
         h = z
         for layer in self.decoder_layers:
@@ -187,13 +188,13 @@ class TabularAE(BaseTabularModel):
     # Anomaly score
     # -------------------------------
     def anomaly_score(
-            self, 
-            x_cont: torch.Tensor, 
-            x_cat: torch.Tensor, 
-            cont_weight: float = 1.0, 
-            cat_weight: float = 0.0, 
-            temperature: float = 1.0
-        ) -> torch.Tensor:
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor, 
+        cont_weight: float = 1.0, 
+        cat_weight: float = 0.0, 
+        temperature: float = 1.0
+    ) -> torch.Tensor:
         """Combined reconstruction error with optional categorical weighting which returns per-sample anomaly score [batch,]."""
         with torch.no_grad():
             cont_recon, cat_logits = self.forward(
@@ -229,4 +230,5 @@ class TabularAE(BaseTabularModel):
                 total_weight = 1.0
                 cont_weight = 1.0
                 cat_weight = 0.0
+            
             return (cont_weight * cont_error + cat_weight * cat_error) / total_weight

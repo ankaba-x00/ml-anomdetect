@@ -3,30 +3,41 @@
 Analyze training and validation performance for one or all countries:
 - loads training history
 - loads validation errors
-- generates plots (loss curves, LR schedules, error histograms, error time series) and validation summary
+- generates plots and summary
 
 Outputs:
     PATH: results/ae_ml/trained/<MODEL>
-    FILES : <COUNTRY>_loss_curve.png, <COUNTRY>_detailed_loss_curves.png, <COUNTRY>_lr_schedule.png
+    FILES : <COUNTRY>_loss_curve.png, 
+            <COUNTRY>_detailed_loss_curves.png, 
+            <COUNTRY>_lr_schedule.png
     PATH: results/ae_ml/validated/<MODEL>
-    FILES : <COUNTRY>_error_hist.png, <COUNTRY>_error_timeseries.png, <COUNTRY>_summary.json
+    FILES : <COUNTRY>_error_hist.png, 
+            <COUNTRY>_error_timeseries.png, 
+            <COUNTRY>_summary.json
 
 Usage:
     python -m app.src.pipelines.ae.analyze_training [-s] <MODEL> <COUNTRY|all>
 """
+
 import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
+
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.ml.analysis.analysis import (
-    plot_training_curves, plot_detailed_loss_curves, plot_error_histogram, plot_error_timeseries, summarize_validation
+    plot_training_curves, 
+    plot_detailed_loss_curves, 
+    plot_error_histogram, 
+    plot_error_timeseries, 
+    summarize_validation
 )
 
 
 #########################################
 ##                PARAMS               ##
 #########################################
+
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
 TRAINED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
@@ -37,17 +48,26 @@ VALIDATED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "validated"
 ##               LOAD DATA             ##
 #########################################
 
-def load_training_history(ae_type: str, country: str, models_dir: Path) -> dict:
-    """Load training history for country and returns train_loss, val_loss, learning_rates, best_epoch."""
+def load_training_history(
+    ae_type: str,
+    country: str, 
+    models_dir: Path
+) -> dict:
+    """Load training history for country."""
     path = Path(models_dir) / f"{ae_type.upper()}" / f"{country}_training_history.json"
     if not path.exists():
         raise FileNotFoundError(f"[ERROR] Training history not found: {path}")
     with open(path, "r") as f:
-        return json.load(f)
+        data = json.load(f)
+    return data
 
 
-def load_validation_errors(ae_type:str, country: str, validated_dir: Path) -> pd.DataFrame:
-    """Load validation CSV and returns ts, error."""
+def load_validation_errors(
+    ae_type:str, 
+    country: str, 
+    validated_dir: Path
+) -> pd.DataFrame:
+    """Load validation CSV."""
     path = Path(validated_dir) / f"{ae_type.upper()}" / f"{country}_validation.csv"
     if not path.exists():
         raise FileNotFoundError(f"[ERROR] Validation CSV not found: {path}")
@@ -58,12 +78,16 @@ def load_validation_errors(ae_type:str, country: str, validated_dir: Path) -> pd
 ##                 MAIN                ##
 #########################################
 
-def analyze_country(ae_type: str, country: str, show_plots: bool):
+def analyze_country(
+    ae_type: str, 
+    country: str, 
+    show_plots: bool
+) -> None:
     """Runs full analysis pipeline of a country model."""
     print(f"[INFO] Analyzing {country}...")
-    out_train = TRAINED_DIR / f"{ae_type.upper()}" / "analysis"
+    out_train = TRAINED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_train.mkdir(parents=True, exist_ok=True)
-    out_val = VALIDATED_DIR / f"{ae_type.upper()}" / "analysis"
+    out_val = VALIDATED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_val.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -113,7 +137,11 @@ def analyze_country(ae_type: str, country: str, show_plots: bool):
 
     print(f"[OK] Analysis for {country} completed!")
 
-def analyze_all(ae_type: str, show_plots: bool):
+
+def analyze_all(
+    ae_type: str, 
+    show_plots: bool
+) -> None:
     """Runs full analysis pipeline of all country models."""
     print(f"\n[INFO] Analysis of all models starting...")
     
@@ -157,6 +185,13 @@ if __name__ == "__main__":
         exit(1)
 
     if target == "all":
-        analyze_all(ae_type, show_plots=args.show)
+        analyze_all(
+            ae_type, 
+            show_plots=args.show
+        )
     else:
-        analyze_country(ae_type, target.upper(), show_plots=args.show)
+        analyze_country(
+            ae_type, 
+            target.upper(), 
+            show_plots=args.show
+        )

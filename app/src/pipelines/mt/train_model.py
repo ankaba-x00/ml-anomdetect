@@ -9,7 +9,11 @@ Train multi-task attack predictor for one or all countries to predict L3 and L7 
 Outputs:
     PATH without -F: results/mt_ml/trained
     PATH with -F: app/deployment/models/MTP
-    FILES: <COUNTRY>_model.pt, <COUNTRY>_scaler.pkl, <COUNTRY>_training_history.json, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES: <COUNTRY>_model.pt, 
+           <COUNTRY>_scaler.pkl, 
+           <COUNTRY>_training_history.json, 
+           <COUNTRY>_latent_space_pca_coords.csv, 
+           <COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.mt.train_multitask_model [-tr <int>] [-vr <int>] [-F] [-L] <COUNTRY|all>
@@ -20,12 +24,16 @@ from pathlib import Path
 from typing import Optional
 import numpy as np
 from sklearn.preprocessing import RobustScaler
+
 from app.src.data.split import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.data.feature_engineering import load_supervised_feature_matrix
 from app.src.ml.models.mte import MTEConfig
 from app.src.ml.analysis.analysis import plot_latent_space
-from app.src.ml.training.train_mt import train_multitask_model, save_multitask_model
+from app.src.ml.training.train_mt import (
+    train_multitask_model, 
+    save_multitask_model
+)
 
 
 #########################################
@@ -50,8 +58,7 @@ def train_country(
     full: bool,
     latent: bool,
     loss_weights: Optional[dict] = None,
-):
-
+) -> None:
     print(f"\n==============================")
     print(f"   TRAIN MT MODEL ({country}) ")
     print(f"==============================")
@@ -59,7 +66,9 @@ def train_country(
     # ------------------------------------
     # Load supervised feature matrix
     # ------------------------------------ 
-    X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = load_supervised_feature_matrix(country)
+    X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = (
+        load_supervised_feature_matrix(country)
+    )
     Xc = X_cont.values.astype(np.float64)
     Xk = X_cat.values.astype(np.int64)
     y3 = y_l3.values.astype(np.float32)
@@ -71,17 +80,22 @@ def train_country(
     # ------------------------------------
     if full or tr == 100:
         print(f"[INFO] Reading MTEConfig from best tuning run.")
+        
         tuned_cfg_path = BEST_MODELS_DIR / f"{country}_best_config.json"
         tuned_params_path = BEST_MODELS_DIR / f"{country}_best_params.json"
+        
         if not tuned_cfg_path.exists():
             raise FileNotFoundError("[ERROR] Best config not found. Run tuning first.")
         if not tuned_params_path.exists():
             raise FileNotFoundError("[ERROR] Best params not found. Run tuning first.")
+        
         with open(tuned_cfg_path, "r") as f:
             cfg_dict = json.load(f)
             cfg = MTEConfig(**cfg_dict)
+            
         with open(tuned_params_path, "r") as f:
             best_params = json.load(f)
+        
         try:
             loss_weights = {
                 "l3": best_params.get("l3", 1.0),
@@ -96,6 +110,7 @@ def train_country(
                 "attack": 1.0,
             }
             print(f"[INFO] Using default loss weights: {loss_weights}")
+    
     else:
         print(f"[INFO] Constructing MTEConfig from inital params.")
         cfg = MTEConfig(
@@ -127,24 +142,25 @@ def train_country(
     # Full OR split
     # ------------------------------------
     if full or tr == 100:
+        print("[INFO] Training on full dataset")
         scaler = RobustScaler()
         Xc_scald = scaler.fit_transform(Xc).astype(np.float32)
 
-        print("[INFO] Training on full dataset")
         model, history = train_multitask_model(
             Xc_scald, Xk, y3, y7, ya,
             None, None, None, None, None,
             cfg,
             loss_weights,
         )
+
         out_path = FULL_OUT_DIR
         out_path.mkdir(parents=True, exist_ok=True)
     else:
         print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test.")
         (Xc_tr, Xk_tr), (Xc_val, Xk_val), _ = timeseries_seq_split(
             Xc, Xk,
-            train_ratio=tr/100,
-            val_ratio=vr/100,
+            tr/100,
+            vr/100,
         )
         y3_tr, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
         y7_tr, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
@@ -160,6 +176,7 @@ def train_country(
             cfg,
             loss_weights,
         )
+        
         out_path = OUT_DIR
         out_path.mkdir(parents=True, exist_ok=True)
     
@@ -180,6 +197,7 @@ def train_country(
             "total_samples": len(X_cont),
         }
     )
+    
     scaler_path = out_path / f"{country}_scaler.pkl"
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
@@ -214,12 +232,18 @@ def train_country(
     print(f"[DONE] Trained model for {country}")
 
 
-def train_all(tr: int, vr: int, full: bool, latent: bool):
+def train_all(
+    tr: int, 
+    vr: int, 
+    full: bool, 
+    latent: bool
+) -> None:
     for c in COUNTRIES:
         try:
             train_country(c, tr, vr, full, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+
     print("\n[DONE] All multi-task trainings completed!")
     
 
@@ -264,7 +288,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.target.lower() == "all":
-        train_all(args.tr, args.vr, args.full, args.latent)
+        train_all(
+            args.tr, 
+            args.vr, 
+            args.full, 
+            args.latent
+        )
     else:
         train_country(
             args.target.upper(),

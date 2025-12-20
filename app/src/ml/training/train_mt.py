@@ -1,10 +1,11 @@
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Any
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
+
 from app.src.ml.models.mte import MTEConfig, TrafficAttackPredictor
 
 
@@ -21,7 +22,6 @@ def _make_supervised_dataloader(
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
-
     Xc = torch.from_numpy(X_cont.astype(np.float32))
     Xk = torch.from_numpy(X_cat.astype(np.int64))
     y3 = torch.from_numpy(y_l3.astype(np.float32))
@@ -51,7 +51,7 @@ def train_multitask_model(
     val_attack: Optional[np.ndarray],
     config: MTEConfig,
     loss_weights: dict[str, float],
-):
+) -> tuple[TrafficAttackPredictor, dict[str, Any]]:
     """
     Train multi-task traffic predictor on split dataset with early stopping.
     
@@ -67,8 +67,11 @@ def train_multitask_model(
     # DataLoaders
     # -------------------------
     train_loader = _make_supervised_dataloader(
-        train_cont, train_cat,
-        train_l3, train_l7, train_attack,
+        train_cont, 
+        train_cat,
+        train_l3, 
+        train_l7, 
+        train_attack,
         config.batch_size,
         shuffle=True,
     )
@@ -76,8 +79,11 @@ def train_multitask_model(
     val_loader = None
     if val_cont is not None:
         val_loader = _make_supervised_dataloader(
-            val_cont, val_cat,
-            val_l3, val_l7, val_attack,
+            val_cont, 
+            val_cat,
+            val_l3, 
+            val_l7, 
+            val_attack,
             config.batch_size,
             shuffle=False,
         )
@@ -170,7 +176,10 @@ def train_multitask_model(
             total_loss.backward()
 
             if config.gradient_clip:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), 
+                    config.gradient_clip
+                )
 
             optimizer.step()
 
@@ -256,8 +265,7 @@ def train_multitask_model(
         model.load_state_dict(best_state)
         print(f"Restored best model from epoch {history['best_epoch']}")
 
-    model.eval()
-    return model, history
+    return model.eval(), history
 
 
 #########################################
@@ -283,13 +291,14 @@ def save_multitask_model(
         "additional_info": additional_info or {},
     }
     torch.save(payload, path)
+
     print(f"[OK] Saved multi-task predictor to {path}")
 
 
 def load_multitask_model(
-        path: Path,
-        device: Optional[str] = "cpu"
-    ) -> tuple[TrafficAttackPredictor, MTEConfig, int, dict]:
+    path: Path,
+    device: Optional[str] = "cpu"
+) -> tuple[TrafficAttackPredictor, MTEConfig, int, dict]:
     """Load model + config from a .pt file."""
     payload = torch.load(path, map_location=device)
 
@@ -303,9 +312,8 @@ def load_multitask_model(
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
     model = model.to(target_device)
-    model.eval()
     
     print(f"[INFO] Loaded multi-task predictor from {path}")
     print(f"[INFO] Model moved to device: {target_device}")
     
-    return model, cfg, num_cont, cat_dims
+    return model.eval(), cfg, num_cont, cat_dims

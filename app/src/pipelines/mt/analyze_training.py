@@ -3,29 +3,44 @@
 Analyze multi-task training and validation performance for one or all countries:
 - loads training history
 - loads validation summary
-- generates plots 
+- generates plots and summary
 
 Outputs:
-    PATH: results/mt_ml/trained/<MODEL>
-    FILES : <COUNTRY>_loss_curve.png, <COUNTRY>_detailed_loss_curves.png, <COUNTRY>_lr_schedule.png
-    PATH: results/mt_ml/validated/<MODEL>
-    FILES : <COUNTRY>_l7_regression_scatter.png, <COUNTRY>_l3_regression_scatter.png,  <COUNTRY>_attack_confidence_hist.png, <COUNTRY>_attack_confusion_matrix.png, <COUNTRY>_mt_anomaly_timeseries.png, <COUNTRY>_summary.json
+    PATH: results/mt_ml/trained/<COUNTRY>
+    FILES : <COUNTRY>_loss_curve.png, 
+            <COUNTRY>_detailed_loss_curves.png, 
+            <COUNTRY>_lr_schedule.png
+    PATH: results/mt_ml/validated/<COUNTRY>
+    FILES : <COUNTRY>_l7_regression_scatter.png, 
+            <COUNTRY>_l3_regression_scatter.png,
+            <COUNTRY>_attack_confidence_hist.png, 
+            <COUNTRY>_attack_confusion_matrix.png, 
+            <COUNTRY>_mt_anomaly_timeseries.png, 
+            <COUNTRY>_summary.json
 
 Usage:
     python -m app.src.pipelines.mt.analyze_training [-s] <COUNTRY|all>
 """
+
 import json
 from pathlib import Path
 import pandas as pd
+
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.ml.analysis.analysis import plot_training_curves
 from app.src.ml.analysis.analysis_mt import (
-    plot_detailed_mt_loss_curves, summarize_mt_validation, plot_regression_scatter, plot_attack_confusion_matrix, plot_attack_confidence_hist, plot_mt_anomaly_timeseries
+    plot_detailed_mt_loss_curves, 
+    summarize_mt_validation, 
+    plot_regression_scatter, 
+    plot_attack_confusion_matrix, 
+    plot_attack_confidence_hist, 
+    plot_mt_anomaly_timeseries
 )
 
 #########################################
 ##                PARAMS               ##
 #########################################
+
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
 TRAINED_DIR = PROJECT_ROOT / "results" / "mt_ml" / "trained"
@@ -36,17 +51,24 @@ VALIDATED_DIR = PROJECT_ROOT / "results" / "mt_ml" / "validated"
 ##               LOAD DATA             ##
 #########################################
 
-def load_training_history(country: str, models_dir: Path) -> dict:
-    """Load training history for country and returns train_loss, val_loss, learning_rates, best_epoch."""
+def load_training_history(
+    country: str, 
+    models_dir: Path
+) -> dict:
+    """Load training history for country."""
     path = Path(models_dir) / f"{country}_training_history.json"
     if not path.exists():
         raise FileNotFoundError(f"[ERROR] Training history not found: {path}")
     with open(path, "r") as f:
-        return json.load(f)
+        data = json.load(f)
+    return data
 
 
-def load_validation_errors(country: str, validated_dir: Path) -> pd.DataFrame:
-    """Load validation CSV and returns ts, error."""
+def load_validation_errors(
+    country: str, 
+    validated_dir: Path
+) -> pd.DataFrame:
+    """Load validation CSV."""
     path = Path(validated_dir) / f"{country}_mt_validation.csv"
     if not path.exists():
         raise FileNotFoundError(f"[ERROR] Validation CSV not found: {path}")
@@ -57,8 +79,11 @@ def load_validation_errors(country: str, validated_dir: Path) -> pd.DataFrame:
 ##                 MAIN                ##
 #########################################
 
-def analyze_country(country: str, show_plots: bool):
-    """Runs full analysis pipeline of a country model."""
+def analyze_country(
+    country: str, 
+    show_plots: bool
+) -> None:
+    """Runs full analysis pipeline of a country MT model."""
     print(f"[INFO] Analyzing {country}...")
     out_train = TRAINED_DIR / "analysis" / country
     out_train.mkdir(parents=True, exist_ok=True)
@@ -83,12 +108,6 @@ def analyze_country(country: str, show_plots: bool):
             out_train,
             f"{country}_detailed_loss_curves.png",
             show_plots,
-        )
-        summarize_mt_validation(
-            country,
-            val_df,
-            out_val,
-            f"{country}_summary.json"
         )
         plot_regression_scatter(
             val_df["l3_true"],
@@ -129,13 +148,20 @@ def analyze_country(country: str, show_plots: bool):
             f"{country}_mt_anomaly_timeseries.png",
             show_plots
         )
+        summarize_mt_validation(
+            country,
+            val_df,
+            out_val,
+            f"{country}_summary.json"
+        )
     except Exception as e:
         print(f"[ERROR] Failed analyzing {country}: {e}")
 
     print(f"[OK] Analysis for {country} completed!")
 
-def analyze_all(show_plots: bool):
-    """Runs full analysis pipeline of all country models."""
+
+def analyze_all(show_plots: bool) -> None:
+    """Runs full analysis pipeline of all country MT models."""
     print(f"\n[INFO] Analysis of all MT models starting...")
 
     for c in COUNTRIES:
@@ -167,6 +193,11 @@ if __name__ == "__main__":
     target = args.target.lower()
 
     if target == "all":
-        analyze_all(show_plots=args.show)
+        analyze_all(
+            show_plots=args.show
+        )
     else:
-        analyze_country(target.upper(), show_plots=args.show)
+        analyze_country(
+            target.upper(), 
+            show_plots=args.show
+        )

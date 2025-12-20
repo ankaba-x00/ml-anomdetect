@@ -10,16 +10,6 @@ body {
   color: #333;
 }
 
-.container {
-  width: 600px;
-  margin: 75px auto;
-  background: white;
-  padding: 30px 40px;
-  border: 1px solid #b9b9b9;
-  border-radius: 12px;
-  box-shadow: 5px 5px 12px -6px rgba(0,0,0,0.76);
-}
-
 h2 {
   text-align: center;
   margin-bottom: 25px;
@@ -30,19 +20,6 @@ label {
   font-weight: bold;
   margin-top: 15px;
   display: block;
-}
-
-.model, .country, .date {
-  width: 100%;
-  padding: 10px 12px;
-  margin-top: 5px;
-  border: 1px solid #d0d4da;
-  border-radius: 8px;
-  font-size: 16px;
-}
-
-.date {
-  width: 35%;
 }
 
 button {
@@ -59,6 +36,29 @@ button {
 
 button:hover {
   background: #2c3f85;
+}
+
+.container {
+  width: 600px;
+  margin: 75px auto;
+  background: white;
+  padding: 30px 40px;
+  border: 1px solid #b9b9b9;
+  border-radius: 12px;
+  box-shadow: 5px 5px 12px -6px rgba(0,0,0,0.76);
+}
+
+.model, .country, .date {
+  width: 100%;
+  padding: 10px 12px;
+  margin-top: 5px;
+  border: 1px solid #d0d4da;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.date {
+  width: 35%;
 }
 
 .result-box {

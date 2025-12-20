@@ -1,9 +1,15 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+
 from app.src.data.feature_engineering import build_feature_matrix
-from app.src.exploration.core.time_utils import conv_iso_to_local, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
+from app.src.exploration.core.time_utils import (
+    conv_iso_to_local, 
+    conv_iso_to_local_with_daytype, 
+    conv_iso_to_local_with_daytimes
+)
 from app.src.exploration.core.params import timezones
+
 
 #########################################
 ##             HELPER BUILD            ##
@@ -35,9 +41,19 @@ def _conf_todf(data: dict, key: str, rename: str) -> pd.DataFrame:
             data={rename: values}, 
             index=ts
         ).astype("float64")
-                                          
-def _conv_weighted_todf(data: dict, key: str, rename: str, mids: dict) -> pd.Series:
-    """Converts raw data which are value distributions to internal pd.DataFrame format which are weighted averages per timestamp consistent with model train/val/tune/test nomenclature."""
+
+
+def _conv_weighted_todf(
+    data: dict, 
+    key: str, 
+    rename: str, 
+    mids: dict
+) -> pd.Series:
+    """
+    Converts raw data which are value distributions to internal pd.DataFrame 
+    format which are weighted averages per timestamp consistent with model 
+    train/val/tune/test nomenclature.
+    """
     ts = pd.to_datetime(data.get("timestamps", []), errors="coerce")
     cols = [c for c in mids.keys() if c in data[key]]
     if len(ts) == 0 or not cols:
@@ -55,8 +71,13 @@ def _conv_weighted_todf(data: dict, key: str, rename: str, mids: dict) -> pd.Ser
 
     return pd.Series(weighted, index=ts, name=rename, dtype="float64")
 
+
 def _conv_fract_todf(data: dict, key: str) -> pd.DataFrame:
-    """Converts raw data which are protocol bucket data to internal pd.DataFrame format which are fractional shares and Shannon entropy per timestamp consistent with model train/val/tune/test nomenclature."""
+    """
+    Converts raw data which are protocol bucket data to internal pd.DataFrame 
+    format which are fractional shares and Shannon entropy per timestamp 
+    consistent with model train/val/tune/test nomenclature.
+    """
     ts = pd.to_datetime(data["timestamps"], errors="coerce")
     df = pd.DataFrame({
         "udp":  np.array(data[key].get("UDP",  []),  dtype=float),
@@ -93,6 +114,7 @@ def _conv_fract_todf(data: dict, key: str) -> pd.DataFrame:
 def run_build(country: str, data: dict) -> pd.DataFrame:
     """Builds raw feature matrix as df for a given country."""
     print(f"[INFO] Building raw feature matrix for {country}...")
+    
     # ------------------------------------
     # 1. load all base series
     # ------------------------------------
@@ -113,7 +135,12 @@ def run_build(country: str, data: dict) -> pd.DataFrame:
         "_10_GBPS_TO_100_GBPS": 55000,
         "OVER_100_GBPS": 100000
     }
-    s_l3_bitrate = _conv_weighted_todf(data, "l3attack_origin_bitrate_time", "l3_bitrate_avg", bitrate_mids)
+    s_l3_bitrate = _conv_weighted_todf(
+        data, 
+        "l3attack_origin_bitrate_time", 
+        "l3_bitrate_avg", 
+        bitrate_mids
+    )
     dur_mids = {
         "UNDER_10_MINS": 5,
         "_10_MINS_TO_20_MINS": 15,
@@ -122,7 +149,12 @@ def run_build(country: str, data: dict) -> pd.DataFrame:
         "_1_HOUR_TO_3_HOURS": 120,
         "OVER_3_HOURS": 300
     }
-    s_l3_duration = _conv_weighted_todf(data, "l3attack_origin_duration_time", "l3_duration_avg", dur_mids)
+    s_l3_duration = _conv_weighted_todf(
+        data, 
+        "l3attack_origin_duration_time", 
+        "l3_duration_avg", 
+        dur_mids
+    )
     
     s_protocol = _conv_fract_todf(data, "l3attack_origin_protocol_time")
 
@@ -214,14 +246,17 @@ def run_build(country: str, data: dict) -> pd.DataFrame:
         df[f"{col}_roll3h"] = df[col].rolling(3).mean()
         df[f"{col}_roll24h"] = df[col].rolling(24).mean()
 
-    df = df.bfill()
-    return df
+    return df.bfill()
+
 
 #########################################
 ##               MAIN RUN              ##
 #########################################
 
-def build_features(country: str, newdata: dict) -> tuple[pd.DataFrame, pd.DataFrame, int, dict]:
+def build_features(
+    country: str, 
+    newdata: dict
+) -> tuple[pd.DataFrame, pd.DataFrame, int, dict]:
     """Fetches and processes raw data to return feature matrix objects ready for inference."""
    
     raw_df = run_build(country, newdata)

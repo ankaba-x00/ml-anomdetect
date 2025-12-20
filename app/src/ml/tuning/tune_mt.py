@@ -2,6 +2,7 @@ import json, torch, optuna
 from pathlib import Path
 import numpy as np
 from sklearn.preprocessing import RobustScaler
+
 from app.src.data.feature_engineering import load_supervised_feature_matrix
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.models.mte import MTEConfig
@@ -12,7 +13,7 @@ from app.src.ml.training.train_mt import train_multitask_model
 ##                 SETUP               ##
 #########################################
 
-def set_global_seeds(seed: int = 42):
+def set_global_seeds(seed: int = 42) -> None:
     """Ensures reproducibility."""
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -45,6 +46,9 @@ def objective(
     )
     Xc_np = Xc.values.astype(np.float64)
     Xk_np = Xk.values.astype(np.int64)
+    y3 = y_l3.values.astype(np.float32)
+    y7 = y_l7.values.astype(np.float32)
+    ya = y_attack.values.astype(np.int64)
 
     # -----------------------------
     # Split dataset
@@ -55,9 +59,9 @@ def objective(
         tr/100, 
         vr/100
     )
-    y3_tr, y3_val, _ = timeseries_seq_split(y_l3.values, None, tr/100, vr/100)
-    y7_tr, y7_val, _ = timeseries_seq_split(y_l7.values, None, tr/100, vr/100)
-    ya_tr, ya_val, _ = timeseries_seq_split(y_attack.values, None, tr/100, vr/100)
+    y3_tr, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
+    y7_tr, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
+    ya_tr, ya_val, _ = timeseries_seq_split(ya, None, tr/100, vr/100)
 
     # -----------------------------
     # Fit scaler on cont features and tranform data
@@ -144,6 +148,7 @@ def objective(
 
     best_epoch = int(np.argmin(history["val_loss"]))
     final_val_loss = float(history["val_loss"][best_epoch])
+    
     trial.set_user_attr(
         "loss_weights",
         {

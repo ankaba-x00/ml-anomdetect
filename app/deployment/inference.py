@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, Any, Union
 import json, pickle, torch
 import numpy as np
+
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
 from app.src.ml.training.evaluate import reconstruction_error, anomaly_mask, find_anomalies
@@ -23,6 +24,7 @@ MODELS_DIR = FILE_DIR / "models"
 def load_inference_bundle(ae_type: str, country: str) -> Dict[str, Any]:
     """Load inference bundle for prediction incl. model, scaler, cat_dims for order."""
     print(f"[INFO] Loading inference bundle for {country}...")
+
     model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
     scaler_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
     numcont_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_num_cont.json"
@@ -90,6 +92,7 @@ def run_inference(
     temperature: float = 1.0,
 ) -> dict[str, Any]:
     """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
+
     errors = reconstruction_error(
         model,
         X_cont,
@@ -99,6 +102,7 @@ def run_inference(
         cat_weight=cat_weight,
         temperature=temperature,
     )
+
     mask = anomaly_mask(errors, threshold)
     intervals = find_anomalies(
         mask,
@@ -107,6 +111,7 @@ def run_inference(
     )    
     starts = np.array([s for s, _ in intervals])
     ends   = np.array([e for _, e in intervals])
+    
     return {
         "errors": errors,
         "threshold": threshold,

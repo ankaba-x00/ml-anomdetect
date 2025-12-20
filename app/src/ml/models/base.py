@@ -57,7 +57,7 @@ class BaseTabularModel(nn.Module):
     # -------------------------------
     # Utilities
     # -------------------------------
-    def _make_activation(self, name: str):
+    def _make_activation(self, name: str) -> nn.Module:
         activations = {
             "relu": nn.ReLU(inplace=True),
             "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
@@ -70,7 +70,7 @@ class BaseTabularModel(nn.Module):
             raise ValueError(f"[ERROR] Unknown activation: {name}.")
         return activations[name]
     
-    def _init_weights(self):
+    def _init_weights(self) -> None:
             """Xavier init for Linear layers, Normal init for Embeddings."""
             for module in self.modules():
                 if isinstance(module, nn.Linear):
@@ -81,7 +81,7 @@ class BaseTabularModel(nn.Module):
                 elif isinstance(module, nn.Embedding):
                     nn.init.normal_(module.weight, mean=0.0, std=0.01)
 
-    def _init_decoder_output_layers(self):
+    def _init_decoder_output_layers(self) -> None:
         # continuous head
         nn.init.xavier_uniform_(self.cont_recon.weight, gain=0.01)
         nn.init.zeros_(self.cont_recon.bias)
@@ -110,14 +110,20 @@ class BaseTabularModel(nn.Module):
     # -------------------------------
     # Abstract methods
     # -------------------------------
-    def encode(self, x_cont: torch.Tensor, x_cat: torch.Tensor) -> torch.Tensor:
+    def encode(
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor
+    ) -> torch.Tensor:
         """Return latent variables for AE or (mu, logvar) for VAE."""
         raise NotImplementedError
 
-    def decode(self, z: torch.Tensor, temperature: float = 1.0):
-        """
-        Return continuous reconstruction (batch, num_cont) and categorical logits as {name: logits}.
-        """
+    def decode(
+        self, 
+        z: torch.Tensor, 
+        temperature: float = 1.0
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Return continuous reconstruction (batch, num_cont) and categorical logits as {name: logits}."""
         raise NotImplementedError
 
     # -------------------------------

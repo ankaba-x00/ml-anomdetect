@@ -1,9 +1,16 @@
-from typing import Union
+from typing import Callable, TypeVar, ParamSpec, Union
+import functools
 import pandas as pd
 import time
 
-def timeit(func):
-    def wrapper(*args, **kwargs):
+P = ParamSpec("P")
+R = TypeVar("R")
+TimeLike = Union[str, pd.Series, pd.Timestamp]
+
+
+def timeit(func: Callable[P, R]) -> Callable[P, R]:
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         end = time.perf_counter()
@@ -11,11 +18,11 @@ def timeit(func):
         return result
     return wrapper
 
-TimeLike = Union[str, pd.Series, pd.Timestamp]
 
 def conv_iso_to_utc(time: TimeLike) -> Union[pd.Timestamp, pd.Series]:
     """Converts ISO 8601 extended date-time format timestamp to UTC time format timestamp."""
     return pd.to_datetime(time, utc=True, errors="coerce")
+
 
 def conv_utc_to_iso(time: TimeLike) -> Union[str, pd.Series]:
     """Converts UTC time format timestamp to ISO 8601 extended date-time format timestamp."""
@@ -26,11 +33,12 @@ def conv_utc_to_iso(time: TimeLike) -> Union[str, pd.Series]:
     
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+
 def conv_iso_to_local(
-        time: TimeLike, 
-        country: str, 
-        tz: dict
-    ) -> Union[pd.Timestamp, pd.Series]:
+    time: TimeLike, 
+    country: str, 
+    tz: dict
+) -> Union[pd.Timestamp, pd.Series]:
     """Converts ISO 8601 extended date-time format timestamp into local timestamp."""
     utc_time = conv_iso_to_utc(time)
     zone = tz[country]["zone"]
@@ -40,11 +48,12 @@ def conv_iso_to_local(
     
     return utc_time.tz_convert(zone)
 
+
 def conv_local_to_iso(
-        time: TimeLike, 
-        country: str, 
-        tz: dict
-    ) -> Union[str, pd.Series]:
+    time: TimeLike, 
+    country: str, 
+    tz: dict
+) -> Union[str, pd.Series]:
     """Converts local timestamp to ISO 8601 extended date-time format timestamp."""
     local_tz = tz[country]["zone"]
     dt = pd.to_datetime(time, errors="coerce")
@@ -65,11 +74,12 @@ def conv_local_to_iso(
     utc_time = dt.tz_convert("UTC")
     return utc_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+
 def conv_iso_to_local_with_daytype(
-        time: TimeLike, 
-        country: str, 
-        tz: dict
-    ) -> Union[dict, pd.DataFrame]:
+    time: TimeLike, 
+    country: str, 
+    tz: dict
+) -> Union[dict, pd.DataFrame]:
     """
     Converts an ISO 8601 timestamp to the country's local time and returns weekday/weekend info.
         Returns:
@@ -96,11 +106,12 @@ def conv_iso_to_local_with_daytype(
     except Exception:
         return {"local_time": pd.NaT, "weekday": None, "daytype": None}
 
+
 def conv_iso_to_local_with_daytimes(
-        time: TimeLike, 
-        country: str, 
-        tz: dict  
-    ) -> Union[dict, pd.DataFrame]:
+    time: TimeLike, 
+    country: str, 
+    tz: dict  
+) -> Union[dict, pd.DataFrame]:
     """
     Converts an ISO 8601 timestamp to the country's local time and classifies into a daytime bucket.
         Returns:

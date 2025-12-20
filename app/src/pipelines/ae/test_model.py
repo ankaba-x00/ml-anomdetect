@@ -10,16 +10,21 @@ Test model to detect anomalies in new data:
 
 Outputs:
     PATH : results/ae_ml/tested/<MODEL>
-    FILES : <COUNTRY>_errors_<method>.csv, <COUNTRY>_threshold_<method>.json, <COUNTRY>_intervals_<method>.csv, <COUNTRY>_latent_space_pca_coords.csv, <COUNTRY>_latent_space.png
+    FILES : <COUNTRY>_errors_<method>.csv, 
+            <COUNTRY>_threshold_<method>.json, 
+            <COUNTRY>_intervals_<method>.csv, 
+            <COUNTRY>_latent_space_pca_coords.csv, 
+            <COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all> [| tee stdout_test.txt]
+    python -m app.src.pipelines.ae.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all>
 """
 
 import pickle, json, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
 from app.src.data.feature_engineering import load_feature_matrix, COUNTRIES
 from app.src.ml.training.train import load_autoencoder
 from app.src.ml.training.evaluate import apply_model
@@ -42,7 +47,15 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ##                 RUN                 ##
 #########################################
 
-def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int = 15, use_mc_elbo: bool = False, latent: bool = False):
+def test_country(
+    ae_type: str, 
+    country: str, 
+    method: str, 
+    tr: int = 75, 
+    vr: int = 15, 
+    use_mc_elbo: bool = False, 
+    latent: bool = False
+) -> None:
     print(f"\n==============================")
     print(f"  DETECT ANOMALIES ({country})")
     print(f"==============================")
@@ -90,8 +103,8 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
     (Xc_train, _), (Xc_val, _), (Xc_test, Xk_test) = timeseries_seq_split(
         X_cont, X_cat,
-        train_ratio=tr/100,
-        val_ratio=vr/100
+        tr/100,
+        vr/100
     )
 
     ts_eval = ts[len(Xc_train)+len(Xc_val):]
@@ -105,7 +118,9 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     # Load loss weights
     # --------------------
     payload = torch.load(model_path, map_location="cpu")
-    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 0.0})
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {
+        "cont_weight": 1.0, "cat_weight": 0.0
+    })
 
     cont_weight = loss_weights["cont_weight"]
     cat_weight = loss_weights["cat_weight"]
@@ -216,6 +231,8 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     # ------------------------------------
     if latent:
         print(f"[INFO] Preparing latent space visualization...")
+        out_path = out_path / "analysis" / country
+        out_path.mkdir(parents=True, exist_ok=True)
         plot_latent_space(
             country, 
             Xc_test_scald,
@@ -230,12 +247,28 @@ def test_country(ae_type: str, country: str, method: str, tr: int = 75, vr: int 
     print(f"[DONE] Tested model for {country}")
 
 
-def test_all(ae_type: str, method: str, tr: int, vr: int, use_mc_elbo: bool, latent: bool):
+def test_all(
+    ae_type: str, 
+    method: str, 
+    tr: int, 
+    vr: int, 
+    use_mc_elbo: bool, 
+    latent: bool
+) -> None:
     for c in COUNTRIES:
         try:
-            test_country(ae_type=ae_type, country=c, method=method, tr=tr, vr=vr, use_mc_elbo=use_mc_elbo, latent=latent)
+            test_country(
+                ae_type=ae_type, 
+                country=c, 
+                method=method, 
+                tr=tr, 
+                vr=vr, 
+                use_mc_elbo=use_mc_elbo, 
+                latent=latent
+            )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
+
     print(f"\n[DONE] All model testings completed!")
 
 

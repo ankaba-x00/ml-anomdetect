@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
+
 from app.src.ml.models.ae import AEConfig, TabularAE
 from app.src.ml.models.vae import VAEConfig, TabularVAE
 
@@ -35,6 +36,7 @@ def _make_dataloader(
         shuffle=shuffle,
         pin_memory=True if torch.cuda.is_available() else False
     )
+
 
 def train_autoencoder(
     train_cont: np.ndarray,
@@ -227,7 +229,7 @@ def train_autoencoder(
                 epoch=epoch,
                 total_epochs=config.num_epochs,
                 beta_max=config.beta,
-                schedule="linear"   # or "cyclic"
+                schedule="linear" # or "cyclic"
             )
 
         for batch_Xc, batch_Xk in train_loader:
@@ -250,7 +252,7 @@ def train_autoencoder(
                         cat_recons[name],
                         batch_Xk[:, i].long()
                     )
-                cat_loss = cat_loss / len(cat_names)  # Average over categorical features
+                cat_loss = cat_loss / len(cat_names) # Average over categorical features
 
                 # Weighted total loss
                 total_loss = (
@@ -274,7 +276,10 @@ def train_autoencoder(
 
             # Gradient clipping
             if config.gradient_clip and config.gradient_clip > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), 
+                    config.gradient_clip
+                )
             
             optimizer.step()
 
@@ -314,7 +319,11 @@ def train_autoencoder(
 
                     if isinstance(config, AEConfig):
                         # Forward pass
-                        cont_recon, cat_recons = model(batch_Xc, batch_Xk, temperature=config.temperature)
+                        cont_recon, cat_recons = model(
+                            batch_Xc, 
+                            batch_Xk, 
+                            temperature=config.temperature
+                        )
                         
                         # Continuous loss
                         cont_loss = ((cont_recon - batch_Xc) ** 2).mean()
@@ -432,8 +441,7 @@ def train_autoencoder(
         model.load_state_dict(best_state)
         print(f"Restored best model from epoch {history['best_epoch']}")
     
-    model.eval()
-    return model, history
+    return model.eval(), history
 
 
 #########################################
@@ -460,13 +468,14 @@ def save_autoencoder(
         "additional_info": additional_info or {},
     }
     torch.save(payload, path)
+
     print(f"[OK] Saved autoencoder to {path}")
 
 
 def load_autoencoder(
-        path: Path,
-        device: Optional[str] = "cpu"
-    ) -> Union[tuple[TabularAE, AEConfig], tuple[TabularVAE, VAEConfig]]:
+    path: Path,
+    device: Optional[str] = "cpu"
+) -> Union[tuple[TabularAE, AEConfig], tuple[TabularVAE, VAEConfig]]:
     """Load model + config from a .pt file."""
     payload = torch.load(path, map_location=device)
 
@@ -506,9 +515,8 @@ def load_autoencoder(
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)
     model = model.to(target_device)
-    model.eval()
     
     print(f"[INFO] Loaded autoencoder from {path}")
     print(f"[INFO] Model moved to device: {target_device}")
     
-    return model, cfg
+    return model.eval(), cfg

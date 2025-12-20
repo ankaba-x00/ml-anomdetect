@@ -8,6 +8,7 @@ from sklearn.metrics import (
     calinski_harabasz_score,
     davies_bouldin_score
 )
+
 from .time_utils import (
     conv_iso_to_utc, conv_iso_to_local_with_daytype, conv_iso_to_local_with_daytimes
 )
@@ -31,6 +32,7 @@ def add_local_daytypes(df: pd.DataFrame, tzmap: dict) -> pd.DataFrame:
 
     return df
 
+
 def add_local_daytimes(df: pd.DataFrame, tzmap: dict) -> pd.DataFrame:
     """Adds local time, local hour, and daytime classification per country's timezone."""
     df = df.copy()
@@ -46,6 +48,7 @@ def add_local_daytimes(df: pd.DataFrame, tzmap: dict) -> pd.DataFrame:
     df["daytime"] = converted.apply(lambda val: val["daytime"])
 
     return df
+
 
 def add_fluctuation_metrics(
     df: pd.DataFrame,
@@ -99,13 +102,15 @@ def normalize_per_date(df: pd.DataFrame) -> pd.DataFrame:
 
     return norm
 
+
 def aggregate_directional(df: pd.DataFrame) -> pd.Series:
     return df.groupby("countries")["values"].sum()
 
+
 def preprocess_matrix(
-        df: pd.DataFrame, 
-        min_activity: float = 1e-6
-    ) -> tuple[list[str], np.ndarray]:
+    df: pd.DataFrame, 
+    min_activity: float = 1e-6
+) -> tuple[list[str], np.ndarray]:
     """
     Standardizes the input country × date matrix.
     Removes countries with extremely low activity.
@@ -118,6 +123,7 @@ def preprocess_matrix(
     X = scaler.fit_transform(mat2.values)
 
     return mat2.index.tolist(), X
+
 
 def evaluate_kmeans_over_k(
     X: Union[np.ndarray, pd.DataFrame], 
@@ -158,6 +164,7 @@ def evaluate_kmeans_over_k(
         )
 
     return pd.DataFrame(results)
+
 
 def fit_final_kmeans(X: Union[np.ndarray, pd.DataFrame], k: int) -> np.ndarray:
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")

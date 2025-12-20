@@ -18,9 +18,29 @@ Usage:
 
 from typing import Optional
 import pandas as pd
+
 from app.src.data import conv_pkltodf
 from .core import (
-    timezones, add_local_daytypes, add_local_daytimes, add_fluctuation_metrics, normalize_per_date, aggregate_directional, preprocess_matrix, evaluate_kmeans_over_k, fit_final_kmeans, boxplot_valdist, boxplot_valdist_daytypes, boxplot_valdist_daytimes, heatmap_activity_fluctuations, heatmap_anomalies, heatmap_log10_attack_profile, barplot_activity_fluctuations, barplot_top_attackers, lineplot_clustering_eval_curves, pca_clusterplot, radarchart_attack_fingerprint
+    timezones, 
+    add_local_daytypes, 
+    add_local_daytimes, 
+    add_fluctuation_metrics, 
+    normalize_per_date, 
+    aggregate_directional, 
+    preprocess_matrix, 
+    evaluate_kmeans_over_k, 
+    fit_final_kmeans, 
+    boxplot_valdist, 
+    boxplot_valdist_daytypes, 
+    boxplot_valdist_daytimes, 
+    heatmap_activity_fluctuations, 
+    heatmap_anomalies, 
+    heatmap_log10_attack_profile, 
+    barplot_activity_fluctuations, 
+    barplot_top_attackers, 
+    lineplot_clustering_eval_curves, 
+    pca_clusterplot, 
+    radarchart_attack_fingerprint
 )
 
 
@@ -28,7 +48,7 @@ from .core import (
 ##        VALUE DISTRIBUTIONS          ##
 #########################################
 
-def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool):
+def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
     if typ == "traffic":
         name = "NetFlow traffic"
         shortname = "traffic"
@@ -78,7 +98,13 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool):
         title=f"{name} volume distribution by country: daytimes",
         xlabel="Most active countries (acc. to median)",
         ylabel=f"Relative {shortname} per hour to busiest hour of day",
-        palette={"Deep night": colpal2[0], "Morning": colpal2[1], "Business hours": colpal2[2], "Evening": colpal2[3], "Early night": colpal2[4]},
+        palette={
+            "Deep night": colpal2[0], 
+            "Morning": colpal2[1], 
+            "Business hours": colpal2[2], 
+            "Evening": colpal2[3], 
+            "Early night": colpal2[4]
+        },
         folder=out_folder,
         fname=f"{typ}_dist_daytimes.png",
         show=show
@@ -89,7 +115,7 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool):
 ##        ACTIVITY FLUCTUATIONS        ##
 #########################################
 
-def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool):
+def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
     if typ == "traffic":
         name = "traffic"
         color = "#5EA7E3"
@@ -105,7 +131,11 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool):
         if category == "daytype":
             df = conv_pkltodf(f"{typ}", in_folder)
             mod_df = add_local_daytypes(df, timezones)
-            mod_df_medians = add_fluctuation_metrics(mod_df, group_col="countries", type_col="daytype")
+            mod_df_medians = add_fluctuation_metrics(
+                mod_df, 
+                group_col="countries", 
+                type_col="daytype"
+            )
             values = mod_df_medians.loc[:, "Weekday":"Weekend"]
         else:
             df = conv_pkltodf(f"{typ}_time", in_folder)
@@ -149,7 +179,7 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool):
 ##              ANOMALIES              ##
 #########################################
 
-def gen_anomheatmap(in_folder: str, out_folder: str, show: bool = False):
+def gen_anomheatmap(in_folder: str, out_folder: str, show: bool = False) -> None:
     df = conv_pkltodf("anomalies", in_folder)
     heatmap_anomalies(
         df,
@@ -166,14 +196,18 @@ def gen_anomheatmap(in_folder: str, out_folder: str, show: bool = False):
 ##           ATTACK PROFILES           ##
 #########################################
 
-def _load_data_worldwide(file: str, folder: str, col: str = "worldwide") -> pd.DataFrame:
+def _load_data_worldwide(
+    file: str,
+    folder: str, 
+    col: str = "worldwide"
+) -> pd.DataFrame:
     df = conv_pkltodf(file, folder)
     df = df[df["regions"] == col].copy()
     df["values"] = df["values"].astype(float)
     df["dates"] = pd.to_datetime(df["dates"])
     return df
 
-def _ask_for_k():
+def _ask_for_k() -> int:
     while True:
         user_in = input(">>> How many clusters do you choose? [int 2–15] ")
         try:
@@ -186,16 +220,16 @@ def _ask_for_k():
             print("[ERROR] Invalid input — please enter an integer.")
 
 def _run_kmeans_analysis(
-        df: pd.DataFrame, 
-        folder: str,
-        name: str,
-        col: str,
-        k_min: int = 2, 
-        k_max: int = 15, 
-        final_k: Optional[int] = None,
-        interactive: bool = False,
-        show: bool = False
-    ) -> int:
+    df: pd.DataFrame, 
+    folder: str,
+    name: str,
+    col: str,
+    k_min: int = 2, 
+    k_max: int = 15, 
+    final_k: Optional[int] = None,
+    interactive: bool = False,
+    show: bool = False
+) -> int:
     countries, X = preprocess_matrix(df)
     eval_df = evaluate_kmeans_over_k(X, k_min=k_min, k_max=k_max)
     lineplot_clustering_eval_curves(
@@ -233,11 +267,11 @@ def _run_kmeans_analysis(
     return final_k
 
 def gen_attackprofile(
-        in_folder: str, 
-        out_folder: str, 
-        interactive: str = False,
-        show: bool = False
-    ):
+    in_folder: str, 
+    out_folder: str, 
+    interactive: str = False,
+    show: bool = False
+) -> None:
     for key in ["l3_origin", "l7_origin"]:
         if key == "l3_origin":
             col = "#01205f"
@@ -257,7 +291,14 @@ def gen_attackprofile(
         )
         df_norm = normalize_per_date(df)
         
-        final_k = _run_kmeans_analysis(df_norm, out_folder, key, col, interactive=interactive, show=show)
+        _run_kmeans_analysis(
+            df_norm, 
+            out_folder, 
+            key, 
+            col, 
+            interactive=interactive, 
+            show=show
+        )
 
         heatmap_log10_attack_profile(
             df_norm, 
@@ -269,8 +310,12 @@ def gen_attackprofile(
        
     for c in ["US", "DE", "CN", "BR", "IN"]:
         for dir in ["origin", "target"]:
-            l3 = aggregate_directional(_load_data_worldwide(f"l3_{dir}", in_folder, col=c))
-            l7 = aggregate_directional(_load_data_worldwide(f"l7_{dir}", in_folder, col=c))
+            l3 = aggregate_directional(
+                _load_data_worldwide(f"l3_{dir}", in_folder, col=c)
+            )
+            l7 = aggregate_directional(
+                _load_data_worldwide(f"l7_{dir}", in_folder, col=c)
+            )
             radarchart_attack_fingerprint(
                 l3,
                 l7,
@@ -288,7 +333,11 @@ def gen_attackprofile(
 ##                 RUN                 ##
 #########################################
 
-def run_exploration(in_folder: str, out_folder: str , show: bool = False):
+def run_exploration(
+    in_folder: str, 
+    out_folder: str, 
+    show: bool = False
+) -> None:
     for typ in ["traffic", "httpreq"]:
         gen_valdist(typ, in_folder, out_folder, show)
         gen_actfluct(typ, in_folder, out_folder, show)

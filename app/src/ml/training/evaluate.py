@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from typing import Any, Optional, Union
+
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
 
@@ -21,20 +22,36 @@ def reconstruction_error(
     beta: float = 1.0,
 ) -> np.ndarray:
     """Per-sample reconstruction error normalized by features."""
+
     if device is None:
         device = next(model.parameters()).device
     else:
         device = torch.device(device)
 
     model.eval()
+
     Xc = torch.from_numpy(X_cont.astype(np.float32)).to(device)
     Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
 
     with torch.no_grad():
         if use_mc_elbo and isinstance(model, TabularVAE):
-            errors = model.mc_elbo_score(Xc, Xk, cont_weight, cat_weight, temperature, n_samples=20, beta=beta)
+            errors = model.mc_elbo_score(
+                Xc, 
+                Xk, 
+                cont_weight, 
+                cat_weight, 
+                temperature, 
+                n_samples=20, 
+                beta=beta
+            )
         else:
-            errors = model.anomaly_score(Xc, Xk, cont_weight, cat_weight, temperature)
+            errors = model.anomaly_score(
+                Xc, 
+                Xk, 
+                cont_weight, 
+                cat_weight, 
+                temperature
+            )
 
     return errors.cpu().numpy()
 
@@ -43,12 +60,20 @@ def reconstruction_error(
 ##          THRESHOLD METHODS          ##
 #########################################
 
-def threshold_percentile(errors: np.ndarray, p: float = 99.0) -> float:
+def threshold_percentile(
+    errors: np.ndarray, 
+    p: float = 99.0
+) -> float:
     """Computes p-th percentile threshold."""
     return float(np.percentile(errors, p))
 
 
-def threshold_mad(errors: np.ndarray, k: float = 6.0, min_p: float = 99.5, max_p: float = 99.9) -> float:
+def threshold_mad(
+    errors: np.ndarray, 
+    k: float = 6.0, 
+    min_p: float = 99.5, 
+    max_p: float = 99.9
+) -> float:
     """
     Computes normalized median absolute deviation threshold with enforced minimum threshold based on percentile. 
     Scaling factor 
@@ -63,6 +88,7 @@ def threshold_mad(errors: np.ndarray, k: float = 6.0, min_p: float = 99.5, max_p
     low = np.percentile(errors, min_p)
     high = np.percentile(errors, max_p)
     thr = np.clip(thr, low, high)
+
     return float(thr)
 
 
@@ -70,17 +96,22 @@ def threshold_mad(errors: np.ndarray, k: float = 6.0, min_p: float = 99.5, max_p
 ##          ANOMALY DETECTION          ##
 #########################################
 
-def anomaly_mask(errors: np.ndarray, threshold: float) -> np.ndarray:
+def anomaly_mask(
+    errors: np.ndarray, 
+    threshold: float
+) -> np.ndarray:
     """Creates boolean mask."""
     return errors > threshold
 
 
-def find_anomalies(mask: np.ndarray, 
+def find_anomalies(
+    mask: np.ndarray, 
     min_length: int = 1,
     merge_gap: int = 0,
 ) -> list[tuple[int, int]]:
     """
-    Converts bool mask [F,F,T,T,T,F,F,T] into list of anomalous sample intervals [(start, end), ...]; end is exclusive. 
+    Converts bool mask [F,F,T,T,T,F,F,T] into list of anomalous sample intervals 
+    [(start, end), ...]; end is exclusive. 
     min_length : min anomaly sample length to be considered
     merge_gap : sample interval gap to merge 2 adjacent anomalies into one
     """
@@ -146,8 +177,9 @@ def apply_model(
     beta: float = 1.0,
     min_length: int = 1,
     merge_gap: int = 0,
-) -> dict[str, Any]:
-    """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
+) -> dict[str, np.ndarray]:
+    """Compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
+
     errors = reconstruction_error(
         model,
         X_cont,
@@ -159,6 +191,7 @@ def apply_model(
         temperature,
         beta
     )
+    
     if method == "p99":
         threshold = threshold_percentile(errors, p=99)
     elif method == "p995":
@@ -167,6 +200,7 @@ def apply_model(
         threshold = threshold_mad(errors)
     else:
         raise ValueError(f"[Error] Unknown threshold method: {method}")
+    
     mask = anomaly_mask(errors, threshold)
     intervals = find_anomalies(
         mask,
@@ -175,6 +209,7 @@ def apply_model(
     )    
     starts = np.array([s for s, _ in intervals])
     ends   = np.array([e for _, e in intervals])
+    
     return {
         "errors": errors,
         "threshold": threshold,

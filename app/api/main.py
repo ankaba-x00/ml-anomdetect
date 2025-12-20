@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from app.api.events import routes
 from app.api.metadata import (
     API_TITLE, API_VERSION, API_DESCRIPTION,

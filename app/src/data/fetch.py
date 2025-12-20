@@ -43,7 +43,27 @@ DATE_TO   = datetime(2025, 11, 14, tzinfo=timezone.utc)
 #########################################
 
 ISO_3166_alpha2 = [
-    "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ", "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS", "BT", "BV", "BW", "BY", "BZ", "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN", "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE", "EG", "EH", "ER", "ES", "ET", "FI", "FJ", "FK", "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF", "GG", "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY", "HK", "HM", "HN", "HR", "HT", "HU", "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT", "JE", "JM", "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR", "KW", "KY", "KZ", "LA", "LB", "LC", "LI", "LK", "LR", "LS", "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK", "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", "MX", "MY", "MZ", "NA", "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ", "OM", "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", "PN", "PR", "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW", "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY", "SZ", "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO", "TR", "TT", "TV", "TW", "TZ", "UA", "UG", "UM", "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI", "VN", "VU", "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW"] # added Kosovo = XK for CF
+    "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", 
+    "AU", "AW", "AX", "AZ", "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", 
+    "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS", "BT", "BV", "BW", "BY", 
+    "BZ", "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN", 
+    "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", 
+    "DO", "DZ", "EC", "EE", "EG", "EH", "ER", "ES", "ET", "FI", "FJ", "FK", 
+    "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF", "GG", "GH", "GI", "GL", 
+    "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY", "HK", "HM", 
+    "HN", "HR", "HT", "HU", "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", 
+    "IS", "IT", "JE", "JM", "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", 
+    "KP", "KR", "KW", "KY", "KZ", "LA", "LB", "LC", "LI", "LK", "LR", "LS", 
+    "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK", 
+    "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", 
+    "MX", "MY", "MZ", "NA", "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", 
+    "NR", "NU", "NZ", "OM", "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", 
+    "PN", "PR", "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW", 
+    "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", 
+    "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY", "SZ", "TC", "TD", "TF", 
+    "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO", "TR", "TT", "TV", "TW", 
+    "TZ", "UA", "UG", "UM", "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI", 
+    "VN", "VU", "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW"] # added Kosovo = XK for CF
 
 
 #########################################
@@ -57,14 +77,16 @@ def _get_output_path(title: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir / f"{title}_pull-{pull_date}.json"
 
-def _headers():
+
+def _headers() -> dict[str, str]:
     global API_TOKEN
     return {
         "Authorization": f"Bearer {API_TOKEN}",
         "accept": "application/json",
     }
 
-def _requests_session():
+
+def _requests_session() -> requests.Session:
     session = requests.Session()
     retries = Retry(
         total=5,
@@ -75,7 +97,8 @@ def _requests_session():
     session.mount("https://", HTTPAdapter(max_retries=retries))
     return session
 
-def _print_range():
+
+def _print_range() -> None:
     print(f"[INFO] Data will be fetched \n\t FROM incl. {DATE_FROM.strftime('%m/%d/%Y')} \n\t TO incl. {DATE_TO.strftime('%m/%d/%Y')}\n")
 
 
@@ -83,7 +106,7 @@ def _print_range():
 ##               FETCHER               ##
 #########################################
 
-def pull_notime_data(TITLE, URL, BASE_PARAMS):
+def pull_notime_data(TITLE, URL, BASE_PARAMS) -> None:
     """
     Fetches dataseries with no specific location from Cloudflare API in 1-day buckets (ergo worldwide and no timeseries).
     ASSUMES:
@@ -140,7 +163,7 @@ def pull_notime_data(TITLE, URL, BASE_PARAMS):
     print(f"[DONE] Saved {len(results)} days to {output_path}")
 
 
-def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2):
+def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2) -> None:
     """
     Fetches dataseries for worldwide and per country from Cloudflare API in 1-day buckets (no timeseries).
     ASSUMES:
@@ -217,7 +240,7 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
     print(f"[DONE] Saved worldwide + {len(COUNTRIES)} countries to {output_path}")
 
 
-def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2):
+def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2) -> None:
     """
     Fetches timeseries data for worldwide and per country from Cloudflare API in 1-hour buckets.
     ASSUMES:
@@ -433,6 +456,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    
     start, end = args.start, args.end 
     try:
         start_dt = datetime.strptime(start, "%m/%d/%Y").replace(tzinfo=timezone.utc)
