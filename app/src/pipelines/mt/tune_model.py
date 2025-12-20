@@ -207,8 +207,6 @@ def tune_country(
         
     print(f"[DONE] Saved best model to {out_model_path}")
 
-    return study
-
 def tune_all(trials: int, pruner: str, tr: int, vr: int, latent: bool):
     for c in COUNTRIES:
         try:
