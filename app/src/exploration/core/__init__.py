@@ -1,4 +1,4 @@
-# src/exploration/core/__init__.py
+# app/src/exploration/core/__init__.py
 """
 core data exploration 
 =====================

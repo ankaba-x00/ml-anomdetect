@@ -1,4 +1,4 @@
-# src/data/__init__.py
+# app/src/data/__init__.py
 """
 data preprocessing package
 ==========================

@@ -1,4 +1,4 @@
-# src/exploration/__init__.py
+# app/src/exploration/__init__.py
 """
 data exploration package
 ========================
