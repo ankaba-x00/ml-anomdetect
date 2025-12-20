@@ -109,7 +109,7 @@ def plot_latent(
     if not scaler_path.exists():
         raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
 
-    model, cfg = load_autoencoder(model_path)
+    model, cfg, _, _ = load_autoencoder(model_path)
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)

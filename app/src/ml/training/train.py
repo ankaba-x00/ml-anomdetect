@@ -451,19 +451,19 @@ def train_autoencoder(
 def save_autoencoder(
     model: Union[TabularAE, TabularVAE],
     config: Union[AEConfig, VAEConfig],
+    cat_dims: dict,
+    num_cont: int,
     path: Path,
     additional_info: Optional[dict] = None
 ) -> None:
     """Save model weights + config to a single .pt file."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    cat_dims_from_model = model.cat_dims
-
     payload = {
         "state_dict": model.state_dict(),
         "config": asdict(config),
-        "cat_dims": cat_dims_from_model,
-        "num_cont": model.num_cont,
+        "cat_dims": cat_dims,
+        "num_cont": num_cont,
         "model_class": model.__class__.__name__,
         "additional_info": additional_info or {},
     }
@@ -475,7 +475,10 @@ def save_autoencoder(
 def load_autoencoder(
     path: Path,
     device: Optional[str] = "cpu"
-) -> Union[tuple[TabularAE, AEConfig], tuple[TabularVAE, VAEConfig]]:
+) -> Union[
+    tuple[TabularAE, AEConfig, int, dict], 
+    tuple[TabularVAE, VAEConfig, int, dict]
+]:
     """Load model + config from a .pt file."""
     payload = torch.load(path, map_location=device)
 
@@ -519,4 +522,4 @@ def load_autoencoder(
     print(f"[INFO] Loaded autoencoder from {path}")
     print(f"[INFO] Model moved to device: {target_device}")
     
-    return model.eval(), cfg
+    return model.eval(), cfg, num_cont, cat_dims

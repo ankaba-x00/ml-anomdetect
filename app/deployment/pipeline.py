@@ -24,9 +24,10 @@ def detect_anomalies(
         bundle = load_inference_bundle(ae_type, country)
 
         newdata = run_fetch(country, date_from, date_to)
-        X_cont_df, X_cat_df, _, cat_dims2, = build_features(country, newdata)
+        X_cont_df, X_cat_df, num_cont, cat_dims, = build_features(country, newdata)
         
-        assert cat_dims2.keys() == bundle["cat_dims"].keys(), "[Error] Saved cat_dims fatal mismatch — rebuild features."
+        assert bundle["model_num_cont"] == num_cont, "[Error] Saved num_conts fatal mismatch — rebuild features."
+        assert bundle["model_cat_dims"].keys() == cat_dims.keys(), "[Error] Saved cat_dims fatal mismatch — rebuild features."
 
         X_cont = X_cont_df.values.astype(np.float64)
         X_cat = X_cat_df.values.astype(np.int64)

@@ -12,8 +12,6 @@ Outputs:
     PATH with -F: app/deployment/models/<MODEL
     FILES: <COUNTRY>_autoencoder.pt, 
            <COUNTRY>_scaler_cont.pkl, 
-           <COUNTRY>_cat_dims.json, 
-           <COUNTRY>_num_cont.json, 
            <COUNTRY>_training_history.json, 
            <COUNTRY>_latent_space_pca_coords.csv, 
            <COUNTRY>_latent_space.png
@@ -202,7 +200,9 @@ def train_country(
     model_path = out_path / f"{country}_autoencoder.pt"
     save_autoencoder(
         model=model, 
-        config=cfg, 
+        config=cfg,
+        cat_dims=cat_dims,
+        num_cont=num_cont,
         path=model_path,
         additional_info={
             "country": country,
@@ -218,16 +218,6 @@ def train_country(
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
     print(f"[OK] Saved continuous scaler to {scaler_path}")
-    
-    cat_path = out_path / f"{country}_cat_dims.json"
-    with open(cat_path, "w") as f:
-        json.dump(cat_dims, f, indent=2)
-    print(f"[OK] Saved categorical vocab sizes to {cat_path}")
-
-    num_path = out_path / f"{country}_num_cont.json"
-    with open(num_path, "w") as f:
-        json.dump({"num_cont": num_cont}, f, indent=2)
-    print(f"[OK] Saved num_cont to {num_path}")
 
     history_path = out_path / f"{country}_training_history.json"
     with open(history_path, "w") as f:

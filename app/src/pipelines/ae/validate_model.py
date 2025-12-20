@@ -61,40 +61,28 @@ def validate_country(
 
     model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
     scaler_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
-    num_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_num_cont.json"
-    cat_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_cat_dims.json"
 
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
     if not scaler_path.exists():
         raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
-    if not num_path.exists():
-        raise FileNotFoundError(f"[ERROR] Num_cont not found: {num_path}")
-    if not cat_path.exists():
-        raise FileNotFoundError(f"[ERROR] Cat_dims not found: {cat_path}")
     
     # --------------------
-    # Load model + config, scaler, num_cont
+    # Load model + config, scaler
     # --------------------
-    model, cfg = load_autoencoder(model_path)
+    model, cfg, model_num_cont, model_cat_dims = load_autoencoder(model_path)
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
 
-    with open(num_path, "r") as f:
-        num_cont = json.load(f)["num_cont"]
-    
-    with open(cat_path, "r") as f:
-        cat_dims = json.load(f)
-
     # --------------------
     # Load feature matrix
     # --------------------
-    X_cont_df, X_cat_df, num_cont_check, cat_dims_check = load_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont, cat_dims = load_feature_matrix(country)
 
     # Consistency check
-    assert num_cont == num_cont_check, "[ERROR] num_cont mismatch between scaler and feature matrix"
-    assert cat_dims == cat_dims_check, "[ERROR] cant_dims mismatch between scaler and feature matrix"
+    assert model_num_cont == num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
+    assert model_cat_dims == cat_dims, "[ERROR] cant_dims mismatch between scaler and feature matrix"
 
     Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)

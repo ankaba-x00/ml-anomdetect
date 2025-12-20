@@ -27,7 +27,6 @@ Outputs:
            <COUNTRY>_best_config.json, 
            <COUNTRY>_best_history.json, 
            <COUNTRY>_scaler.pkl, 
-           <COUNTRY>_cat_dims.json, 
            <COUNTRY>_latent_space_pca_coords.csv, 
            <COUNTRY>_latent_space.png
 
@@ -191,6 +190,8 @@ def tune_country(
     save_autoencoder(
         model=best_model, 
         config=best_cfg, 
+        cat_dims=cat_dims,
+        num_cont=num_cont,
         path=out_model_path,
         additional_info={
             "country": country,
@@ -214,9 +215,6 @@ def tune_country(
 
     with open(out_path / f"{country}_scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
-
-    with open(out_path / f"{country}_cat_dims.json", "w") as f:
-        json.dump(cat_dims, f, indent=2)
 
     print(f"\n[OK] Finished tuning for {country}")
 

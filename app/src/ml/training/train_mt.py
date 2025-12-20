@@ -302,11 +302,10 @@ def load_multitask_model(
     """Load model + config from a .pt file."""
     payload = torch.load(path, map_location=device)
 
-    cfg = MTEConfig(**payload["config"])
-    
     num_cont = payload["num_cont"]
     cat_dims = payload["cat_dims"]
-    
+
+    cfg = MTEConfig(**payload["config"])
     model = TrafficAttackPredictor(cfg)
 
     model.load_state_dict(payload["state_dict"])

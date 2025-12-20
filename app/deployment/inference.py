@@ -27,34 +27,22 @@ def load_inference_bundle(ae_type: str, country: str) -> dict[str, Any]:
 
     model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
     scaler_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
-    numcont_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_num_cont.json"
-    catdims_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_cat_dims.json"
     threshold_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_cal_threshold.json"
 
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
     if not scaler_path.exists():
         raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
-    if not numcont_path.exists():
-        raise FileNotFoundError(f"[ERROR] Num_cont not found: {numcont_path}")
-    if not catdims_path.exists():
-        raise FileNotFoundError(f"[ERROR] Cat_dims not found: {catdims_path}")
     if not threshold_path.exists():
         raise FileNotFoundError(f"[ERROR] Threshold not found: {threshold_path}")
 
-    model, cfg = load_autoencoder(model_path)
+    model, cfg, model_num_cont, model_cat_dims = load_autoencoder(model_path)
     
     payload = torch.load(model_path, map_location="cpu")
     loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 1.0})
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
-
-    with open(numcont_path, "r") as f:
-        num_cont = json.load(f)["num_cont"]
-
-    with open(catdims_path, "r") as f:
-        cat_dims = json.load(f)
 
     with open(threshold_path, "r") as f:
         calibration_obj = json.load(f)
@@ -67,8 +55,8 @@ def load_inference_bundle(ae_type: str, country: str) -> dict[str, Any]:
         "config": cfg,
         "loss_weights": loss_weights,
         "scaler": scaler,
-        "num_cont": num_cont,
-        "cat_dims": cat_dims,
+        "model_num_cont": model_num_cont,
+        "model_cat_dims": model_cat_dims,
         "threshold": float(threshold),
         "method": method,
         "temperature": temperature,

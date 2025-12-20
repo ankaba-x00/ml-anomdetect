@@ -64,34 +64,29 @@ def test_country(
     out_path.mkdir(parents=True, exist_ok=True)
 
     # --------------------
-    # Load model + config, scaler, cat_dims
+    # Load model + config, scaler
     # --------------------
     model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_model.pt"
     scaler_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_scaler.pkl"
-    catdims_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_cat_dims.json"
 
     if not model_path.exists():
         raise FileNotFoundError(f"[Error] Model not found: {model_path}")
     if not scaler_path.exists():
         raise FileNotFoundError(f"[Error] Scaler not found: {scaler_path}")
-    if not catdims_path.exists():
-        raise FileNotFoundError(f"[Error] Cat_dims not found: {catdims_path}")
 
-    model, cfg = load_autoencoder(model_path)
+    model, cfg, model_num_cont, model_cat_dims = load_autoencoder(model_path)
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
 
-    with open(catdims_path, "r") as f:
-        cat_dims = json.load(f)
-
     # --------------------
     # Load feature matrix
     # --------------------
-    X_cont_df, X_cat_df, _, cat_dims2 = load_feature_matrix(country)
+    X_cont_df, X_cat_df, num_cont, cat_dims = load_feature_matrix(country)
 
     # ensure consistent categorical structure
-    assert cat_dims2 == cat_dims, "[Error] Saved cat_dims mismatch — rebuild features."
+    assert model_cat_dims == cat_dims, "[Error] Saved cat_dims mismatch — rebuild features."
+    assert model_num_cont == num_cont, "[Error] Saved num_cont mismatch — rebuild features."
 
     X_cont = X_cont_df.values.astype(np.float64)
     X_cat = X_cat_df.values.astype(np.int64)
