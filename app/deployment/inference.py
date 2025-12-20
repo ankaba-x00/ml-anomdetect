@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Any, Union
 import json, pickle, torch
 import numpy as np
 
@@ -21,7 +21,7 @@ MODELS_DIR = FILE_DIR / "models"
 #           LOAD DEPENDENCIES
 #########################################
 
-def load_inference_bundle(ae_type: str, country: str) -> Dict[str, Any]:
+def load_inference_bundle(ae_type: str, country: str) -> dict[str, Any]:
     """Load inference bundle for prediction incl. model, scaler, cat_dims for order."""
     print(f"[INFO] Loading inference bundle for {country}...")
 

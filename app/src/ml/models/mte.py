@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, asdict
-from typing import Sequence, Dict
+from typing import Sequence
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +13,7 @@ import torch.nn.functional as F
 @dataclass
 class MTEConfig:
     num_cont: int
-    cat_dims: Dict[str, int]
+    cat_dims: dict[str, int]
     n_attack_types: int
     hidden_dims: Sequence[int] = (128, 64)
     latent_dim: int = 32
@@ -50,7 +50,7 @@ class TrafficEncoder(nn.Module):
     def __init__(
         self,
         num_cont: int,
-        cat_dims: Dict[str, int],
+        cat_dims: dict[str, int],
         hidden_dims: Sequence[int] = (128, 64),
         latent_dim: int = 32,
         dropout: float = 0.1,

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
 
 class BaseTabularModel(nn.Module):
@@ -19,7 +19,7 @@ class BaseTabularModel(nn.Module):
     def __init__(
         self,
         num_cont: int,
-        cat_dims: Dict[str, int],
+        cat_dims: dict[str, int],
         embedding_dim: Optional[int],
         continuous_noise_std: float,
         activation: str = "relu",
