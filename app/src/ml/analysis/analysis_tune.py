@@ -1,12 +1,8 @@
-import json, torch, optuna, warnings
-from typing import Optional, Union
+import json, optuna
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 import seaborn as sns
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from optuna.visualization import (
     plot_optimization_history,
@@ -16,329 +12,8 @@ from optuna.visualization import (
     plot_contour,
 )
 
-from app.src.ml.models.ae import TabularAE
-from app.src.ml.models.vae import TabularVAE
-from app.src.ml.models.mte import TrafficAttackPredictor
+from .common import apply_custom_theme
 
-
-#########################################
-##                CONFIG               ##
-#########################################
-
-custom_rc = {
-    "figure.titlesize": 22,
-    "axes.titlesize": 20,
-    "axes.labelsize": 18,
-    "xtick.labelsize": 14,
-    "ytick.labelsize": 14,
-    "font.family": "Arial",
-    "legend.title_fontsize": 14,
-    "legend.fontsize": 12,
-    "grid.alpha": 0.4,
-    "grid.linestyle": "--",
-}
-
-
-def apply_custom_theme() -> None:
-    """Apply consistent Matplotlib styling."""
-    mpl.rcParams.update(custom_rc)
-    sns.set_style("whitegrid")
-
-
-#########################################
-##         FEATURE BUILD PLOTS         ##
-#########################################
-
-def plot_log_candidates(
-    feature_name: str, 
-    feature_values: pd.Series, 
-    folder: Path, 
-    fname: str = "plot_log_candidates.png", 
-    show: bool = False,
-) -> None:
-    """Histograms of value distribution for raw signals and log-transformed signals."""
-    apply_custom_theme()
-
-    try:
-        # suppresses divide-by-zero and invalid log warnings
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            log_vals = np.log1p(feature_values)
-        if not np.all(np.isfinite(log_vals)):
-            raise ValueError("[ERROR] log1p produced non-finite values; skipping log-scale plot.")
-        
-        plt.figure(figsize=(12,4))
-        plt.subplot(1,2,1)
-        plt.hist(feature_values, bins=200)
-        plt.title(f"Raw Scale: {feature_name}")
-        plt.yscale("log")
-        plt.subplot(1,2,2)
-        plt.hist(np.log1p(feature_values), bins=200)
-        plt.title(f"Log1p Scale: {feature_name}")
-        plt.savefig(folder / fname, dpi=160)
-        if show: plt.show()
-        plt.close()
-
-    except (Exception, BaseException):
-        print(f"[INFO] Log scaling not possible for feature '{feature_name}'.")
-
-
-#########################################
-##           TRAINING PLOTS            ##
-#########################################
-
-def plot_training_curves(
-    country: str,
-    history: dict,
-    folder: Path = Path.cwd(),
-    fnames: list[str] = ["loss_curve.png", "lr_schedule.png"],
-    show: bool = False,
-    MT: bool = False
-) -> None:
-    """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
-    apply_custom_theme()
-
-    train_loss = np.array(history["train_loss"], dtype=float)
-    val_loss = np.array(history["val_loss"], dtype=float)
-    lrs = np.array(history["learning_rates"], dtype=float)
-    epochs = np.arange(1, len(train_loss) + 1)
-    best_epoch = history.get("best_epoch", None)
-
-    # Ensure lr schedule length matches number of epochs
-    if len(lrs) < len(epochs):
-        pad = np.full(len(epochs) - len(lrs), lrs[-1] if len(lrs) > 0 else 0.0)
-        lrs = np.concatenate([lrs, pad])
-
-    # normalization for shape comparison
-    train_norm = train_loss / train_loss[0]
-    val_norm   = val_loss / val_loss[0]
-
-    # -------------------------------
-    # 1. Loss curves
-    # -------------------------------
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
-    # 1) Raw losses (log-scale)
-    ax = axes[0]
-    ax.plot(epochs, train_loss, label="Train", linewidth=2)
-    ax.plot(epochs, val_loss, label="Val", linewidth=2)
-    if best_epoch:
-        ax.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
-
-    ax.set_title(f"{country} — Loss Curve (Raw Loss, Log Scale)")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Total Loss" if MT else "Loss")
-    ax.set_yscale("log")
-    ax.grid(True)
-    ax.legend()
-
-    # 2) Normalized losses (linear scale)
-    ax2 = axes[1]
-    ax2.plot(epochs, train_norm, label="Train (norm)", linewidth=2)
-    ax2.plot(epochs, val_norm, label="Val (norm)", linewidth=2)
-    if best_epoch:
-        ax2.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
-
-    ax2.set_title(f"{country} — Learning Curve (Normalized to check for overfitting)")
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Normalized Total Loss" if MT else "Normalized Loss")
-    ax2.grid(True)
-    ax2.legend()
-
-    plt.tight_layout()
-    fig.savefig(folder / fnames[0], dpi=160)
-    print(f"[OK] Saved to {fnames[0]}")
-    if show: plt.show()
-    plt.close(fig)
-
-    # -------------------------------
-    # 2. Learning rate curve
-    # -------------------------------
-    fig2, ax3 = plt.subplots(figsize=(12, 5))
-    ax3.plot(epochs, lrs, linewidth=2)
-    ax3.set_title(f"{country} — Learning Rate Schedule")
-    ax3.set_xlabel("Epoch")
-    ax3.set_ylabel("Learning Rate")
-    ax3.grid(True)
-
-    plt.tight_layout()
-    fig2.savefig(folder / fnames[1], dpi=160)
-    print(f"[OK] Saved to {fnames[1]}")
-    if show: plt.show()
-    plt.close(fig2)
-
-
-def plot_detailed_loss_curves(
-    ae_type: str,
-    country: str,
-    history: dict,
-    folder: Path = Path.cwd(),
-    fname: str = "detailed_loss_curves.png",
-    show: bool = False,
-) -> None:
-    """Plot separate loss curves for continuous and categorical components."""
-    apply_custom_theme()
-
-    cont_loss_name = "cont_loss" if ae_type == "ae" else "recon_loss"
-    cat_loss_name = "cat_loss" if ae_type == "ae" else "kl_loss"
-
-    if f"train_{cont_loss_name}" not in history or f"train_{cat_loss_name}" not in history:
-        print(f"[INFO] Detailed loss components not available for {country}")
-        return
-    
-    train_cont = np.array(history[f"train_{cont_loss_name}"], dtype=float)
-    train_cat = np.array(history[f"train_{cat_loss_name}"], dtype=float)
-    val_cont = np.array(history.get(f"val_{cont_loss_name}", []), dtype=float)
-    val_cat = np.array(history.get(f"val_{cat_loss_name}", []), dtype=float)
-    epochs = np.arange(1, len(train_cont) + 1)
-
-    # normalization for shape comparison
-    train_norm = train_cont / train_cont[0]
-    val_norm   = val_cont / val_cont[0]
-
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    
-    axes[0, 0].plot(epochs, train_norm, label="Train Continuous", linewidth=2, color='blue')
-    if len(val_cont) > 0:
-        axes[0, 0].plot(epochs, val_norm, label="Val Continuous", linewidth=2, color='cyan')
-    axes[0, 0].set_title("Continuous MSE Loss (Normalized to check for overfitting)")
-    axes[0, 0].set_xlabel("Epoch")
-    axes[0, 0].set_ylabel("MSE")
-    axes[0, 0].set_yscale("log")
-    axes[0, 0].legend()
-    axes[0, 0].grid(True)
-
-    axes[0, 1].plot(epochs, train_cat, label="Train Categorical", linewidth=2, color='red')
-    if len(val_cat) > 0:
-        axes[0, 1].plot(epochs, val_cat, label="Val Categorical", linewidth=2, color='orange')
-    axes[0, 1].set_title("Categorical Cross-Entropy Loss")
-    axes[0, 1].set_xlabel("Epoch")
-    axes[0, 1].set_ylabel("Cross-Entropy")
-    axes[0, 1].set_yscale("log")
-    axes[0, 1].legend()
-    axes[0, 1].grid(True)
-
-    # loss ratio (CE/MSE)
-    if len(train_cat) > 0 and len(train_cont) > 0:
-        loss_ratio = train_cat / (train_cont + 1e-8)
-        axes[1, 0].plot(epochs, loss_ratio, linewidth=2, color='purple')
-        axes[1, 0].set_title("Loss Ratio (CE / MSE)")
-        axes[1, 0].set_xlabel("Epoch")
-        axes[1, 0].set_ylabel("Ratio")
-        axes[1, 0].grid(True)
-    
-    # loss weights
-    if "loss_weights" in history:
-        weights = history["loss_weights"]
-        axes[1, 1].bar(["Continuous", "Categorical"], 
-                      [weights.get("cont_weight", 1.0), weights.get("cat_weight", 0.0)],
-                      color=['blue', 'red'])
-        axes[1, 1].set_title("Loss Weights")
-        axes[1, 1].set_ylabel("Weight")
-        axes[1, 1].grid(True, axis='y')
-    
-    plt.suptitle(f"{country} — Detailed Loss Analysis", fontsize=20)
-    plt.tight_layout()
-    plt.savefig(folder / fname, dpi=160)
-    print(f"[OK] Saved detailed loss curves to {fname}")
-    if show: plt.show()
-    plt.close(fig)
-
-
-#########################################
-##          VALIDATION PLOTS           ##
-#########################################
-
-def plot_error_histogram(
-    country: str,
-    df: pd.DataFrame,
-    folder: Path = Path.cwd(),
-    fname: str = "plot_error_histogram.png",
-    show: bool = False,
-) -> None:
-    """Histogram of log errors with percentile lines."""
-    apply_custom_theme()
-
-    errors = df["error"].values
-    log_err = np.log10(errors + 1e-8)
-    p95 = np.percentile(errors, 95)
-    p99 = np.percentile(errors, 99)
-    p995 = np.percentile(errors, 99.5)
-    med = np.median(errors)
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.hist(log_err, bins=60, color="steelblue", alpha=0.7)
-    # marker lines (in log space for consistency)
-    for p, label in [(med, "median"), (p95, "p95"), (p99, "p99"), (p995, "p995")]:
-        ax.axvline(np.log10(p + 1e-8), linestyle="--", label=label)
-    ax.set_title(f"{country} — Validation Error Distribution (log10 scale)")
-    ax.set_xlabel("log10(error)")
-    ax.set_ylabel("Count")
-    ax.grid(True)
-    ax.legend()
-    plt.tight_layout()
-    fig.savefig(folder / fname, dpi=160)
-    print(f"[OK] Saved to {fname}")
-    if show: plt.show()
-    plt.close(fig)
-
-
-def plot_error_timeseries(
-    country: str,
-    df: pd.DataFrame,
-    threshold: Optional[float],
-    folder: Path = Path.cwd(),
-    fname: str = "plot_error_timeseries.png",
-    show: bool = False,
-) -> None:
-    """Lineplot error over time with optional threshold line."""
-    apply_custom_theme()
-
-    fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(df["ts"], df["error"], linewidth=1, label="Error")
-    if threshold is not None:
-        ax.axhline(threshold, color="red", linestyle="--", label=f"Threshold={threshold:.2f}")
-    ax.set_title(f"{country} — Validation Error Time Series")
-    ax.set_xlabel("Timestamp")
-    ax.set_ylabel("Reconstruction Error")
-    ax.grid(True)
-    ax.legend()
-    plt.tight_layout()
-    fig.savefig(folder / fname, dpi=160)
-    print(f"[OK] Saved to {fname}")
-    if show: plt.show()
-    plt.close(fig)
-
-
-def summarize_validation(
-    country: str,
-    df: pd.DataFrame,
-    folder: Path = Path.cwd(),
-    fname: str = "summarize_validation.png",
-) -> None:
-    """Summary statistics for validation error distribution as json."""
-    errors = df["error"].values
-
-    summary = {
-        "country": country,
-        "count": int(len(errors)),
-        "min": float(errors.min()),
-        "max": float(errors.max()),
-        "mean": float(errors.mean()),
-        "median": float(np.median(errors)),
-        "p95": float(np.percentile(errors, 95)),
-        "p99": float(np.percentile(errors, 99)),
-        "p995": float(np.percentile(errors, 99.5)),
-    }
-
-    with open(folder / fname, "w") as f:
-        json.dump(summary, f, indent=2)
-    print(f"[OK] Saved val summary to {fname}")
-
-
-#########################################
-##             TUNING PLOTS            ##
-#########################################
 
 def save_optuna_plots(
     study: optuna.Study, 
@@ -826,199 +501,280 @@ def plot_multi_weight_loss_correlation(
     plt.close(fig)
 
 
-#########################################
-##             TESTING PLOTS           ##
-#########################################
-
-def plot_error_curve(
+def plot_mt_loss_component_analysis(
+    study: optuna.Study,
     country: str, 
-    df_err: pd.DataFrame, 
-    threshold: float, 
-    method: str, 
+    history_dir: Path,
     folder: Path = Path.cwd(),
-    fname: str = "plot_error_curve.png", 
+    fname: str = "plot_mt_loss_component_analysis.png",
     show: bool = False
 ) -> None:
-    """Lineplot reconstruction error over timestamps with color-coded error predictions, smoothed error curve, threshold and detected anomalies."""
-    apply_custom_theme()
-
-    fig, ax = plt.subplots(figsize=(14, 5))
-    ax.plot(df_err["ts"], df_err["error"], label="Error", alpha=0.6)
-    # smoothed error
-    df_err["smooth"] = df_err["error"].rolling(48, min_periods=1).mean()
-    ax.plot(df_err["ts"], df_err["smooth"], label="Smoothed", linewidth=2)
-    # threshold
-    ax.axhline(threshold, color="red", linestyle="--", label=f"Threshold ({method})")
-    # anomalies
-    anomalies = df_err[df_err["is_anomaly"] == 1]
-    ax.scatter(anomalies["ts"], anomalies["error"], color="red", s=12, label="Detected")
-    ax.set_title(f"{country} – Test Error Curve ({method})")
-    ax.set_ylabel("Reconstruction Error")
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig(folder / fname, dpi=150)
-    print(f"[OK] Saved to {fname}")
-    if show: plt.show()
-    plt.close(fig)
-
-
-def plot_intervals(
-    country: str, 
-    df_err: pd.DataFrame, 
-    df_int: pd.DataFrame, 
-    method: str, 
-    folder: Path = Path.cwd(),
-    fname: str = "plot_intervals.png", 
-    show: bool = False
-) -> None:
-    """Lineplot with detected anomalies over timestamps."""
-    apply_custom_theme()
-
-    fig, ax = plt.subplots(figsize=(14, 2))
-    ax.plot(df_err["ts"], np.zeros_like(df_err["ts"]), alpha=0)  # invisible anchor
-    for _, row in df_int.iterrows():
-        ax.axvspan(row["start_ts"], row["end_ts"], color="red", alpha=0.3)
-    ax.set_title(f"{country} – Anomaly Intervals ({method})")
-    ax.set_yticks([])
-    plt.tight_layout()
-    plt.savefig(folder / fname, dpi=150)
-    print(f"[OK] Saved to {fname}")
-    if show: plt.show()
-    plt.close(fig)
-
-
-def plot_error_hist(
-    country: str, 
-    df: pd.DataFrame, 
-    threshold: float, 
-    method: str, 
-    folder: Path = Path.cwd(),
-    fname: str = "plot_error_hist.png", 
-    show: bool = False,
-    MT: bool = False
-) -> None:
-    """Histogram showing error counts and threshold."""
-    apply_custom_theme()
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    sns.histplot(df["loss_total"] if MT else df["error"], bins=60, ax=ax)
-    ax.axvline(threshold, color="red", linestyle="--", label="Threshold")
-    ax.legend()
-    ax.set_yscale("log")
-    ax.set_ylabel("Log(counts)")
-    ax.set_title(f"{country} – Error Histogram ({method})")
-    plt.tight_layout()
-    plt.savefig(folder / fname, dpi=150)
-    print(f"[OK] Saved to {fname}")
-    if show: plt.show()
-    plt.close(fig)
-
-
-def plot_raw_with_errors(
-    signal_name: str,
-    ts: Union[np.ndarray, pd.Index, pd.Series], 
-    raw_signal: np.ndarray, 
-    errors: np.ndarray, 
-    mask: np.ndarray, 
-    folder: Path = Path.cwd(),
-    fname: str = "plot_raw_with_errors.png", 
-    show: bool = False
-) -> None:
-    """Lineplot showing raw target signal with smoothed error scaled on same range and detected anomalies."""
-    apply_custom_theme()
-
-    # normalize errors to same scale as raw signal
-    err_norm = errors / np.max(errors) * (raw_signal.max() - raw_signal.min()) * 0.4
-    err_norm = err_norm + raw_signal.min()  # shift upward
-
-    plt.figure(figsize=(16, 6))
-    plt.plot(ts, raw_signal, label=f"Raw {signal_name} signal", color='black', linewidth=1.4)
-    plt.plot(ts, err_norm, label="Scaled error", color='orange', alpha=0.7)
-    # annotate anomalies
-    plt.scatter(ts[mask], raw_signal[mask], color='red', label='Detected snomalies', s=25)
-    plt.title("Raw Signal with Scaled Reconstruction Error Overlay")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(folder / fname, dpi=150)
-    print(f"[OK] Saved to {fname}")
-    if show: plt.show()
-    plt.close()
-
-
-#########################################
-##             LATENT SPACE            ##
-#########################################
-
-def plot_latent_space(
-    country: str,
-    X_cont: np.ndarray,
-    X_cat: np.ndarray,
-    model: Union[TabularAE, TabularVAE, TrafficAttackPredictor],
-    device: str,
-    max_samples: int = 1000,
-    folder: Path = Path.cwd(),
-    fname: str = "plot_latent_space.png",
-    show: bool = False,
-) -> None:
-    """Scatter plot showing latent space using PCA/t-SNE."""
+    """Scatter plots showing how MT loss components contribute to total loss."""
     apply_custom_theme()
     
-    if len(X_cont) > max_samples:
-        indices = np.random.RandomState(42).choice(len(X_cont), max_samples, replace=False)
-        X_cont = X_cont[indices]
-        X_cat = X_cat[indices]
-        print(f"[INFO] Using random subset of {max_samples} samples for latent space")
+    reg_losses = []
+    attack_losses = []
+    total_losses = []
+    trial_numbers = []
 
-    Xc_tensor = torch.from_numpy(X_cont).to(device)
-    Xk_tensor = torch.from_numpy(X_cat).to(device)
-    
-    model.eval()
-    with torch.no_grad():
-        if isinstance(model, TabularAE):
-            z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
-        elif isinstance(model, TabularVAE):
-            z = model.encode_to_latent(Xc_tensor, Xk_tensor, False).cpu().numpy()
-        else:
-            z = model.encoder(Xc_tensor, Xk_tensor).cpu().numpy()
-    if len(z) < 10:
-        print(f"[INFO] Not enough samples for latent space visualization: {len(z)}")
+    for trial in study.trials:
+        if trial.state.name != "COMPLETE":
+            continue
+        hist_file = history_dir / f"{country}_trial_{trial.number:04d}_history.json"
+        if not hist_file.exists():
+            continue
+        with open(hist_file, "r") as f:
+            hist = json.load(f)
+        required = ["val_l3", "val_l7", "val_attack"]
+        if not all(k in hist for k in required):
+            continue
+       
+        l3 = hist["val_l3"][-1]
+        l7 = hist["val_l7"][-1]
+        attack = hist["val_attack"][-1]
+
+        reg_losses.append(l3 + l7)
+        attack_losses.append(attack)
+        total_losses.append(trial.value)
+        trial_numbers.append(trial.number)
+
+    if len(reg_losses) < 3:
+        print(f"[INFO] Not enough loss component data for {country}")
         return
     
-    pca = PCA(n_components=2)
-    z_pca = pca.fit_transform(z)
+    ratios = [a / (r + 1e-8) for r, a in zip(reg_losses, attack_losses)]
+    best_idx = int(np.argmin(total_losses))
+
+    df = pd.DataFrame({
+        "trial": trial_numbers,
+        "reg_loss": reg_losses,
+        "attack_loss": attack_losses,
+        "total_loss": total_losses,
+        "ratio": ratios,
+    })
     
-    if len(z) >= 50:
-        tsne = TSNE(n_components=2, perplexity=min(30, len(z)-1), random_state=42)
-        z_tsne = tsne.fit_transform(z)
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    # Regression vs total
+    axes[0, 0].scatter(reg_losses, total_losses, alpha=0.7)
+    axes[0, 0].set_xlabel("Regression Loss (L3 + L7)")
+    axes[0, 0].set_ylabel("Total Validation Loss")
+    axes[0, 0].set_title("Regression Loss Contribution")
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Attack vs total
+    axes[0, 1].scatter(attack_losses, total_losses, alpha=0.7)
+    axes[0, 1].set_xlabel("Attack Classification Loss")
+    axes[0, 1].set_ylabel("Total Validation Loss")
+    axes[0, 1].set_title("Attack Loss Contribution")
+    axes[0, 1].grid(True, alpha=0.3)
     
-    fig, axes = plt.subplots(1, 3 if len(z) >= 50 else 2, figsize=(18, 6))
+    # Ratio plot
+    axes[1, 0].scatter(ratios, total_losses, alpha=0.7)
+    axes[1, 0].scatter(
+        ratios[best_idx],
+        total_losses[best_idx],
+        s=200,
+        marker="X",
+        color="red",
+        label="Best Trial"
+    )
+    axes[1, 0].legend()
+    axes[1, 0].axvline(1, color="gray", linestyle="--", alpha=0.5)
+    axes[1, 0].set_xlabel("Loss Ratio (Attack / Regression)")
+    axes[1, 0].set_ylabel("Total Validation Loss")
+    axes[1, 0].set_title("Loss Ratio vs Performance")
+    axes[1, 0].set_xscale("log")
+    axes[1, 0].grid(True, alpha=0.3)
     
-    axes[0].scatter(z_pca[:, 0], z_pca[:, 1], alpha=0.6, s=20)
-    axes[0].set_title(f"{country} — Latent Space (PCA)")
-    axes[0].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%})")
-    axes[0].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%})")
-    axes[0].grid(True, alpha=0.3)
+    # Component comparison
+    axes[1, 1].plot(
+        ["reg_loss", "attack_loss", "total_loss"],
+        df.loc[best_idx, ["reg_loss", "attack_loss", "total_loss"]],
+        "ro-",
+        linewidth=3,
+        label="Best Trial",
+    )
+
+    for idx, row in df.iterrows():
+        if idx != best_idx:
+            axes[1, 1].plot(
+                ["reg_loss", "attack_loss", "total_loss"],
+                row[["reg_loss", "attack_loss", "total_loss"]],
+                "b-",
+                alpha=0.2,
+            )
+
+    axes[1, 1].set_title("Loss Component Comparison")
+    axes[1, 1].set_ylabel("Loss Value")
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
     
-    axes[1].boxplot(z, showfliers=False)
-    axes[1].set_title(f"{country} — Latent Dimension Distributions")
-    axes[1].set_xlabel("Latent Dimension")
-    axes[1].set_ylabel("Value")
-    axes[1].grid(True, axis='y', alpha=0.3)
-    
-    if len(z) >= 50:
-        axes[2].scatter(z_tsne[:, 0], z_tsne[:, 1], alpha=0.6, s=20)
-        axes[2].set_title(f"{country} — Latent Space (t-SNE)")
-        axes[2].set_xlabel("t-SNE 1")
-        axes[2].set_ylabel("t-SNE 2")
-        axes[2].grid(True, alpha=0.3)
-    
-    plt.suptitle(f"{country} — Latent Space Analysis", fontsize=16)
+    plt.suptitle(f"{country} — MT Loss Component Analysis")
     plt.tight_layout()
-    
-    pca_path = folder / f"{fname[:-4]}_pca_coords.csv"
-    pd.DataFrame(z_pca, columns=['PC1', 'PC2']).to_csv(pca_path, index=False)
-    
     plt.savefig(folder / fname, dpi=160)
-    print(f"[OK] Saved latent space visualization to {fname}")
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+
+def plot_multi_mt_weights_overview(
+    best_weights: dict,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_multi_mt_weights_overview.png",
+    show: bool = False,
+) -> None:
+    """Bar and scatter plots comparing loss weights (regression vs classification) and their ratio across countries."""
+    apply_custom_theme()
+    
+    if not best_weights:
+        print("[INFO] No loss weights found to plot")
+        return
+    
+    df = pd.DataFrame.from_dict(best_weights, orient='index')
+    df.index.name = "country"
+    df = df.reset_index()
+    
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))  
+
+    x = np.arange(len(df))
+    width = 0.35
+    axes[0].bar(x - width/2, df["reg"], width, label="regression (l3 + l7)", color='blue')
+    axes[0].bar(x + width/2, df["class"], width, label="classification", color='red')
+    axes[0].set_xlabel("Country")
+    axes[0].set_ylabel("Weight")
+    axes[0].set_title("Loss Weights by Country")
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels(df["country"], rotation=45)
+    axes[0].legend()
+    axes[0].grid(True, axis='y', alpha=0.3)
+
+    axes[1].scatter(
+        df["reg"], 
+        df["class"], 
+        s=100, 
+        alpha=0.7
+    )
+    for _, row in df.iterrows():
+        axes[1].annotate(
+            row["country"], 
+            (row["reg"], row["class"]), 
+            fontsize=9, 
+            alpha=0.8, 
+            xytext=(5, 5), 
+            textcoords='offset points'
+        )
+    axes[1].axline((0, 0), slope=1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
+    axes[1].set_xlabel("regression (l3 + l7)")
+    axes[1].set_ylabel("classification")
+    axes[1].set_title("Weight Balance (Regression vs Attack)")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].bar(df["country"], df["ratio"], color='purple')
+    axes[2].axhline(1.0, color='gray', linestyle='--', alpha=0.5, label='Ratio = 1')
+    axes[2].set_xlabel("Country")
+    axes[2].set_ylabel("Classification/Regression Ratio")
+    axes[2].set_title("Weight Ratio by Country")
+    axes[2].tick_params(axis='x', rotation=45)
+    axes[2].legend()
+    axes[2].grid(True, axis='y', alpha=0.3)
+    
+    plt.suptitle(f"MT Loss Weight Comparison Across Countries (n={len(df)})", fontsize=14)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160, bbox_inches='tight')
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+
+def plot_multi_mt_weight_loss_correlation(
+    weights_data: dict,
+    losses_data: dict,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_multi_mt_weight_loss_correlation.png",
+    show: bool = False,
+) -> None:
+    """Scatter plots showing relationship between MT loss weights and validation performance."""
+    apply_custom_theme()
+
+    merged = {}
+    for country in set(weights_data.keys()) & set(losses_data.keys()):
+        merged[country] = {
+            "reg_weight": weights_data[country]["reg"],
+            "class_weight": weights_data[country]["class"],
+            "ratio": weights_data[country]["ratio"],
+            "loss": losses_data[country],
+        }
+    
+    if not merged:
+        print("[INFO] No overlapping weight/loss data to plot")
+        return
+
+    df = pd.DataFrame.from_dict(merged, orient='index')
+    df.index.name = "country"
+    df = df.reset_index()
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # regression weight vs loss
+    axes[0, 0].scatter(df["reg_weight"], df["loss"], s=100, alpha=0.75)
+    for _, r in df.iterrows():
+        axes[0, 0].annotate(r["country"], (r["reg_weight"], r["loss"]), fontsize=9)
+    axes[0, 0].set_xlabel("Regression Weight (L3 + L7)")
+    axes[0, 0].set_ylabel("Validation Loss")
+    axes[0, 0].set_title("Regression Weight vs Performance")
+    axes[0, 0].set_yscale("log")
+    axes[0, 0].grid(alpha=0.3)
+    
+    # classification weight vs loss
+    axes[0, 1].scatter(df["class_weight"], df["loss"], s=100, alpha=0.75, color="darkred")
+    for _, r in df.iterrows():
+        axes[0, 1].annotate(r["country"], (r["class_weight"], r["loss"]), fontsize=9)
+    axes[0, 1].set_xlabel("Classification Weight")
+    axes[0, 1].set_ylabel("Validation Loss")
+    axes[0, 1].set_title("Classificaion Weight vs Performance")
+    axes[0, 1].set_yscale("log")
+    axes[0, 1].grid(alpha=0.3)
+
+    # ratio vs loss
+    axes[1, 0].scatter(df["ratio"], df["loss"], s=100, alpha=0.75, color="purple")
+    for _, r in df.iterrows():
+        axes[1, 0].annotate(r["country"], (r["ratio"], r["loss"]), fontsize=9)
+    axes[1, 0].axvline(1.0, linestyle="--", color="gray", alpha=0.5, label="Balanced")
+    axes[1, 0].set_xlabel("Classification / Regression Weight Ratio")
+    axes[1, 0].set_ylabel("Validation Loss")
+    axes[1, 0].set_title("Loss Weight Ratio vs Performance")
+    axes[1, 0].set_xscale("log")
+    axes[1, 0].set_yscale("log")
+    axes[1, 0].legend()
+    axes[1, 0].grid(alpha=0.3)
+
+    # weight space colored by loss
+    scatter = axes[1, 1].scatter(
+        df["reg_weight"],
+        df["class_weight"],
+        c=df["loss"],
+        cmap="viridis",
+        s=120,
+        alpha=0.8,
+    )
+    for _, r in df.iterrows():
+        axes[1, 1].annotate(
+            r["country"],
+            (r["reg_weight"], r["class_weight"]),
+            fontsize=9,
+        )
+
+    axes[1, 1].axline((0, 0), slope=1, linestyle="--", color="gray", alpha=0.5)
+    axes[1, 1].set_xlabel("Regression Weight (L3 + L7)")
+    axes[1, 1].set_ylabel("Classification Weight")
+    axes[1, 1].set_title("Weight Space (color = validation loss)")
+    plt.colorbar(scatter, ax=axes[1, 1], label="Validation Loss")
+    axes[1, 1].grid(alpha=0.3)
+
+    plt.suptitle("MT Loss Weight vs Performance Correlation Analysis", fontsize=16)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)

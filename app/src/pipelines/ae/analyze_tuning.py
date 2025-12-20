@@ -41,7 +41,7 @@ from pathlib import Path
 from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.data import timeseries_seq_split
 from app.src.ml.training.train import load_autoencoder
-from app.src.ml.analysis.analysis import (
+from app.src.ml.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
     plot_loss_curves_all_trials,

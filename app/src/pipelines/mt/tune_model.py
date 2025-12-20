@@ -44,7 +44,7 @@ from app.src.data.split import timeseries_seq_split
 from app.src.ml.models.mte import MTEConfig
 from app.src.ml.tuning.tune_mt import set_global_seeds, objective
 from app.src.ml.training.train_mt import train_multitask_model, save_multitask_model
-from app.src.ml.analysis.analysis import plot_latent_space
+from app.src.ml.analysis import plot_latent_space
 
 
 #########################################

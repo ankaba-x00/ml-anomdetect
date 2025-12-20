@@ -36,15 +36,15 @@ Usage:
 """
 
 import json, pickle, torch, optuna
+from pathlib import Path
+import numpy as np
+from sklearn.preprocessing import RobustScaler
+from dataclasses import asdict
 from optuna.pruners import (
     MedianPruner, 
     SuccessiveHalvingPruner, 
     HyperbandPruner
 )
-from pathlib import Path
-import numpy as np
-from sklearn.preprocessing import RobustScaler
-from dataclasses import asdict
 
 from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.data.split import timeseries_seq_split
@@ -52,7 +52,7 @@ from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
 from app.src.ml.tuning.tune import set_global_seeds, objective
 from app.src.ml.training.train import train_autoencoder, save_autoencoder
-from app.src.ml.analysis.analysis import plot_latent_space
+from app.src.ml.analysis import plot_latent_space
 
 #########################################
 ##                PARAMS               ##

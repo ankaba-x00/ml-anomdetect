@@ -41,16 +41,14 @@ from pathlib import Path
 from app.src.data.feature_engineering import COUNTRIES, load_supervised_feature_matrix
 from app.src.data import timeseries_seq_split
 from app.src.ml.training.train_mt import load_multitask_model
-from app.src.ml.analysis.analysis import (
+from app.src.ml.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
     plot_loss_curves_all_trials,
     plot_best_trial_learning_curve,
     plot_3d_scatter,
     plot_multi_loss_overview,
-    plot_latent_space
-)
-from app.src.ml.analysis.analysis_mt import ( 
+    plot_latent_space,
     plot_mt_loss_component_analysis, 
     plot_multi_mt_weights_overview, 
     plot_multi_mt_weight_loss_correlation

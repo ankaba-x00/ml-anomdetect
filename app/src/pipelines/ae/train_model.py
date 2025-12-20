@@ -33,7 +33,7 @@ from app.src.data.feature_engineering import COUNTRIES, load_feature_matrix
 from app.src.ml.training.calibrate import calibrate_threshold
 from app.src.ml.models.ae import AEConfig
 from app.src.ml.models.vae import VAEConfig
-from app.src.ml.analysis.analysis import plot_latent_space
+from app.src.ml.analysis import plot_latent_space
 from app.src.ml.training.train import train_autoencoder, save_autoencoder
 
 

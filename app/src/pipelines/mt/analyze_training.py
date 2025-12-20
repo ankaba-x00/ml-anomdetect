@@ -27,9 +27,9 @@ from pathlib import Path
 import pandas as pd
 
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.ml.analysis.analysis import plot_training_curves
-from app.src.ml.analysis.analysis_mt import (
-    plot_detailed_mt_loss_curves, 
+from app.src.ml.analysis import (
+    plot_training_curves,
+    plot_detailed_mt_loss_curves,
     summarize_mt_validation, 
     plot_regression_scatter, 
     plot_attack_confusion_matrix, 

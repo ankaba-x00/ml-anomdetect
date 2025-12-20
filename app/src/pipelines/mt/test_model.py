@@ -26,7 +26,7 @@ from pathlib import Path
 from app.src.data.feature_engineering import load_supervised_feature_matrix, COUNTRIES
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.training.train_mt import load_multitask_model
-from app.src.ml.analysis.analysis import plot_latent_space
+from app.src.ml.analysis import plot_latent_space
 from app.src.ml.training.evaluate_mt import apply_multitask_model
 
 

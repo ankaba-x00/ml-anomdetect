@@ -24,7 +24,7 @@ from pathlib import Path
 from app.src.data.feature_engineering import build_country_dataframe
 from app.src.data.split import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.ml.analysis.analysis import (
+from app.src.ml.analysis import (
     plot_error_curve,
     plot_intervals,
     plot_error_hist,

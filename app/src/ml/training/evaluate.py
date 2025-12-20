@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE

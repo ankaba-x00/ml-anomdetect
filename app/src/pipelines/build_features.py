@@ -29,7 +29,7 @@ from app.src.data.feature_engineering import (
     load_feature_matrix,
     load_supervised_feature_matrix
 )
-from app.src.ml.analysis.analysis import plot_log_candidates
+from app.src.ml.analysis import plot_log_candidates
 
 
 #########################################

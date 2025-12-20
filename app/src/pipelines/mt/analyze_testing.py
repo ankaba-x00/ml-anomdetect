@@ -24,11 +24,9 @@ import pandas as pd
 from pathlib import Path
 
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.ml.analysis.analysis import (
+from app.src.ml.analysis import (
     plot_intervals,
     plot_error_hist,
-)
-from app.src.ml.analysis.analysis_mt import (
     plot_mt_anomaly_timeseries,
     plot_attack_confidence_hist,
     plot_attack_confusion_matrix,

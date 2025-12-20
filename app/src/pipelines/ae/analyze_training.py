@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from app.src.data.feature_engineering import COUNTRIES
-from app.src.ml.analysis.analysis import (
+from app.src.ml.analysis import (
     plot_training_curves, 
     plot_detailed_loss_curves, 
     plot_error_histogram, 
