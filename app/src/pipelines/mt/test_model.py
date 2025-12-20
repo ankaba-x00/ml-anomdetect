@@ -165,6 +165,8 @@ def test_country(country: str, method: str, tr: int, vr: int, latent: bool):
     # ------------------------------------
     if latent:
         print(f"[INFO] Preparing latent space visualization...")
+        out_path = OUT_DIR / "analysis"
+        out_path.mkdir(parents=True, exist_ok=True)
         plot_latent_space(
             country,
             Xc_te,
@@ -172,7 +174,7 @@ def test_country(country: str, method: str, tr: int, vr: int, latent: bool):
             model,
             cfg.device,
             1000,
-            OUT_DIR,
+            out_path,
             f"{country}_latent_space.png",
         )
 

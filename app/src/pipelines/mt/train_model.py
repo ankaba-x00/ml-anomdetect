@@ -197,6 +197,9 @@ def train_country(
         print(f"[INFO] Preparing latent space visualization...")
         if full or tr == 100:
             Xc_tr_scald, Xk_tr = Xc_scald, Xk
+        else: 
+            out_path = OUT_DIR / "analysis" / country
+            out_path.mkdir(parents=True, exist_ok=True)
         plot_latent_space(
             country, 
             Xc_tr_scald, 

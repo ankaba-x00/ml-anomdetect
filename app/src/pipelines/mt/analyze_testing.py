@@ -80,26 +80,29 @@ def analyze_country(
     """Runs full analysis pipeline of a country model testing."""
     print(f"[INFO] Analyzing {country} with {method}...")
 
+    out_dir = OUT_DIR / country
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     df_res, df_int = _load_results(country, method)
 
     plot_mt_anomaly_timeseries(
         country,
         df_res,
-        OUT_DIR,
+        out_dir,
         f"{country}_mt_anomaly_timeseries_{method}.png",
         show=show_plots
     )
     plot_attack_confidence_hist(
         country,
         df_res,
-        OUT_DIR,
+        out_dir,
         f"{country}_attack_confidence_hist_{method}.png",
         show=show_plots
     )
     plot_attack_confusion_matrix(
         country,
         df_res,
-        OUT_DIR,
+        out_dir,
         f"{country}_attack_confusion_matrix_{method}.png",
         show=show_plots
     )
@@ -108,7 +111,7 @@ def analyze_country(
         df_res, 
         df_int, 
         method, 
-        OUT_DIR,
+        out_dir,
         f"{country}_intervals_{method}.png",
         show=show_plots
     )
@@ -117,7 +120,7 @@ def analyze_country(
         df_res, 
         df_res["threshold"][0], 
         method, 
-        OUT_DIR, 
+        out_dir, 
         f"{country}_hist_{method}.png",
         show=show_plots,
         MT=True
@@ -130,7 +133,7 @@ def analyze_country(
         df_res["is_flagged"],
         df_int["start_idx"],
         df_int["end_idx"],
-        OUT_DIR,
+        out_dir,
         f"{country}_raw_l3_erroroverlay_{method}.png",
         show=show_plots
     )
@@ -142,19 +145,19 @@ def analyze_country(
         df_res["is_flagged"],
         df_int["start_idx"],
         df_int["end_idx"],
-        OUT_DIR,
+        out_dir,
         f"{country}_raw_l7_erroroverlay_{method}.png",
         show=show_plots
     )
     plot_attack_timeline(
         df_res,
-        OUT_DIR,
+        out_dir,
         f"{country}_attack_timeline_{method}.png",
         show=show_plots
     )
     plot_loss_components_timeseries(
         df_res,
-        OUT_DIR,
+        out_dir,
         f"{country}_loss_timeseries_{method}.png",
         show=show_plots   
     )

@@ -60,9 +60,9 @@ def load_validation_errors(country: str, validated_dir: Path) -> pd.DataFrame:
 def analyze_country(country: str, show_plots: bool):
     """Runs full analysis pipeline of a country model."""
     print(f"[INFO] Analyzing {country}...")
-    out_train = TRAINED_DIR / "analysis"
+    out_train = TRAINED_DIR / "analysis" / country
     out_train.mkdir(parents=True, exist_ok=True)
-    out_val = VALIDATED_DIR / "analysis"
+    out_val = VALIDATED_DIR / "analysis" / country
     out_val.mkdir(parents=True, exist_ok=True)
 
     try:
