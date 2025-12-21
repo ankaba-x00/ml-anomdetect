@@ -616,6 +616,70 @@ def plot_mt_loss_component_analysis(
     if show: plt.show()
     plt.close(fig)
 
+def plot_attack_class_weights(
+    country: str,
+    attack_class_weights: np.ndarray,
+    class_names: list[str],
+    folder: Path = Path.cwd(),
+    fname: str = "plot_attack_class_weights.png",
+    show: bool = False,
+):
+    """Bar plot of attack class weights for given country."""
+    apply_custom_theme()
+
+    if class_names is None:
+        class_names = [f"class_{i}" for i in range(len(attack_class_weights))]
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.bar(class_names, attack_class_weights)
+    ax.set_title(f"{country} — Attack Class Weights")
+    ax.set_ylabel("Weight")
+    ax.set_xlabel("Attack Class")
+    ax.tick_params(axis="x", rotation=45, labelsize=11)
+    ax.set_yscale("log")
+    ax.grid(True, axis="y", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_attack_class_balance(
+    country: str,
+    attack_class_weights: np.ndarray,
+    attack_class_counts: np.ndarray,
+    folder: Path = Path.cwd(),
+    fname: str = "plot_attack_class_balance.png",
+    show: bool = False,
+):
+    """Bar plots of class frequencies and weights for given country."""
+    apply_custom_theme()
+
+    classes = [f"class_{i}" for i in range(len(attack_class_weights))]
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+
+    # Frequencies
+    axes[0].bar(classes, attack_class_counts)
+    axes[0].set_title("Attack Class Frequencies (Train)")
+    axes[0].set_ylabel("Samples")
+    axes[0].set_yscale("log")
+    axes[0].grid(True, axis="y", alpha=0.3)
+
+    # Weights
+    axes[1].bar(classes, attack_class_weights)
+    axes[1].set_title("Attack Class Weights")
+    axes[1].set_ylabel("Weight")
+    axes[1].set_yscale("log")
+    axes[1].grid(True, axis="y", alpha=0.3)
+
+    plt.suptitle(f"{country} — Attack Class Balance")
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
 
 def plot_multi_mt_weights_overview(
     best_weights: dict,
@@ -773,6 +837,46 @@ def plot_multi_mt_weight_loss_correlation(
     axes[1, 1].grid(alpha=0.3)
 
     plt.suptitle("MT Loss Weight vs Performance Correlation Analysis", fontsize=16)
+    plt.tight_layout()
+    plt.savefig(folder / fname, dpi=160)
+    print(f"[OK] Saved to {fname}")
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_multi_country_attack_weights(
+    weights_by_country: dict[str, list[float]],
+    class_names: list[str],
+    folder: Path = Path.cwd(),
+    fname: str = "plot_multi_country_attack_weights.png",
+    show: bool = False,
+):
+    """Heatmap of attack class weights across countries."""
+    apply_custom_theme()
+
+    df = pd.DataFrame.from_dict(
+        weights_by_country,
+        orient="index"
+    )
+    if df.shape[1] != len(class_names):
+        raise ValueError("[Error] len class_weights do not match len class_names")
+    df.columns = class_names #[f"{i}" for i in range(df.shape[1])]
+
+    fig, ax = plt.subplots(figsize=(12, max(4, 0.5 * len(df))))
+    sns.heatmap(
+        np.log10(df + 1e-6),
+        annot=True,
+        fmt=".2f",
+        cmap="viridis",
+        ax=ax
+    )
+    ax.set_title("Attack Class Weights (log10 scale)")
+    ax.set_xlabel("Attack Class")
+    ax.set_ylabel("Country")
+    ax.set_xticklabels(
+        ax.get_xticklabels(),
+        rotation=45,
+        fontsize=11
+    )
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")

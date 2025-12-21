@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
+from collections import Counter
 
 from app.src.ml.models.mte import MTEConfig, TrafficAttackPredictor
 
@@ -36,6 +37,42 @@ def _make_supervised_dataloader(
         shuffle=shuffle,
         pin_memory=torch.cuda.is_available(),
     )
+
+# def compute_attack_class_weights(
+#     y_attack_tr: np.ndarray,
+#     n_classes: int,
+#     device: str
+# ):
+#     """Computes attack class weights for class-weighted cross-entropy"""
+#     counts = Counter(y_attack_tr.tolist())
+#     total = sum(counts.values())
+
+#     weights = torch.tensor(
+#         [total / (counts.get(c, 0) + 1e-6) for c in range(n_classes)],
+#         dtype=torch.float32,
+#         device=device
+#     )
+
+#     # normalization for stability
+#     weights = weights / weights.mean()
+#     return weights
+
+
+def compute_attack_class_weights(
+    y: np.ndarray,
+    n_classes: int,
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    """
+    Computes inverse-frequency class weights for CrossEntropyLoss.
+    weight_c = total_samples / (n_classes * count_c)
+    """
+    counts = np.bincount(y, minlength=n_classes).astype(np.float32)
+    counts = np.maximum(counts, eps)
+
+    weights = counts.sum() / (n_classes * counts)
+    return torch.tensor(weights, dtype=torch.float32)
+
 
 
 def train_multitask_model(
@@ -89,9 +126,17 @@ def train_multitask_model(
         )
 
     # -------------------------
+    # Class weights
+    # -------------------------
+    attack_class_weights = compute_attack_class_weights(
+        train_attack,
+        config.n_attack_types,
+    )
+
+    # -------------------------
     # Build model
     # -------------------------
-    model = TrafficAttackPredictor(config).to(device)
+    model = TrafficAttackPredictor(config, attack_class_weights).to(device)
 
     # -------------------------
     # Optimizer
@@ -131,6 +176,7 @@ def train_multitask_model(
         "best_epoch": 0,
         "config": asdict(config),
         "loss_weights": loss_weights,
+        "attack_class_weights": []
     }
 
     best_metric = float("inf")
@@ -139,7 +185,7 @@ def train_multitask_model(
 
     lambda_l3 = loss_weights.get("l3", 1.0)
     lambda_l7 = loss_weights.get("l7", 1.0)
-    lambda_att = loss_weights.get("attack", 1.0)
+    lambda_att = loss_weights.get("attack", 3.0)
 
     print("Training multi-task model with:")
     print(f"  L3 weight: {lambda_l3}")
@@ -194,6 +240,11 @@ def train_multitask_model(
         history["train_l3"].append(tl3 / n)
         history["train_l7"].append(tl7 / n)
         history["train_attack"].append(tatt / n)
+        history["attack_class_weights"] = (
+            attack_class_weights.cpu().tolist()
+            if attack_class_weights is not None
+            else None
+        )
 
         # -------------------------
         # Validation
@@ -305,8 +356,13 @@ def load_multitask_model(
     num_cont = payload["num_cont"]
     cat_dims = payload["cat_dims"]
 
+    attack_class_weights = None
+    if "additional_info" in payload:
+        weights = payload["additional_info"].get("attack_class_weights")
+        if weights is not None:
+            attack_class_weights = torch.tensor(weights, dtype=torch.float32)
     cfg = MTEConfig(**payload["config"])
-    model = TrafficAttackPredictor(cfg)
+    model = TrafficAttackPredictor(cfg, attack_class_weights)
 
     model.load_state_dict(payload["state_dict"])
     target_device = torch.device(cfg.device)

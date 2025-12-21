@@ -100,14 +100,14 @@ def train_country(
             loss_weights = {
                 "l3": best_params.get("l3", 1.0),
                 "l7": best_params.get("l7", 1.0),
-                "attack": best_params.get("attack", 1.0),
+                "attack": best_params.get("attack", 3.0),
             }
             print(f"[INFO] Using tuned loss weights: {loss_weights}")
         except Exception:
             loss_weights = {
                 "l3": 1.0,
                 "l7": 1.0,
-                "attack": 1.0,
+                "attack": 3.0,
             }
             print(f"[INFO] Using default loss weights: {loss_weights}")
     
@@ -135,7 +135,7 @@ def train_country(
         loss_weights = {
             "l3": 1.0,
             "l7": 1.0,
-            "attack": 1.0,
+            "attack": 3.0,
         }
 
     # ------------------------------------
@@ -176,7 +176,7 @@ def train_country(
             cfg,
             loss_weights,
         )
-        
+
         out_path = OUT_DIR
         out_path.mkdir(parents=True, exist_ok=True)
     
@@ -194,6 +194,9 @@ def train_country(
             "train_ratio": tr,
             "val_ratio": vr,
             "loss_weights": loss_weights,
+            "attack_class_weights": (
+                model.attack_class_weights.cpu().tolist() if model.attack_class_weights is not None else None
+            ),
             "total_samples": len(X_cont),
         }
     )

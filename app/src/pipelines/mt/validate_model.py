@@ -112,14 +112,31 @@ def validate_country(
     # --------------------
     payload = torch.load(model_path, map_location="cpu")
     loss_weights = payload.get("additional_info", {}).get("loss_weights", {
-        "l3": 1.0, "l7": 1.0, "attack": 1.0
+        "l3": 1.0, "l7": 1.0, "attack": 3.0
     })
+    att_cl_w = payload.get("additional_info", {}).get("attack_class_weights", None)
 
     l3_w = float(loss_weights.get("l3", 1.0))
     l7_w = float(loss_weights.get("l7", 1.0))
-    att_w = float(loss_weights.get("attack", 1.0))
+    att_w = float(loss_weights.get("attack", 3.0))
 
-    print(f"[INFO] Using loss weights - L3: {l3_w:.2f}, L7: {l7_w:.2f}, Attack: {att_w:.2f}")
+    print(
+    f"[INFO] Using loss weights - "
+    f"L3: {loss_weights['l3']:.2f}, "
+    f"L7: {loss_weights['l7']:.2f}, "
+    f"Attack: {loss_weights['attack']:.2f}"
+)
+
+    if att_cl_w is not None:
+        print(
+            "[INFO] Using attack class weights - "
+            + ", ".join(
+                f"class{i}: {w:.2f}"
+                for i, w in enumerate(att_cl_w)
+            )
+        )
+    else:
+        print("[INFO] No attack class weights used")
 
     # --------------------
     # Compute validation errors

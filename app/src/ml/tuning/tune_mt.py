@@ -92,7 +92,7 @@ def objective(
     )
     lambda_l3 = trial.suggest_float("lambda_l3", 0.5, 2.0)
     lambda_l7 = trial.suggest_float("lambda_l7", 0.5, 2.0)
-    lambda_attack = trial.suggest_float("lambda_attack", 0.5, 2.0)
+    lambda_attack = trial.suggest_float("lambda_attack", 0.2, 8.0, log=True)
     loss_weights = {
         "l3": lambda_l3,
         "l7": lambda_l7,
@@ -125,7 +125,7 @@ def objective(
     # -----------------------------
     # Train
     # -----------------------------
-    _, history = train_multitask_model(
+    model, history = train_multitask_model(
         Xc_tr, Xk_tr, y3_tr, y7_tr, ya_tr,
         Xc_val, Xk_val, y3_val, y7_val, ya_val,
         cfg,
@@ -156,6 +156,15 @@ def objective(
             "l7": lambda_l7,
             "attack": lambda_attack,
         }
+    )
+    trial.set_user_attr(
+        "attack_class_weights",
+        model.attack_class_weights.cpu().tolist() if model.attack_class_weights is not None else None
+    )
+    frequ = np.bincount(ya_tr)
+    trial.set_user_attr(
+        "attack_class_frequencies",
+        frequ.tolist() if frequ else None
     )
     trial.set_user_attr("best_epoch", best_epoch)
 

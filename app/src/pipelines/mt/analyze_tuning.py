@@ -18,7 +18,9 @@ Outputs:
             losses_all_trials, 
             best_learning_curve.png, 
             correlation_heatmap.png,
-            loss_component_analysis.png, 
+            loss_component_analysis.png,
+            attack_class_weights.png,
+            attack_class_balance.png,
             trial_results.csv, 
             <COUNTRY>_latent_space.png, 
             <COUNTRY>_latent_space_pca_coords.csv
@@ -27,7 +29,9 @@ Outputs:
             best_weights.png, 
             weight_loss_correlation.png, 
             best_losses.json, 
-            best_weights.json
+            best_weights.json,
+            best_attack_class_weights.png,
+            best_attack_class_weights.json
 
 Usage:
     python -m app.src.pipelines.mt.analyze_tuning [-s] [-M] [-L] <COUNTRY|all|none>
@@ -39,6 +43,7 @@ import numpy as np
 from pathlib import Path
 
 from app.src.data.feature_engineering import COUNTRIES, load_supervised_feature_matrix
+from app.src.data.attack_labelling import ATTACK_LABELS
 from app.src.data import timeseries_seq_split
 from app.src.ml.training.train_mt import load_multitask_model
 from app.src.ml.analysis import (
@@ -49,9 +54,12 @@ from app.src.ml.analysis import (
     plot_3d_scatter,
     plot_multi_loss_overview,
     plot_latent_space,
-    plot_mt_loss_component_analysis, 
+    plot_mt_loss_component_analysis,
+    plot_attack_class_weights,
+    plot_attack_class_balance,
     plot_multi_mt_weights_overview, 
-    plot_multi_mt_weight_loss_correlation
+    plot_multi_mt_weight_loss_correlation, 
+    plot_multi_country_attack_weights
 )
 
 
@@ -156,6 +164,7 @@ def multi_analyze(
     #countries.remove("GB")
     #countries.remove("CH")
     losses_data = {}
+    attack_class_weights = {}
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"
         study_path = TUNED_DIR / f"{c}_study.db"
@@ -166,6 +175,8 @@ def multi_analyze(
         
         study = load_study(c, study_path)
         losses_data[c] = study.best_value
+        if c == "AT":
+            attack_class_weights[c] = study.best_trial.user_attrs["attack_class_weights"]
     
     plot_multi_loss_overview(
         losses_data, 
@@ -175,6 +186,16 @@ def multi_analyze(
     )
     with open(out_dir / "best_losses.json", "w") as f:
         json.dump(losses_data, f, indent=2)
+    
+    plot_multi_country_attack_weights(
+        attack_class_weights,
+        ATTACK_LABELS,
+        out_dir, 
+        "best_attack_class_weights.png", 
+        show
+    )
+    with open(out_dir / "best_attack_class_weights.json", "w") as f:
+        json.dump(attack_class_weights, f, indent=2)
 
     weights_data = {}
     for c in countries:
@@ -236,12 +257,40 @@ def analyze_country(
         raise FileNotFoundError(f"No study DB for {country}")
     
     study = load_study(country, db_path)
-    save_optuna_plots(
-        study, 
-        out_dir, 
-        html_out=True, 
-        png_out=False
-    )
+    if study:
+        save_optuna_plots(
+            study, 
+            out_dir, 
+            html_out=True, 
+            png_out=False
+        )
+        plot_mt_loss_component_analysis(
+            study,
+            country, 
+            history_dir = TUNED_DIR / "trial_history",
+            folder=out_dir,
+            fname="loss_component_analysis.png",
+            show=show
+        )
+        weights = study.best_trial.user_attrs["attack_class_weights"]
+        plot_attack_class_weights(
+            country,
+            np.array(weights),
+            ATTACK_LABELS,
+            out_dir,
+            f"attack_class_weights.png",
+            show
+        )
+        frequ = study.best_trial.user_attrs["attack_class_frequencies"]
+        if frequ is not None:
+            plot_attack_class_balance(
+                country,
+                np.array(weights),
+                np.array(frequ),
+                out_dir,
+                f"attack_class_balance.png",
+                show
+            )
 
     df = trial_dataframe(study)
     df.to_csv(out_dir / "trial_results.csv", index=False)
@@ -271,16 +320,6 @@ def analyze_country(
             out_dir, 
             "best_learning_curve.png", 
             show
-        )
-    
-    if study:
-        plot_mt_loss_component_analysis(
-            study,
-            country, 
-            history_dir = TUNED_DIR / "trial_history",
-            folder=out_dir,
-            fname="loss_component_analysis.png",
-            show=show
         )
 
     if latent:

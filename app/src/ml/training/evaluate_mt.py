@@ -51,8 +51,15 @@ def prediction_errors(
         loss_attack = None
         attack_pred = None
         attack_prob_max = None
+
         if ya is not None:
-            loss_attack = F.cross_entropy(logits, ya, reduction="none")
+            loss_attack = F.cross_entropy(
+                logits, 
+                ya, 
+                reduction="none", 
+                weight=model.attack_class_weights if getattr(model, "attack_class_weights", None) is not None
+                else None,
+            )
             probs = F.softmax(logits, dim=-1)
             attack_pred = probs.argmax(dim=-1)
             attack_prob_max = probs.max(dim=-1).values

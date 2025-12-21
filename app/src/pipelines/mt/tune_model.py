@@ -133,7 +133,7 @@ def tune_country(
     hidden_dims = [p[f"h{i}"] for i in range(depth)]
     lambda_l3 = p.get("lambda_l3", 1.0)
     lambda_l7 = p.get("lambda_l7", 1.0)
-    lambda_attack = p.get("lambda_attack", 1.0)
+    lambda_attack = p.get("lambda_attack", 3.0)
     loss_weights = {
         "l3": lambda_l3,
         "l7": lambda_l7,
@@ -181,6 +181,9 @@ def tune_country(
             "train_ratio": tr,
             "val_ratio": vr,
             "loss_weights": loss_weights,
+            "attack_class_weights": (
+                best_model.attack_class_weights.cpu().tolist() if best_model.attack_class_weights is not None else None
+            ),
             "total_samples": len(Xc_train_scald),
         }
     )

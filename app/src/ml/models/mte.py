@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, asdict
-from typing import Sequence
+from typing import Sequence, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +22,7 @@ class MTEConfig:
     head_hidden_dim: int = 32
     lambda_l3: float = 1.0
     lambda_l7: float = 1.0
-    lambda_attack: float = 1.0
+    lambda_attack: float = 3.0 # maybe 5.0
     lr: float = 1e-3
     weight_decay: float = 1e-5
     batch_size: int = 256
@@ -159,10 +159,18 @@ class TrafficAttackPredictor(nn.Module):
     - Attack type classifier: R^K → softmax → cat dist over K attack types
     """
 
-    def __init__(self, config: MTEConfig):
+    def __init__(
+        self, 
+        config: MTEConfig,
+        attack_class_weights: Optional[torch.Tensor] = None
+    ):
         super().__init__()
 
         self.config = config
+        self.register_buffer(
+            "attack_class_weights",
+            attack_class_weights if attack_class_weights is not None else None
+        )
 
         self.encoder = TrafficEncoder(
             num_cont=config.num_cont,
@@ -220,7 +228,11 @@ class TrafficAttackPredictor(nn.Module):
     ) -> dict[str, torch.Tensor]:
         l3_loss = F.mse_loss(outputs["l3"], y_l3)
         l7_loss = F.mse_loss(outputs["l7"], y_l7)
-        attack_loss = F.cross_entropy(outputs["attack_logits"], y_attack)
+        attack_loss = F.cross_entropy(
+            outputs["attack_logits"], 
+            y_attack, 
+            weight=self.attack_class_weights
+        )
 
         total = (
             self.config.lambda_l3 * l3_loss +
