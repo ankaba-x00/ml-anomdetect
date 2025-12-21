@@ -286,6 +286,7 @@ def analyze_country(
             country,
             np.array(weights),
             np.array(frequ),
+            ATTACK_LABELS,
             out_dir,
             f"attack_class_balance.png",
             show

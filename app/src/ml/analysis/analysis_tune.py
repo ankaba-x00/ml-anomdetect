@@ -648,6 +648,7 @@ def plot_attack_class_balance(
     country: str,
     attack_class_weights: np.ndarray,
     attack_class_counts: np.ndarray,
+    class_names: list[str],
     folder: Path = Path.cwd(),
     fname: str = "plot_attack_class_balance.png",
     show: bool = False,
@@ -655,7 +656,7 @@ def plot_attack_class_balance(
     """Bar plots of class frequencies and weights for given country."""
     apply_custom_theme()
 
-    classes = [f"class_{i}" for i in range(len(attack_class_weights))]
+    classes = class_names #[f"class_{i}" for i in range(len(attack_class_weights))]
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
 
@@ -664,6 +665,7 @@ def plot_attack_class_balance(
     axes[0].set_title("Attack Class Frequencies (Train)")
     axes[0].set_ylabel("Samples")
     axes[0].set_yscale("log")
+    axes[0].tick_params(axis="x", rotation=45, labelsize=11)
     axes[0].grid(True, axis="y", alpha=0.3)
 
     # Weights
@@ -671,6 +673,7 @@ def plot_attack_class_balance(
     axes[1].set_title("Attack Class Weights")
     axes[1].set_ylabel("Weight")
     axes[1].set_yscale("log")
+    axes[1].tick_params(axis="x", rotation=45, labelsize=11)
     axes[1].grid(True, axis="y", alpha=0.3)
 
     plt.suptitle(f"{country} — Attack Class Balance")
