@@ -163,8 +163,8 @@ def objective(
     )
     frequ = np.bincount(ya_tr)
     trial.set_user_attr(
-        "attack_class_frequencies",
-        frequ.tolist() if frequ else None
+        "attack_class_frequencies", 
+        frequ.tolist()
     )
     trial.set_user_attr("best_epoch", best_epoch)
 

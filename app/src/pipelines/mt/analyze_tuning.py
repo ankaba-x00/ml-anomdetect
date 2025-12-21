@@ -282,15 +282,14 @@ def analyze_country(
             show
         )
         frequ = study.best_trial.user_attrs["attack_class_frequencies"]
-        if frequ is not None:
-            plot_attack_class_balance(
-                country,
-                np.array(weights),
-                np.array(frequ),
-                out_dir,
-                f"attack_class_balance.png",
-                show
-            )
+        plot_attack_class_balance(
+            country,
+            np.array(weights),
+            np.array(frequ),
+            out_dir,
+            f"attack_class_balance.png",
+            show
+        )
 
     df = trial_dataframe(study)
     df.to_csv(out_dir / "trial_results.csv", index=False)
