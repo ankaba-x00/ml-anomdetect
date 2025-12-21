@@ -54,8 +54,8 @@ fi
 
 echo "===================================="
 echo "[INFERENCE] Executing:"
-echo "python -m app.deployment.pipeline $ARGS_INFER"
-eval python -m app.deployment.pipeline $ARGS_INFER
+echo "python -m app.deployment.use_model $ARGS_INFER"
+eval python -m app.deployment.use_model $ARGS_INFER
 echo "[INFERENCE] Completed!"
 
 echo
