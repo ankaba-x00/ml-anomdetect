@@ -146,7 +146,6 @@ def tune_country(
         cat_dims=cat_dims,
         n_attack_types=8,
         hidden_dims=tuple(hidden_dims),
-        #latent_dim=p["latent_dim"],
         dropout=p["dropout"],
         lr=p["lr"],
         weight_decay=p["weight_decay"],
@@ -158,8 +157,12 @@ def tune_country(
         lambda_l3=lambda_l3,
         lambda_l7=lambda_l7,
         lambda_attack=lambda_attack,
-        use_focal_loss=p["use_focal_loss"],
-        focal_gamma=p["focal_gamma"],
+        use_focal_loss=True,
+        focal_gamma=2.0,
+        #latent_dim=p["latent_dim"],
+        #head_hidden_dim=p["head_hidden_dim"]
+        #use_focal_loss=p["use_focal_loss"],
+        #focal_gamma=p["focal_gamma"],
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
