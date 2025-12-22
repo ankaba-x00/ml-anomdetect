@@ -7,16 +7,17 @@ Validate a trained autoencoder:
 - performs latent space analysis if specified
 
 Outputs: 
-    PATH : results/ae_ml/validate/<MODEL
+    PATH without --tuned: results/ae_ml/validate/trained_model/<MODEL
+    PATH with --tuned: results/ae_ml/validate/tuned_model/<MODEL
     FILES : <COUNTRY>_validation.csv, 
-            <COUNTRY>_latent_space_pca_coords.csv, 
-            <COUNTRY>_latent_space.png
+            analysis/<COUNTRY>_latent_space_pca_coords.csv, 
+            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [--tuned] <MODEL> <COUNTRY|all>
 """
 
-import pickle, json, torch
+import pickle, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -34,7 +35,8 @@ from app.src.ml.analysis import plot_latent_space
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
-MODELS_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
+TRAINED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
+TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "validated"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -46,6 +48,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 def validate_country(
     ae_type: str, 
     country: str, 
+    tuned: bool,
     tr: int, 
     vr: int, 
     use_mc_elbo: bool, 
@@ -56,17 +59,22 @@ def validate_country(
     print(f"==============================")
     print(f"[INFO] Model {ae_type.upper()} selected")
 
-    out_path = OUT_DIR / f"{ae_type.upper()}"
-    out_path.mkdir(parents=True, exist_ok=True)
+    if not tuned: 
+        out_path = OUT_DIR / "trained_model" / f"{ae_type.upper()}"
+        model_path = TRAINED_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
+        scaler_path = TRAINED_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
+    else:
+        out_path = OUT_DIR / "tuned_model" / f"{ae_type.upper()}"
+        model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_model.pt"
+        scaler_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_scaler.pkl"
 
-    model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
-    scaler_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_scaler_cont.pkl"
+    out_path.mkdir(parents=True, exist_ok=True)
 
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
     if not scaler_path.exists():
         raise FileNotFoundError(f"[ERROR] Scaler not found: {scaler_path}")
-    
+
     # --------------------
     # Load model + config, scaler
     # --------------------
@@ -176,6 +184,7 @@ def validate_country(
 
 def validate_all(
     ae_type: str, 
+    tuned: bool,
     tr: int, 
     vr: int, 
     use_mc_elbo: bool, 
@@ -183,7 +192,7 @@ def validate_all(
 ) -> None:
     for c in COUNTRIES:
         try:
-            validate_country(ae_type, c, tr, vr, use_mc_elbo, latent)
+            validate_country(ae_type, c, tuned, tr, vr, use_mc_elbo, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
 
@@ -224,6 +233,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--tuned",
+        action="store_true",
+        help="use model after tuning stage"
+    )
+
+    parser.add_argument(
         "model",
         help="model to train: ae, vae"
     )
@@ -245,7 +260,8 @@ if __name__ == "__main__":
 
     if target.lower() == "all":
         validate_all(
-            ae_type, 
+            ae_type,
+            args.tuned,
             args.tr, 
             args.vr, 
             args.MC_score, 
@@ -254,7 +270,8 @@ if __name__ == "__main__":
     else:
         validate_country(
             ae_type, 
-            target.upper(), 
+            target.upper(),
+            args.tuned,
             args.tr, 
             args.vr, 
             args.MC_score, 

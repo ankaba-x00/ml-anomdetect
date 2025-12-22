@@ -6,17 +6,19 @@ Analyze training and validation performance for one or all countries:
 - generates plots and summary
 
 Outputs:
-    PATH: results/ae_ml/trained/<MODEL>
+    PATH without --tuned: results/ae_ml/trained/<MODEL>/analysis/<COUNTRY>
+    PATH with --tuned: results/ae_ml/tuned/<MODEL>/analysis/<COUNTRY>
     FILES : <COUNTRY>_loss_curve.png, 
             <COUNTRY>_detailed_loss_curves.png, 
             <COUNTRY>_lr_schedule.png
-    PATH: results/ae_ml/validated/<MODEL>
+    PATH without --tuned: results/ae_ml/validated/trained_model/<MODEL>/analysis/<COUNTRY>
+    PATH with --tuned: results/ae_ml/validated/tuned_model/<MODEL>/analysis/<COUNTRY>
     FILES : <COUNTRY>_error_hist.png, 
             <COUNTRY>_error_timeseries.png, 
             <COUNTRY>_summary.json
 
 Usage:
-    python -m app.src.pipelines.ae.analyze_training [-s] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.analyze_training [-s] [--tuned] <MODEL> <COUNTRY|all>
 """
 
 import json
@@ -41,20 +43,19 @@ from app.src.ml.analysis import (
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
 TRAINED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "trained"
+TUNED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 VALIDATED_DIR = PROJECT_ROOT / "results" / "ae_ml" / "validated"
-
+VAL_TRAIN_DIR = VALIDATED_DIR / "trained_model"
+VAL_TUNE_DIR = VALIDATED_DIR / "tuned_model"
 
 #########################################
 ##               LOAD DATA             ##
 #########################################
 
 def load_training_history(
-    ae_type: str,
-    country: str, 
-    models_dir: Path
+    path: Path
 ) -> dict:
     """Load training history for country."""
-    path = Path(models_dir) / f"{ae_type.upper()}" / f"{country}_training_history.json"
     if not path.exists():
         raise FileNotFoundError(f"[ERROR] Training history not found: {path}")
     with open(path, "r") as f:
@@ -81,18 +82,27 @@ def load_validation_errors(
 def analyze_country(
     ae_type: str, 
     country: str, 
+    tuned: bool,
     show_plots: bool
 ) -> None:
     """Runs full analysis pipeline of a country model."""
     print(f"[INFO] Analyzing {country}...")
-    out_train = TRAINED_DIR / f"{ae_type.upper()}" / "analysis" / country
+    
+    if not tuned:
+        in_val = VAL_TRAIN_DIR
+        in_train = TRAINED_DIR / f"{ae_type.upper()}" / f"{country}_training_history.json"
+        out_train = TRAINED_DIR / f"{ae_type.upper()}" / "analysis" / country
+    else:
+        in_val = VAL_TUNE_DIR
+        in_train = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_best_history.json"
+        out_train = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_train.mkdir(parents=True, exist_ok=True)
-    out_val = VALIDATED_DIR / f"{ae_type.upper()}" / "analysis" / country
+    out_val = in_val / f"{ae_type.upper()}" / "analysis" / country
     out_val.mkdir(parents=True, exist_ok=True)
 
     try:
-        history = load_training_history(ae_type, country, TRAINED_DIR)
-        val_df = load_validation_errors(ae_type, country, VALIDATED_DIR)
+        history = load_training_history(in_train)
+        val_df = load_validation_errors(ae_type, country, in_val)
 
         threshold = np.percentile(val_df["error"], 99)
 
@@ -140,13 +150,14 @@ def analyze_country(
 
 def analyze_all(
     ae_type: str, 
+    tuned: bool,
     show_plots: bool
 ) -> None:
     """Runs full analysis pipeline of all country models."""
     print(f"\n[INFO] Analysis of all models starting...")
     
     for c in COUNTRIES:
-        analyze_country(ae_type, c, show_plots)
+        analyze_country(ae_type, c, tuned, show_plots)
     
     print(f"\n[DONE] Analysis of all model trainings and validations completed!")
 
@@ -162,6 +173,12 @@ if __name__ == "__main__":
         "-s", "--show",
         action="store_true",
         help="show plots interactively when generated"
+    )
+
+    parser.add_argument(
+        "--tuned",
+        action="store_true",
+        help="use model after tuning stage"
     )
 
     parser.add_argument(
@@ -186,12 +203,14 @@ if __name__ == "__main__":
 
     if target == "all":
         analyze_all(
-            ae_type, 
+            ae_type,
+            args.tuned,
             show_plots=args.show
         )
     else:
         analyze_country(
             ae_type, 
             target.upper(), 
+            args.tuned,
             show_plots=args.show
         )

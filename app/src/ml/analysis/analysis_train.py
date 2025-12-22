@@ -158,7 +158,7 @@ def plot_detailed_loss_curves(
     plt.suptitle(f"{country} — Detailed Loss Analysis", fontsize=20)
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
-    print(f"[OK] Saved detailed loss curves to {fname}")
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
 
@@ -271,6 +271,6 @@ def plot_detailed_mt_loss_curves(
     plt.suptitle(f"{country} — Detailed MT Loss Analysis", fontsize=20)
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
-    print(f"[OK] Saved detailed loss curves to {fname}")
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)

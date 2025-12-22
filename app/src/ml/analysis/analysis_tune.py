@@ -616,6 +616,7 @@ def plot_mt_loss_component_analysis(
     if show: plt.show()
     plt.close(fig)
 
+
 def plot_attack_class_weights(
     country: str,
     attack_class_weights: np.ndarray,
@@ -643,6 +644,7 @@ def plot_attack_class_weights(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
+
 
 def plot_attack_class_balance(
     country: str,
@@ -845,6 +847,7 @@ def plot_multi_mt_weight_loss_correlation(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
+
 
 def plot_multi_country_attack_weights(
     weights_by_country: dict[str, list[float]],

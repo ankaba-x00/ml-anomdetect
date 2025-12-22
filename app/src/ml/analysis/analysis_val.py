@@ -101,7 +101,7 @@ def summarize_validation(
 
     with open(folder / fname, "w") as f:
         json.dump(summary, f, indent=2)
-    print(f"[OK] Saved val summary to {fname}")
+    print(f"[OK] Saved to {fname}")
 
 
 def summarize_mt_validation(
@@ -196,7 +196,7 @@ def summarize_mt_validation(
     
     with open(folder / fname, "w") as f:
         json.dump(summary, f, indent=2)
-    print(f"[OK] Saved MT val summary to {fname}")
+    print(f"[OK] Saved to {fname}")
 
 
 def plot_regression_scatter(

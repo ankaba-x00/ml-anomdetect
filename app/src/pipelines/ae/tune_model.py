@@ -27,8 +27,8 @@ Outputs:
            <COUNTRY>_best_config.json, 
            <COUNTRY>_best_history.json, 
            <COUNTRY>_scaler.pkl, 
-           <COUNTRY>_latent_space_pca_coords.csv, 
-           <COUNTRY>_latent_space.png
+           analysis/<COUNTRY>_latent_space_pca_coords.csv, 
+           analysis/<COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.ae.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] <MODEL> <COUNTRY|all>

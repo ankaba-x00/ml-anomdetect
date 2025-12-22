@@ -8,13 +8,14 @@ Validate a trained multi-task traffic model:
 - performs latent space analysis if specified
 
 Outputs:
-    PATH : results/mt_ml/validated
+    PATH without --tuned: results/mt_ml/validated/trained_model
+    PATH with --tuned: results/mt_ml/validated/tuned_model
     FILES : <COUNTRY>_mt_validation.csv, 
-            <COUNTRY>_latent_space_pca_coords.csv, 
-            <COUNTRY>_latent_space.png
+            analysis/<COUNTRY>_latent_space_pca_coords.csv, 
+            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] <COUNTRY|all>
+    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] [--tuned] <COUNTRY|all>
 """
 
 import pickle, torch
@@ -36,9 +37,9 @@ from app.src.data.feature_engineering import load_supervised_feature_matrix
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
-MODELS_DIR = PROJECT_ROOT / "results" / "mt_ml" / "trained"
+TRAINED_DIR = PROJECT_ROOT / "results" / "mt_ml" / "trained"
+TUNED_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tuned"
 OUT_DIR = PROJECT_ROOT / "results" / "mt_ml" / "validated"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 #########################################
@@ -47,6 +48,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def validate_country(
     country: str, 
+    tuned: bool,
     tr: int, 
     vr: int, 
     method: str, 
@@ -56,8 +58,16 @@ def validate_country(
     print(f"  VALIDATE MT MODEL ({country})")
     print(f"==============================")
 
-    model_path = MODELS_DIR / f"{country}_multitask_model.pt"
-    scaler_path = MODELS_DIR / f"{country}_scaler.pkl"
+    if not tuned:
+        model_path = TRAINED_DIR / f"{country}_multitask_model.pt"
+        scaler_path = TRAINED_DIR / f"{country}_scaler.pkl"
+        out_dir = OUT_DIR / "trained_model"
+    else:
+        model_path = TUNED_DIR / f"{country}_best_model.pt"
+        scaler_path = TUNED_DIR / f"{country}_scaler.pkl"
+        out_dir = OUT_DIR / "tuned_model"
+    
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     if not model_path.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {model_path}")
@@ -192,7 +202,7 @@ def validate_country(
         "threshold": thr,
         "is_flagged": mask.astype(int),
     })
-    val_path = OUT_DIR / f"{country}_mt_validation.csv"
+    val_path = out_dir / f"{country}_mt_validation.csv"
     df_out.to_csv(val_path, index=False)
     print(f"[OK] Validation CSV saved: {val_path}")
 
@@ -201,7 +211,7 @@ def validate_country(
     # --------------------
     if latent:
         print(f"[INFO] Preparing latent space visualization...")
-        out_path = OUT_DIR / "analysis" / country
+        out_path = out_dir / "analysis" / country
         out_path.mkdir(parents=True, exist_ok=True)
         plot_latent_space(
             country,
@@ -218,6 +228,7 @@ def validate_country(
 
 
 def validate_all(
+    tuned: bool,
     tr: int, 
     vr: int, 
     method: str, 
@@ -225,7 +236,7 @@ def validate_all(
 ) -> None:
     for c in COUNTRIES:
         try:
-            validate_country(c, tr, vr, method, latent)
+            validate_country(c, tuned, tr, vr, method, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
     
@@ -265,6 +276,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--tuned",
+        action="store_true",
+        help="use model after tuning stage"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to train US model, or 'all' to train all country models"
     )
@@ -273,6 +290,7 @@ if __name__ == "__main__":
 
     if args.target.lower() == "all":
         validate_all(
+            args.tuned,
             args.tr, 
             args.vr, 
             args.method, 
@@ -280,7 +298,8 @@ if __name__ == "__main__":
         )
     else:
         validate_country(
-            args.target.upper(), 
+            args.target.upper(),
+            args.tuned,
             args.tr, 
             args.vr, 
             args.method, 

@@ -13,8 +13,8 @@ Outputs:
     FILES: <COUNTRY>_autoencoder.pt, 
            <COUNTRY>_scaler_cont.pkl, 
            <COUNTRY>_training_history.json, 
-           <COUNTRY>_latent_space_pca_coords.csv, 
-           <COUNTRY>_latent_space.png
+           analysis/<COUNTRY>_latent_space_pca_coords.csv, 
+           analysis/<COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all>
