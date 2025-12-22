@@ -283,7 +283,7 @@ def build_single_country(
                 )
             else:
                 X_cont, X_cat, num_cont, cat_dims = (
-                    load_feature_matrix(country, FEATURE_DIR)
+                    load_feature_matrix(country)
                 )
         
         if SAVE:
@@ -362,7 +362,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "type",
-        default="unsuper",
         help="<super|unsuper> feature matrix for supervised multi-task learning or unsupervised learning [default: unsuper]"
     )
 
