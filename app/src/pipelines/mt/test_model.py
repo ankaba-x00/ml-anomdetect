@@ -31,7 +31,7 @@ from app.src.ml.training.evaluate_mt import apply_multitask_model
 
 
 #########################################
-##               PATHS                 ##
+##               PARAMS                ##
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent

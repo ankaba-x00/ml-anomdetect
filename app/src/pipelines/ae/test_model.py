@@ -33,7 +33,7 @@ from app.src.ml.analysis import plot_latent_space
 
 
 #########################################
-##               PATHS                 ##
+##               PARAMS                ##
 #########################################
 
 FILE_DIR = Path(__file__).resolve().parent
