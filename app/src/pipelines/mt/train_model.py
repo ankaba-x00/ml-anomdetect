@@ -12,8 +12,8 @@ Outputs:
     FILES: <COUNTRY>_model.pt, 
            <COUNTRY>_scaler.pkl, 
            <COUNTRY>_training_history.json, 
-           <COUNTRY>_latent_space_pca_coords.csv, 
-           <COUNTRY>_latent_space.png
+           analysis/<COUNTRY>_latent_space_pca_coords.csv, 
+           analysis/<COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.mt.train_multitask_model [-tr <int>] [-vr <int>] [-F] [-L] <COUNTRY|all>
@@ -125,9 +125,12 @@ def train_country(
             weight_decay=1e-5,
             batch_size=256,
             num_epochs=60,
+            warmup_epochs=5,
             patience=6,
             gradient_clip=1.0,
             use_lr_scheduler=True,
+            use_focal_loss=True,
+            focal_gamma=2.0,
             device="cpu",
         )
 

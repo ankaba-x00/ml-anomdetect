@@ -12,6 +12,7 @@ Search space:
 - batch size
 - activation
 - loss weights
+- focal_gamma 
 
 Outputs:
     PATH : results/mt_ml/tuned/<MODEL>
@@ -21,8 +22,8 @@ Outputs:
            <COUNTRY>_best_config.json, 
            <COUNTRY>_best_history.json, 
            <COUNTRY>_scaler.pkl, 
-           <COUNTRY>_latent_space_pca_coords.csv, 
-           <COUNTRY>_latent_space.png
+           analysis/<COUNTRY>_latent_space_pca_coords.csv, 
+           analysis/<COUNTRY>_latent_space.png
 
 Usage:
     python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all>
@@ -151,11 +152,14 @@ def tune_country(
         weight_decay=p["weight_decay"],
         batch_size=p["batch_size"],
         num_epochs=90,
+        warmup_epochs=5,
         patience=p["patience"],
         activation=p["activation"],
         lambda_l3=lambda_l3,
         lambda_l7=lambda_l7,
         lambda_attack=lambda_attack,
+        use_focal_loss=p["use_focal_loss"],
+        focal_gamma=p["focal_gamma"],
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 

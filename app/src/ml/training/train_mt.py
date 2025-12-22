@@ -38,29 +38,12 @@ def _make_supervised_dataloader(
         pin_memory=torch.cuda.is_available(),
     )
 
-# def compute_attack_class_weights(
-#     y_attack_tr: np.ndarray,
-#     n_classes: int,
-#     device: str
-# ):
-#     """Computes attack class weights for class-weighted cross-entropy"""
-#     counts = Counter(y_attack_tr.tolist())
-#     total = sum(counts.values())
 
-#     weights = torch.tensor(
-#         [total / (counts.get(c, 0) + 1e-6) for c in range(n_classes)],
-#         dtype=torch.float32,
-#         device=device
-#     )
-
-#     # normalization for stability
-#     weights = weights / weights.mean()
-#     return weights
-
-
+# TODO: max_ratio needs benchmarking!
 def compute_attack_class_weights(
     y: np.ndarray,
     n_classes: int,
+    max_ratio: float = 20.0,
     eps: float = 1e-6,
 ) -> torch.Tensor:
     """
@@ -71,8 +54,39 @@ def compute_attack_class_weights(
     counts = np.maximum(counts, eps)
 
     weights = counts.sum() / (n_classes * counts)
+    # clamps extreme values
+    weights = np.clip(weights, 1.0 / max_ratio, max_ratio)
+    weights = weights / weights.mean()
+
     return torch.tensor(weights, dtype=torch.float32)
 
+
+def focal_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    gamma: float = 2.0,
+    weight: Optional[torch.Tensor] = None,
+    reduction: str = "mean",
+) -> torch.Tensor:
+    """Multi-class focal loss."""
+    log_probs = F.log_softmax(logits, dim=-1)
+    probs = torch.exp(log_probs)
+
+    target_logp = log_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+    target_p = probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+
+    focal_factor = (1.0 - target_p) ** gamma
+    loss = -focal_factor * target_logp
+
+    if weight is not None:
+        class_weight = weight.gather(0, targets)
+        loss = loss * class_weight
+
+    if reduction == "mean":
+        return loss.mean()
+    elif reduction == "sum":
+        return loss.sum()
+    return loss
 
 
 def train_multitask_model(
@@ -133,6 +147,12 @@ def train_multitask_model(
         config.n_attack_types,
     )
 
+    if config.warmup_epochs > 0:
+        print(
+            f"[INFO] Attack-only warmup enabled for "
+            f"{config.warmup_epochs} epochs"
+        )
+
     # -------------------------
     # Build model
     # -------------------------
@@ -159,6 +179,8 @@ def train_multitask_model(
             patience=3,
             min_lr=1e-6,
         )
+    base_lr = config.lr
+    warmup_lr = config.lr * 0.3
 
     # -------------------------
     # History
@@ -182,6 +204,7 @@ def train_multitask_model(
     best_metric = float("inf")
     best_state = None
     no_improve = 0
+    reset_after_warmup = False
 
     lambda_l3 = loss_weights.get("l3", 1.0)
     lambda_l7 = loss_weights.get("l7", 1.0)
@@ -198,6 +221,31 @@ def train_multitask_model(
     # -------------------------
     for epoch in range(config.num_epochs):
         model.train()
+
+        # -------------------------
+        # Attack-only warmup logic
+        # -------------------------
+        in_warmup = epoch < config.warmup_epochs
+
+        if in_warmup:
+            # freeze regression heads
+            for p in model.l3_head.parameters():
+                p.requires_grad = False
+            for p in model.l7_head.parameters():
+                p.requires_grad = False
+            # adjust lr to avoid overfitting
+            for g in optimizer.param_groups:
+                g["lr"] = warmup_lr
+        else:
+            # unfreeze after warmup
+            for p in model.l3_head.parameters():
+                p.requires_grad = True
+            for p in model.l7_head.parameters():
+                p.requires_grad = True
+            # use base lr
+            for g in optimizer.param_groups:
+                g["lr"] = base_lr
+
         tl, tl3, tl7, tatt = 0.0, 0.0, 0.0, 0.0
         n = 0
 
@@ -211,13 +259,28 @@ def train_multitask_model(
 
             loss_l3 = F.mse_loss(out["l3"], y3)
             loss_l7 = F.mse_loss(out["l7"], y7)
-            loss_att = F.cross_entropy(out["attack_logits"], ya)
-
-            total_loss = (
-                lambda_l3 * loss_l3 +
-                lambda_l7 * loss_l7 +
-                lambda_att * loss_att
+            if config.use_focal_loss and not in_warmup:
+                loss_att = focal_loss(
+                out["attack_logits"],
+                ya,
+                config.focal_gamma,
+                model.attack_class_weights,
             )
+            else:
+                loss_att = F.cross_entropy(
+                    out["attack_logits"], 
+                    ya,
+                    model.attack_class_weights
+                )
+
+            if in_warmup:
+                total_loss = lambda_att * loss_att
+            else:
+                total_loss = (
+                    lambda_l3 * loss_l3 +
+                    lambda_l7 * loss_l7 +
+                    lambda_att * loss_att
+                )
 
             total_loss.backward()
 
@@ -263,7 +326,19 @@ def train_multitask_model(
 
                     loss_l3 = F.mse_loss(out["l3"], y3)
                     loss_l7 = F.mse_loss(out["l7"], y7)
-                    loss_att = F.cross_entropy(out["attack_logits"], ya)
+                    if config.use_focal_loss  and not in_warmup:
+                        loss_att = focal_loss(
+                        out["attack_logits"],
+                        ya,
+                        config.focal_gamma,
+                        model.attack_class_weights,
+                    )
+                    else:
+                        loss_att = F.cross_entropy(
+                            out["attack_logits"], 
+                            ya,
+                            model.attack_class_weights
+                        )
 
                     total_loss = (
                         lambda_l3 * loss_l3 +
@@ -279,29 +354,47 @@ def train_multitask_model(
                     vn += bs
 
             avg_val = vl / vn
-            history["val_loss"].append(avg_val)
-            history["val_l3"].append(vl3 / vn)
-            history["val_l7"].append(vl7 / vn)
-            history["val_attack"].append(vatt / vn)
+            if in_warmup:
+                history["val_loss"].append(None)
+                history["val_l3"].append(None)
+                history["val_l7"].append(None)
+                history["val_attack"].append(None)
+                continue
+            else:
+                history["val_loss"].append(avg_val)
+                history["val_l3"].append(vl3 / vn)
+                history["val_l7"].append(vl7 / vn)
+                history["val_attack"].append(vatt / vn)
 
-            scheduler.step(avg_val)
+            if not in_warmup:
+                scheduler.step(avg_val)
+
+            if epoch == config.warmup_epochs and not reset_after_warmup:
+                best_metric = float("inf")
+                best_state = None
+                no_improve = 0
+                reset_after_warmup = True
+                print(f"[INFO] Warmup finished at epoch {epoch}. Resetting early stopping baseline.")
 
             # -----------------------------
             # Early stopping
             # -----------------------------
-            if avg_val < best_metric - 1e-9:
-                best_metric = avg_val
-                best_state = model.state_dict()
-                history["best_epoch"] = epoch + 1
-                no_improve = 0
-            else:
-                no_improve += 1
-                if no_improve >= config.patience:
-                    print(f"Early stopping at epoch {epoch+1}")
-                    break
+            if epoch >= config.warmup_epochs:
+                if avg_val < best_metric - 1e-9:
+                    best_metric = avg_val
+                    best_state = model.state_dict()
+                    history["best_epoch"] = epoch + 1
+                    no_improve = 0
+                else:
+                    no_improve += 1
+                    if no_improve >= config.patience:
+                        print(f"Early stopping at epoch {epoch+1}")
+                        break
 
+            mode = "ATTACK-WARMUP" if in_warmup else "MULTI-TASK"
             print(
                 f"Epoch {epoch+1:3d}/{config.num_epochs} | "
+                f"Mode {mode:<12} | "
                 f"Train {history['train_loss'][-1]:.4f} | "
                 f"Val {avg_val:.4f} | "
                 f"LR {optimizer.param_groups[0]['lr']:.2e}"

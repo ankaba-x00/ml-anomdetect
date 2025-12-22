@@ -23,10 +23,13 @@ class MTEConfig:
     lambda_l3: float = 1.0
     lambda_l7: float = 1.0
     lambda_attack: float = 3.0 # maybe 5.0
+    use_focal_loss: bool = False
+    focal_gamma: float = 2.0 # 0 = standard CE, 2 = common default, 3+ = very aggressive and migth be unstable 
     lr: float = 1e-3
     weight_decay: float = 1e-5
     batch_size: int = 256
     num_epochs: int = 60
+    warmup_epochs: int = 5
     patience: int = 6
     gradient_clip: float = 1.0
     use_lr_scheduler: bool = True

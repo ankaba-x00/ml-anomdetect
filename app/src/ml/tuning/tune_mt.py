@@ -98,6 +98,13 @@ def objective(
         "l7": lambda_l7,
         "attack": lambda_attack,
     }
+    #use_focal_loss = trial.suggest_categorical("use_focal_loss", [True, False])
+    #if use_focal_loss:
+    #    focal_gamma = trial.suggest_float("focal_gamma", 0.5, 2.5)
+    #else:
+    #    focal_gamma = 0.0
+    use_focal_loss = True
+    focal_gamma = 2.0
 
     # -----------------------------
     # Config object
@@ -114,11 +121,14 @@ def objective(
         weight_decay=weight_decay,
         batch_size=batch_size,
         num_epochs=50,
+        warmup_epochs=5,
         patience=patience,
         activation=activation,
         lambda_l3=lambda_l3,
         lambda_l7=lambda_l7,
         lambda_attack=lambda_attack,
+        use_focal_loss=use_focal_loss,
+        focal_gamma=focal_gamma,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -140,14 +150,25 @@ def objective(
     # Objective: best validation loss
     # -----------------------------
     for epoch, val_loss in enumerate(history["val_loss"]):
-        trial.report(val_loss, step=epoch)
-        if np.isnan(val_loss) or np.isinf(val_loss):
-            raise optuna.TrialPruned()
-        if epoch >= 5 and trial.should_prune():
+        if epoch < cfg.warmup_epochs:
+            continue
+        if val_loss is None or not np.isfinite(val_loss):
             raise optuna.TrialPruned()
 
-    best_epoch = int(np.argmin(history["val_loss"]))
-    final_val_loss = float(history["val_loss"][best_epoch])
+        trial.report(val_loss, step=epoch)
+
+        if epoch >= cfg.warmup_epochs and trial.should_prune():
+            raise optuna.TrialPruned()
+    
+    valid_losses = [
+        (i, v) for i, v in enumerate(history["val_loss"])
+        if i >= cfg.warmup_epochs and v is not None
+    ]
+    if not valid_losses and trial.should_prune():
+        raise optuna.TrialPruned()
+    
+    best_epoch, best_val_loss = min(valid_losses, key=lambda x: x[1])
+    final_val_loss = float(best_val_loss)
     
     trial.set_user_attr(
         "loss_weights",
