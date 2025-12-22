@@ -79,9 +79,7 @@ def objective(
         for i in range(depth)
     ]
     latent_dim = 32
-    #latent_dim = trial.suggest_categorical("latent_dim", [16, 32, 64, 96])
     head_hidden_dim = 32
-    #head_hidden_dim = trial.suggest_categorical("head_hidden_dim", [64, 128])
     dropout = trial.suggest_float("dropout", 0.0, 0.3)
     lr = trial.suggest_float("lr", 1e-4, 3e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
@@ -98,13 +96,17 @@ def objective(
         "l7": lambda_l7,
         "attack": lambda_attack,
     }
+    use_focal_loss = True
+    focal_gamma = 2.0
+
+    # retune params
+    #head_hidden_dim = trial.suggest_categorical("head_hidden_dim", [64, 128])
+    #latent_dim = trial.suggest_categorical("latent_dim", [16, 32, 64, 96])
     #use_focal_loss = trial.suggest_categorical("use_focal_loss", [True, False])
     #if use_focal_loss:
     #    focal_gamma = trial.suggest_float("focal_gamma", 0.5, 2.5)
     #else:
     #    focal_gamma = 0.0
-    use_focal_loss = True
-    focal_gamma = 2.0
 
     # -----------------------------
     # Config object
