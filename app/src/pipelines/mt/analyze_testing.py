@@ -6,15 +6,17 @@ Visualize test data amulti-task prediction results:
 
 Outputs:
     PATH : results/mt_ml/tested/analysis/<COUNTRY>
-    FILES : <COUNTRY>_mt_anomaly_timeseries_<method>.png", 
-            <COUNTRY>_attack_confidence_hist_<method>.png", 
-            <COUNTRY>_attack_confusion_matrix_<method>.png", 
-            <COUNTRY>_intervals_<method>.png",
-            <COUNTRY>_hist_<method>.png", 
-            <COUNTRY>_raw_l3_erroroverlay_<method>.png", 
-            <COUNTRY>_raw_l7_erroroverlay_<method>.png", 
-            <COUNTRY>_attack_timeline_<method>.png",
-            <COUNTRY>_loss_timeseries_<method>.png"
+    FILES : <COUNTRY>_mt_anomaly_timeseries_<METHOD>.png, 
+            <COUNTRY>_attack_confidence_hist_<METHOD>.png, 
+            <COUNTRY>_attack_confusion_matrix_<METHOD>.png, 
+            <COUNTRY>_l7_regression_scatter_<METHOD>.png, 
+            <COUNTRY>_l3_regression_scatter_<METHOD>.png,
+            <COUNTRY>_intervals_<METHOD>.png,
+            <COUNTRY>_hist_<METHOD>.png, 
+            <COUNTRY>_raw_l3_erroroverlay_<METHOD>.png, 
+            <COUNTRY>_raw_l7_erroroverlay_<METHOD>.png, 
+            <COUNTRY>_attack_timeline_<METHOD>.png,
+            <COUNTRY>_loss_timeseries_<METHOD>.png
 
 Usage:
     python -m app.src.pipelines.mt.analyze_testing [-s] [-M] [-R] <COUNTRY|all|none>
@@ -30,6 +32,7 @@ from app.src.ml.analysis import (
     plot_mt_anomaly_timeseries,
     plot_attack_confidence_hist,
     plot_attack_confusion_matrix,
+    plot_regression_scatter,
     plot_true_pred_anomalies,
     plot_attack_timeline,
     plot_loss_components_timeseries
@@ -111,6 +114,24 @@ def analyze_country(
         out_dir,
         f"{country}_attack_confusion_matrix_{method}.png",
         show=show_plots
+    )
+    plot_regression_scatter(
+        df_res["l3_true"],
+        df_res["l3_pred"],
+        "L3 Intensity",
+        5000,
+        out_dir,
+        f"{country}_l3_regression_scatter_{method}.png",
+        show_plots
+    )
+    plot_regression_scatter(
+        df_res["l7_true"],
+        df_res["l7_pred"],
+        "L7 Intensity",
+        5000,
+        out_dir,
+        f"{country}_l7_regression_scatter_{method}.png",
+        show_plots
     )
     plot_intervals(
         country, 
