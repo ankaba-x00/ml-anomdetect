@@ -15,7 +15,7 @@ Outputs:
             analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] [--tuned] <COUNTRY|all>
+    python -m app.src.pipelines.mt.validate_mtmodel [-tr <int>] [-vr <int>] [-L] [--tuned] <COUNTRY|all>
 """
 
 import pickle, torch

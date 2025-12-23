@@ -14,7 +14,7 @@ Outputs:
             analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [--tuned] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [-L] [--tuned] <MODEL> <COUNTRY|all>
 """
 
 import pickle, torch
