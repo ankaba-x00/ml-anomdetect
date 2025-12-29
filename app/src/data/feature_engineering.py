@@ -12,7 +12,12 @@ from app.src.exploration.core.time_utils import (
     conv_iso_to_local_with_daytimes
 )
 from app.src.exploration.core.params import timezones
-from app.src.data.attack_labelling import compute_attack_thresholds, derive_attack_label
+from app.src.data.attack_labelling import (
+    compute_attack_thresholds, 
+    temporal_attack_labeling, 
+    score_attack_types, 
+    ATTACK_TO_ID
+)
 
 
 ########################################################
@@ -144,7 +149,8 @@ def _load_protocol_features(key: str, country: str) -> pd.DataFrame:
 
 def build_country_dataframe(
     country: str, 
-    attack_label: bool = False
+    attack_label: bool = False,
+    debug: bool = False
 ) -> pd.DataFrame:
     """Builds raw feature matrix as df for a given country."""
     print(f"[INFO] Building base DF for country={country}")
@@ -295,10 +301,18 @@ def build_country_dataframe(
     if attack_label:
         print(f"[INFO] Computing attack labels for country={country}")
         thresholds = compute_attack_thresholds(df)
-        df["attack_label"] = df.apply(
-            lambda r: derive_attack_label(r, thresholds),
+        scores_df = df.apply(
+            lambda r: score_attack_types(
+                r, 
+                thresholds, 
+                return_scores=True
+            ),
             axis=1
-        ).astype("int64")
+        ).apply(pd.Series)
+        semantic_labels = scores_df.idxmax(axis=1).map(ATTACK_TO_ID)
+        if debug:
+            df["uncorr_attack_label"] = semantic_labels
+        df["attack_label"] = temporal_attack_labeling(semantic_labels, scores_df)
 
     return df
 

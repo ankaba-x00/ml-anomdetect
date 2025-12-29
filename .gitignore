@@ -17,6 +17,7 @@ results/exploration/y2023-2024
 results/ae_ml/*
 results/mt_ml/*
 results/featured/*
+results/labelled/*
 
 app/deployment/models/*
 
