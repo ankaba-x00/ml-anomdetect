@@ -10,26 +10,30 @@ Search space:
 - learning rate
 - weight decay
 - batch size
-- activation
+- activation encoder
+- activation decoder for regression
+- activation decoder for classification
 - loss weights
 - focal_gamma 
 
 Outputs:
     PATH : results/mt_ml/tuned/<MODEL>
-    FILES: <COUNTRY>_study.db, 
+    FILES: <COUNTRY>_study_<TUNE_PHASE>.db,
            <COUNTRY>_best_model.pt, 
            <COUNTRY>_best_params.json, 
            <COUNTRY>_best_config.json, 
            <COUNTRY>_best_history.json, 
            <COUNTRY>_scaler.pkl, 
+           <COUNTRY>_search_space.csv,
            analysis/<COUNTRY>_latent_space_pca_coords.csv, 
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] <COUNTRY|all>
+    python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] [--retune] <COUNTRY|all>
 """
 
-import json, pickle, torch, optuna
+import csv, json, pickle, torch, optuna, yaml, sys
+import pandas as pd
 from optuna.pruners import (
     MedianPruner, 
     SuccessiveHalvingPruner, 
@@ -55,7 +59,27 @@ from app.src.ml.analysis import plot_latent_space
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
 OUT_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tuned"
+BEST_MODELS_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+def load_params(param_type: str) -> dict[str, float | bool | list[float | int | str]]:
+    PARAM_FILE = FILE_DIR.parent.parent / "ml" / "tuning" / f"{param_type}.yml"
+    if not PARAM_FILE.exists():
+        raise FileNotFoundError(f"[ERROR] Model not found: {PARAM_FILE}")
+    
+    try:
+        with open(PARAM_FILE, "r") as f:
+            params = yaml.safe_load(f)
+            _ = params.keys()
+        print(f"[OK] YML params of {param_type} loaded!")
+    except AttributeError:
+        print(f"[ERROR] YML file empty!")
+        sys.exit(0)
+    except Exception as e:
+        print(f"[ERROR] YML params load failed for reason: {e}")
+        sys.exit(0)
+    
+    return params
 
 
 #########################################
@@ -68,12 +92,29 @@ def tune_country(
     pruner: str = "median",
     tr: int = 75,
     vr: int = 15,
-    latent: bool = False
+    latent: bool = False,
+    tune_phase: str = "base",
 ) -> None:
     print(f"\n==============================")
     print(f" OPTUNA MT TUNING FOR {country}")
     print(f"==============================\n")
-    
+
+    # -----------------------------
+    # Load search space params
+    # -----------------------------
+    params = load_params(tune_phase)
+    required_params = set([
+        "depth", "base_dim", "latent_dim", "head_hidden_dim", "dropout", "lr", 
+        "weight_decay", "batch_size", "patience", "activation_en", 
+        "activation_de_reg", "activation_de_cls", "lambda_l3", "lambda_l7", 
+        "lambda_attack", "use_focal_loss", "focal_gamma"
+    ])
+    if set(params.keys()) != required_params:
+        raise KeyError(f"[ERROR] yml file is missing parameter: {set({params}.keys()) ^ required_params}")
+
+    # -----------------------------
+    # Prepare study
+    # -----------------------------
     set_global_seeds(42)
 
     pr = {
@@ -84,7 +125,7 @@ def tune_country(
     if pr is None:
         raise ValueError(f"Unknown pruner: {pruner}")
 
-    db_path = OUT_DIR / f"{country}_study.db"
+    db_path = OUT_DIR / f"{country}_study_{tune_phase}.db"
 
     study = optuna.create_study(
         direction="minimize",
@@ -94,7 +135,7 @@ def tune_country(
         load_if_exists=True,
     )
     study.optimize(
-        lambda t: objective(t, country, tr, vr, OUT_DIR),
+        lambda t: objective(t, country, tr, vr, OUT_DIR, params),
         n_trials=n_trials,
         n_jobs=1,
         show_progress_bar=True
@@ -131,7 +172,8 @@ def tune_country(
 
     p = study.best_trial.params
     depth = p["depth"]
-    hidden_dims = [p[f"h{i}"] for i in range(depth)]
+    base_dim = p["base_dim"]
+    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
     lambda_l3 = p.get("lambda_l3", 1.0)
     lambda_l7 = p.get("lambda_l7", 1.0)
     lambda_attack = p.get("lambda_attack", 3.0)
@@ -153,16 +195,16 @@ def tune_country(
         num_epochs=90,
         warmup_epochs=5,
         patience=p["patience"],
-        activation=p["activation"],
+        activation_en=p["activation_en"],
+        activation_de_reg=p["activation_de_reg"],
+        activation_de_cls=p["activation_de_cls"],
         lambda_l3=lambda_l3,
         lambda_l7=lambda_l7,
         lambda_attack=lambda_attack,
         use_focal_loss=True,
-        focal_gamma=2.0,
-        #latent_dim=p["latent_dim"],
-        #head_hidden_dim=p["head_hidden_dim"]
-        #use_focal_loss=p["use_focal_loss"],
-        #focal_gamma=p["focal_gamma"],
+        focal_gamma=p["focal_gamma"],
+        latent_dim=p["latent_dim"],
+        head_hidden_dim=p["head_hidden_dim"],
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -208,6 +250,19 @@ def tune_country(
     with open(OUT_DIR / f"{country}_scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
 
+    mode = "w" if tune_phase == "base" else "a"
+    clean_params = {}
+    for k, v in params.items():
+        if isinstance(v, dict):
+            clean_params[k] = [v["start"], v["end"]]
+        else:
+            clean_params[k] = list(v)
+    with open(OUT_DIR / f"{country}_search_space.csv", mode=mode, newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=clean_params.keys())
+        if tune_phase == "base":
+            writer.writeheader()
+        writer.writerow(clean_params)
+
     print(f"\n[OK] Finished tuning for {country}")
 
     if latent:
@@ -233,7 +288,8 @@ def tune_all(
     pruner: str, 
     tr: int, 
     vr: int, 
-    latent: bool
+    latent: bool,
+    tune_phase: str = "base"
 ) -> None:
     for c in COUNTRIES:
         try:
@@ -243,7 +299,8 @@ def tune_all(
                 pruner=pruner, 
                 tr=tr, 
                 vr=vr,
-                latent=latent
+                latent=latent,
+                tune_phase=tune_phase
             )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
@@ -256,6 +313,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Tune MT hyperparameters for single or for all countries."
+    )
+
+    parser.add_argument(
+        "--retune",
+        action="store_true",
+        help="read retune parameter from yml for retuning]"
     )
 
     parser.add_argument(
@@ -304,6 +367,8 @@ if __name__ == "__main__":
     if args.pruner.lower() not in ["median", "halving", "hyperband"]:
         parser.print_help()
         exit(1)
+    
+    tune_phase = "retune" if args.retune else "base"
 
     if target.lower() == "all":
         tune_all(
@@ -311,7 +376,8 @@ if __name__ == "__main__":
             args.pruner.lower(), 
             args.tr, 
             args.vr, 
-            args.latent
+            args.latent,
+            tune_phase
         )
     else:
         tune_country(
@@ -320,5 +386,6 @@ if __name__ == "__main__":
             pruner=args.pruner.lower(),
             tr=args.tr, 
             vr=args.vr,
-            latent=args.latent
+            latent=args.latent,
+            tune_phase=tune_phase
         )

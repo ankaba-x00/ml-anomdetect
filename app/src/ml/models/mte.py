@@ -19,7 +19,9 @@ class MTEConfig:
     latent_dim: int = 32
     quantiles: tuple[float, ...] = (0.5, 0.9, 0.99)
     dropout: float = 0.1
-    activation: str = "relu"
+    activation_en: str = "relu"
+    activation_de_reg: str = "relu"
+    activation_de_cls: str = "relu"
     head_hidden_dim: int = 32
     lambda_l3: float = 1.0
     lambda_l7: float = 1.0
@@ -42,7 +44,29 @@ class MTEConfig:
     @staticmethod
     def from_json(s: str) -> "MTEConfig":
         return MTEConfig(**json.loads(s))
+    
+################################################
+##                    UTILS                   ##
+################################################
 
+def _make_activation(name: str) -> nn.Module:
+        activations = {
+            "relu": nn.ReLU(inplace=True),
+            "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
+            "gelu": nn.GELU(),
+            "tanh": nn.Tanh(),
+            "sigmoid": nn.Sigmoid(),
+            "elu": nn.ELU(inplace=True),
+        }
+        if name not in activations:
+            raise ValueError(f"[ERROR] Unknown activation: {name}.")
+        return activations[name]
+
+def _pick_init_function(activation, module) -> None:
+    if activation in ["relu", "leaky_relu", "gelu", "elu"]:
+        return nn.init.kaiming_uniform_(module.weight, nonlinearity="relu")
+    elif activation in ["sigmoid", "tanh"]:
+        return nn.init.xavier_normal_(module.weight)
 
 ################################################
 ##               TRAFFIC ENCODER              ##
@@ -67,7 +91,7 @@ class TrafficEncoder(nn.Module):
         self.cat_dims = cat_dims
         self.latent_dim = latent_dim
         self.continuous_noise_std = continuous_noise_std
-        self.activation = self._make_activation(activation)
+        self.activation = _make_activation(activation)
 
         # -----------------------------
         # Categorical embeddings
@@ -108,24 +132,13 @@ class TrafficEncoder(nn.Module):
     # -----------------------------
     # Utilities
     # -----------------------------
-    def _make_activation(self, name: str) -> nn.Module:
-        activations = {
-            "relu": nn.ReLU(inplace=True),
-            "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
-            "gelu": nn.GELU(),
-            "tanh": nn.Tanh(),
-            "sigmoid": nn.Sigmoid(),
-            "elu": nn.ELU(inplace=True),
-        }
-        if name not in activations:
-            raise ValueError(f"[ERROR] Unknown activation: {name}.")
-        return activations[name]
 
     def _init_weights(self) -> None:
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, nonlinearity="relu")
+                _pick_init_function(self.activation, m)
                 nn.init.zeros_(m.bias)
+                # nn.init.orthogonal_(m.bias) # TODO: test option
             elif isinstance(m, nn.Embedding):
                 nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
@@ -182,33 +195,52 @@ class TrafficAttackPredictor(nn.Module):
             hidden_dims=config.hidden_dims,
             latent_dim=config.latent_dim,
             dropout=config.dropout,
-            activation=config.activation,
+            activation=config.activation_en,
             continuous_noise_std=0.01,
         )
 
-        def make_head(out_dim: int) -> nn.Module:
+        def make_head_reg(out_dim: int) -> nn.Module:
             if config.head_hidden_dim > 0:
                 return nn.Sequential(
                     nn.Linear(config.latent_dim, config.head_hidden_dim),
-                    nn.ReLU(inplace=True),
+                    _make_activation(config.activation_de_reg),
                     nn.Dropout(config.dropout),
                     nn.Linear(config.head_hidden_dim, out_dim),
                 )
             else:
                 return nn.Linear(config.latent_dim, out_dim)
+        
+        def make_head_cls(out_dim: int) -> nn.Module:
+            if config.head_hidden_dim > 0:
+                return nn.Sequential(
+                    nn.Linear(config.latent_dim, config.head_hidden_dim),
+                    _make_activation(config.activation_de_cls),
+                    nn.Dropout(config.dropout),
+                    nn.Linear(config.head_hidden_dim, out_dim),
+                    nn.Softmax(dim=1),
+                )
+            else:
+                return nn.Linear(config.latent_dim, out_dim)
 
-        self.l3_head = make_head(1)
-        self.l7_head = make_head(1)
-        self.attack_head = make_head(config.n_attack_types)
+
+        self.quantiles = config.quantiles
+        nq = len(self.quantiles)
+
+        self.l3_head = make_head_reg(nq)
+        self.l7_head = make_head_reg(nq)
+        self.attack_head = make_head_cls(config.n_attack_types)
 
         self._init_heads()
 
     def _init_heads(self) -> None:
         for head in [self.l3_head, self.l7_head, self.attack_head]:
             for m in head.modules():
+                if head == self.attack_head:
+                    activation = self.config.activation_de_cls
+                else: 
+                    activation = self.config.activation_de_reg
                 if isinstance(m, nn.Linear):
-                    nn.init.xavier_uniform_(m.weight)
-                    nn.init.zeros_(m.bias)
+                    _pick_init_function(activation, m)
 
     def forward(
         self, 

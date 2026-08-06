@@ -34,7 +34,7 @@ Outputs:
             best_attack_class_weights.json
 
 Usage:
-    python -m app.src.pipelines.mt.analyze_tuning [-s] [-M] [-L] <COUNTRY|all|none>
+    python -m app.src.pipelines.mt.analyze_tuning [-s] [-M] [-L] [--retune] <COUNTRY|all|none>
 """
 
 import json, optuna, torch, pickle
@@ -244,7 +244,8 @@ def analyze_country(
     multi: bool = True, 
     all: bool = False, 
     latent: bool = False, 
-    show: bool = False
+    show: bool = False,
+    tune_phase: str = "base"
 ) -> None:
     """Runs full analysis pipeline of a country MT model tuning."""
     print(f"\n[INFO] Analyzing {country}...")
@@ -252,7 +253,7 @@ def analyze_country(
     out_dir = TUNED_DIR / "analysis" / country
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    db_path = TUNED_DIR / f"{country}_study.db"
+    db_path = TUNED_DIR / f"{country}_study_{tune_phase}.db"
     if not db_path.exists():
         raise FileNotFoundError(f"No study DB for {country}")
     
@@ -334,7 +335,8 @@ def analyze_country(
 def analyze_all(
     multi: bool = True, 
     latent: bool = False, 
-    show_plots: bool = False
+    show_plots: bool = False,
+    tune_phase: str = "base"
 ) -> None:
     """Runs full analysis pipeline of all country MT model tunings."""
     print(f"\n[INFO] Analysis of all MT models starting...")
@@ -345,7 +347,8 @@ def analyze_all(
             multi=False, 
             all=True,
             latent=latent,
-            show=show_plots
+            show=show_plots,
+            tune_phase=tune_phase
     )
 
     if multi:
@@ -359,6 +362,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Analyze MT model tuning performance."
+    )
+
+    parser.add_argument(
+        "--retune",
+        action="store_true",
+        help="read retune parameter from yml for retuning]"
     )
 
     parser.add_argument(
@@ -387,12 +396,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     target = args.target
+
+    tune_phase = "retune" if args.retune else "base"
     
     if target.lower() == "all":
         analyze_all(
             args.multi, 
             args.latent, 
-            args.show
+            args.show,
+            tune_phase
         )
     elif target.lower() == "none":
         if args.multi:
@@ -405,5 +417,6 @@ if __name__ == "__main__":
             multi=args.multi, 
             all=False,
             latent=args.latent,
-            show=args.show
+            show=args.show,
+            tune_phase=tune_phase
         )

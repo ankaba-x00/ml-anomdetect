@@ -32,6 +32,7 @@ def objective(
     tr: int,
     vr: int,
     out_path: Path,
+    params: dict,
 ) -> float:
     set_global_seeds(42)
 
@@ -69,44 +70,94 @@ def objective(
     scaler = RobustScaler()
     Xc_tr = scaler.fit_transform(Xc_tr).astype(np.float32)
     Xc_val = scaler.transform(Xc_val).astype(np.float32)
-
+    
     # -----------------------------
     # Hyperparameter search space
     # -----------------------------
-    depth = trial.suggest_int("depth", 1, 4)
-    hidden_dims = [
-        trial.suggest_categorical(f"h{i}", [64, 128, 256, 384, 512])
-        for i in range(depth)
-    ]
-    latent_dim = 32
-    head_hidden_dim = 32
-    dropout = trial.suggest_float("dropout", 0.0, 0.3)
-    lr = trial.suggest_float("lr", 1e-4, 3e-3, log=True)
-    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [128, 256, 512])
-    patience = trial.suggest_int("patience", 4, 10)
-    activation = trial.suggest_categorical(
-        "activation", ["relu", "gelu", "leaky_relu"]
+    depth = trial.suggest_int(
+        "depth", 
+        params["depth"]["start"], 
+        params["depth"]["end"]
     )
-    lambda_l3 = trial.suggest_float("lambda_l3", 0.5, 2.0)
-    lambda_l7 = trial.suggest_float("lambda_l7", 0.5, 2.0)
-    lambda_attack = trial.suggest_float("lambda_attack", 0.2, 8.0, log=True)
+    base_dim = trial.suggest_categorical(
+        "base_dim", 
+        params["base_dim"]
+    )
+    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
+    latent_dim = trial.suggest_categorical(
+        "latent_dim", 
+        params["latent_dim"]
+    )
+    head_hidden_dim = trial.suggest_categorical(
+        "head_hidden_dim", 
+        params["head_hidden_dim"]
+    )
+    dropout = trial.suggest_float(
+        "dropout", 
+        params["dropout"]["start"], 
+        params["dropout"]["end"]
+    )
+    lr = trial.suggest_float(
+        "lr", 
+        float(params["lr"]["start"]), 
+        float(params["lr"]["end"]), 
+        log=True
+    )
+    weight_decay = trial.suggest_float(
+        "weight_decay", 
+        float(params["weight_decay"]["start"]), 
+        float(params["weight_decay"]["end"]), 
+        log=True
+    )
+    batch_size = trial.suggest_categorical(
+        "batch_size", 
+        params["batch_size"]
+    )
+    patience = trial.suggest_int(
+        "patience", 
+        params["patience"]["start"], 
+        params["patience"]["end"]
+    )
+    activation_en = trial.suggest_categorical(
+        "activation_en", 
+        params["activation_en"]
+    )
+    activation_de_reg = trial.suggest_categorical(
+        "activation_de_reg", 
+        params["activation_de_reg"]
+    )
+    activation_de_cls = trial.suggest_categorical(
+        "activation_de_cls", 
+        params["activation_de_cls"]
+    )
+    lambda_l3 = trial.suggest_float(
+        "lambda_l3", 
+        params["lambda_l3"]["start"], 
+        params["lambda_l3"]["end"]
+    )
+    lambda_l7 = trial.suggest_float(
+        "lambda_l7", 
+        params["lambda_l7"]["start"], 
+        params["lambda_l7"]["end"]
+    )
+    lambda_attack = trial.suggest_float(
+        "lambda_attack", 
+        params["lambda_attack"]["start"], 
+        params["lambda_attack"]["end"], 
+        log=True
+    )
     loss_weights = {
         "l3": lambda_l3,
         "l7": lambda_l7,
         "attack": lambda_attack,
     }
-    use_focal_loss = True
-    focal_gamma = 2.0
-
-    # retune params
-    #head_hidden_dim = trial.suggest_categorical("head_hidden_dim", [64, 128])
-    #latent_dim = trial.suggest_categorical("latent_dim", [16, 32, 64, 96])
-    #use_focal_loss = trial.suggest_categorical("use_focal_loss", [True, False])
-    #if use_focal_loss:
-    #    focal_gamma = trial.suggest_float("focal_gamma", 0.5, 2.5)
-    #else:
-    #    focal_gamma = 0.0
+    use_focal_loss = params["use_focal_loss"][0]
+    if use_focal_loss:
+        focal_gamma = trial.suggest_float(
+            "focal_gamma", 
+            params["focal_gamma"]["start"],
+            params["focal_gamma"]["end"]
+        )
 
     # -----------------------------
     # Config object
@@ -117,6 +168,7 @@ def objective(
         n_attack_types=8,
         hidden_dims=tuple(hidden_dims),
         latent_dim=latent_dim,
+        quantiles=(0.5, 0.9, 0.99),
         head_hidden_dim=head_hidden_dim,
         dropout=dropout,
         lr=lr,
@@ -125,7 +177,9 @@ def objective(
         num_epochs=50,
         warmup_epochs=5,
         patience=patience,
-        activation=activation,
+        activation_en=activation_en,
+        activation_de_reg=activation_de_reg,
+        activation_de_cls=activation_de_cls,
         lambda_l3=lambda_l3,
         lambda_l7=lambda_l7,
         lambda_attack=lambda_attack,
