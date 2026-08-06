@@ -19,6 +19,6 @@ COPY . .
 # Ensure Python can import the `app` package
 ENV PYTHONPATH="/app"
 
-EXPOSE 8000
+EXPOSE 7134
 
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "7134"]
