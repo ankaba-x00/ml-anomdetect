@@ -22,3 +22,5 @@ results/labelled/*
 app/deployment/models/*
 
 stdout_*
+.vscode
+.devcontainer
