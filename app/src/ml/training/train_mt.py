@@ -328,11 +328,16 @@ def train_multitask_model(
             tl7 += loss_l7.item() * bs
             tatt += loss_att.item() * bs
             n += bs
-
-        history["train_loss"].append(tl / n)
-        history["train_l3"].append(tl3 / n)
-        history["train_l7"].append(tl7 / n)
-        history["train_attack"].append(tatt / n)
+        
+        avg_train_loss = tl / n
+        avg_train_l3 = tl3 / n
+        avg_train_l7 = tl7 / n
+        avg_train_att = tatt / n
+        
+        history["train_loss"].append(avg_train_loss)
+        history["train_l3"].append(avg_train_l3)
+        history["train_l7"].append(avg_train_l7)
+        history["train_attack"].append(avg_train_att)
         history["attack_class_weights"] = (
             attack_class_weights.cpu().tolist()
             if attack_class_weights is not None
@@ -421,7 +426,7 @@ def train_multitask_model(
             if epoch >= config.warmup_epochs:
                 if avg_val < best_metric - 1e-9:
                     best_metric = avg_val
-                    best_state = model.state_dict()
+                    best_state = model.state_dict().copy()
                     history["best_epoch"] = epoch + 1
                     no_improve = 0
                 else:
@@ -436,6 +441,44 @@ def train_multitask_model(
                 f"Mode {mode:<12} | "
                 f"Train {history['train_loss'][-1]:.4f} | "
                 f"Val {avg_val:.4f} | "
+                f"LR {optimizer.param_groups[0]['lr']:.2e}"
+            )
+        
+        # -----------------------------
+        # Full training / No Validation
+        # -----------------------------
+        else:
+            if not in_warmup:
+                scheduler.step(avg_train_loss)
+
+            if epoch == config.warmup_epochs and not reset_after_warmup:
+                best_metric = float("inf")
+                best_state = None
+                no_improve = 0
+                reset_after_warmup = True
+                print(f"[INFO] Warmup finished at epoch {epoch}. Resetting early stopping baseline.")
+
+            # -----------------------------
+            # Early stopping
+            # -----------------------------
+            if epoch >= config.warmup_epochs:
+                if avg_train_loss < best_metric - 1e-9:
+                    best_metric = avg_train_loss
+                    best_state = model.state_dict().copy()
+                    history["best_epoch"] = epoch + 1
+                    no_improve = 0
+                else:
+                    no_improve += 1
+                    if no_improve >= config.patience:
+                        print(f"Early stopping at epoch {epoch+1}")
+                        break
+
+            mode = "ATTACK-WARMUP" if in_warmup else "MULTI-TASK"
+            print(
+                f"Epoch {epoch+1:3d}/{config.num_epochs} | "
+                f"Mode {mode:<12} | "
+                f"Loss {avg_train_loss:.4f} | "
+                f"(loss_l3: {avg_train_l3:.6f}, loss_l7: {avg_train_l7:.6f}, loss_att: {avg_train_att:.6f}) | "
                 f"LR {optimizer.param_groups[0]['lr']:.2e}"
             )
 

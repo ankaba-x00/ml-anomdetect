@@ -98,9 +98,9 @@ def train_country(
         
         try:
             loss_weights = {
-                "l3": best_params.get("l3", 1.0),
-                "l7": best_params.get("l7", 1.0),
-                "attack": best_params.get("attack", 3.0),
+                "l3": best_params.get("lambda_l3", 1.0),
+                "l7": best_params.get("lambda_l7", 1.0),
+                "attack": best_params.get("lambda_attack", 3.0),
             }
             print(f"[INFO] Using tuned loss weights: {loss_weights}")
         except Exception:
