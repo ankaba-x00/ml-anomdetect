@@ -119,6 +119,7 @@ def train_country(
             n_attack_types=8,
             hidden_dims=(128, 64),
             latent_dim=32,
+            quantiles=(0.5, 0.9, 0.99),
             dropout=0.1,
             head_hidden_dim=32,
             lr=1e-3,

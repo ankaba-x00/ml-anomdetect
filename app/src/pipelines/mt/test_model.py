@@ -120,7 +120,7 @@ def test_country(
         merge_gap=0,
     )
 
-    errors = results["loss_total"]
+    score = results["score"]
     thr = results["threshold"]
     mask = results["mask"]
     starts = results["anomaly_starts"]
@@ -130,28 +130,31 @@ def test_country(
     # Print summary
     # --------------------
     print("\n--- MT Test Summary ---")
-    print(f"Total samples: {len(errors)}")
+    print(f"Total samples: {len(score)}")
     print(f"Threshold ({method}): {thr:.6f}")
     print(f"Flagged samples: {int(mask.sum())}")
-    print(f"Min:   {errors.min():.6f}")
-    print(f"Mean:  {errors.mean():.6f}")
-    print(f"Std:   {errors.std():.6f}")
-    print(f"Median:{np.median(errors):.6f}")
-    print(f"99th:  {np.percentile(errors, 99):.6f}")
+    print(f"Min:   {score.min():.6f}")
+    print(f"Mean:  {score.mean():.6f}")
+    print(f"Std:   {score.std():.6f}")
+    print(f"Median:{np.median(score):.6f}")
+    print(f"99th:  {np.percentile(score, 99):.6f}")
     
     # -----------------------------
     # Save CSV
     # -----------------------------
+    sq = results["score_quantile"]
     df = pd.DataFrame({
         "ts": ts_te,
-        "loss_total": errors,
+        "score": score,
+        "loss_total": results["score"],
         "loss_l3": results["loss_l3"],
         "loss_l7": results["loss_l7"],
         "loss_attack": results["loss_attack"],
+        "loss_total": results["loss_total"],
         "l3_true": y3_te,
-        "l3_pred": results["l3_pred"],
+        "l3_pred": results[f"l3_p{str(sq)}"],
         "l7_true": y7_te,
-        "l7_pred": results["l7_pred"],
+        "l7_pred": results[f"l7_p{str(sq)}"],
         "attack_true": ya_te,
         "attack_pred": results["attack_pred"],
         "attack_conf": results["attack_prob_max"],

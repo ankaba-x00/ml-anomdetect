@@ -151,6 +151,7 @@ def validate_country(
     # --------------------
     # Compute validation errors
     # --------------------
+    score_quantile = 0.99
     res = apply_multitask_model(
         model=model,
         X_cont=Xc_val_scald,
@@ -164,9 +165,10 @@ def validate_country(
         l7_weight=l7_w,
         min_length=1,
         merge_gap=0,
+        score_quantile=score_quantile
     )
 
-    errors = res["loss_total"]
+    scores = res["score"]
     thr = res["threshold"]
     mask = res["mask"]
 
@@ -174,28 +176,29 @@ def validate_country(
     # Print summary
     # --------------------
     print("\n--- MT Validation Summary ---")
-    print(f"Total samples: {len(errors)}")
+    print(f"Total samples: {len(scores)}")
     print(f"Threshold ({method}): {thr:.6f}")
     print(f"Flagged samples: {int(mask.sum())}")
-    print(f"Min:   {errors.min():.6f}")
-    print(f"Mean:  {errors.mean():.6f}")
-    print(f"Std:   {errors.std():.6f}")
-    print(f"Median:{np.median(errors):.6f}")
-    print(f"99th:  {np.percentile(errors, 99):.6f}")
+    print(f"Min:    {scores.min():.6f}")
+    print(f"Mean:   {scores.mean():.2f}")
+    print(f"Std:    {scores.std():.6f}")
+    print(f"Median: {np.median(scores):.6f}")
+    print(f"Score p99: {np.percentile(scores, 99):.2f}")
 
     # --------------------
     # Save CSV
     # --------------------
     df_out = pd.DataFrame({
         "ts": ts_val,
-        "loss_total": errors,
+        "score": scores,
         "loss_l3": res["loss_l3"],
         "loss_l7": res["loss_l7"],
         "loss_attack": res["loss_attack"],
+        "loss_total": res["loss_total"],
         "l3_true": y3_val,
-        "l3_pred": res["l3_pred"],
+        f"l3_pred": res[f"l3_p{int(score_quantile*100)}"],
         "l7_true": y7_val,
-        "l7_pred": res["l7_pred"],
+        f"l7_pred": res[f"l7_p{int(score_quantile*100)}"],
         "attack_true": ya_val,
         "attack_pred": res["attack_pred"],
         "attack_conf": res["attack_prob_max"],

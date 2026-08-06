@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from collections import Counter
 
 from app.src.ml.models.mte import MTEConfig, TrafficAttackPredictor
 
@@ -87,6 +86,28 @@ def focal_loss(
     elif reduction == "sum":
         return loss.sum()
     return loss
+
+
+def pinball_loss(
+    yhat: torch.Tensor,
+    y: torch.Tensor,
+    q: float,
+) -> torch.Tensor:
+    """Quantile loss for regression heads"""
+    e = y - yhat
+    return torch.mean(torch.maximum(q * e, (q - 1) * e))
+
+
+def quantile_loss(
+    preds: torch.Tensor, # (B, Q)
+    target: torch.Tensor, # (B,)
+    quantiles: list[float],
+) -> torch.Tensor:
+    """Returns mean pinball loss across quantiles."""
+    losses = []
+    for i, q in enumerate(quantiles):
+        losses.append(pinball_loss(preds[:, i], target, q))
+    return torch.stack(losses).mean()
 
 
 def train_multitask_model(
@@ -257,8 +278,17 @@ def train_multitask_model(
 
             out = model(Xc, Xk)
 
-            loss_l3 = F.mse_loss(out["l3"], y3)
-            loss_l7 = F.mse_loss(out["l7"], y7)
+            loss_l3 = quantile_loss(
+                out["l3_q"],
+                y3,
+                model.config.quantiles,
+            )
+
+            loss_l7 = quantile_loss(
+                out["l7_q"],
+                y7,
+                model.config.quantiles,
+            )
             if config.use_focal_loss and not in_warmup:
                 loss_att = focal_loss(
                 out["attack_logits"],
@@ -324,8 +354,17 @@ def train_multitask_model(
 
                     out = model(Xc, Xk)
 
-                    loss_l3 = F.mse_loss(out["l3"], y3)
-                    loss_l7 = F.mse_loss(out["l7"], y7)
+                    loss_l3 = quantile_loss(
+                        out["l3_q"],
+                        y3,
+                        model.config.quantiles,
+                    )
+
+                    loss_l7 = quantile_loss(
+                        out["l7_q"],
+                        y7,
+                        model.config.quantiles,
+                    )
                     if config.use_focal_loss  and not in_warmup:
                         loss_att = focal_loss(
                         out["attack_logits"],

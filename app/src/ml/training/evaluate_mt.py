@@ -10,6 +10,14 @@ from app.src.ml.models.mte import TrafficAttackPredictor
 ##      MULTI-TASK SCORING UTILS       ##
 #########################################
 
+def pinball_loss_vec(preds, y, quantiles):
+    losses = []
+    for i, q in enumerate(quantiles):
+        e = y - preds[:, i]
+        losses.append(torch.maximum(q * e, (q - 1) * e))
+    return torch.stack(losses, dim=1).mean(dim=1)
+
+
 def prediction_errors(
     model: TrafficAttackPredictor,
     X_cont: np.ndarray,
@@ -20,6 +28,7 @@ def prediction_errors(
     device: Optional[str] = None,
     l3_weight: float = 1.0,
     l7_weight: float = 1.0,
+    score_quantile: float = 0.99
 ) -> dict[str, Union[np.ndarray, None]]:
     """Compute per-sample prediction errors."""
     
@@ -39,13 +48,22 @@ def prediction_errors(
 
     with torch.no_grad():
         out = model(Xc, Xk)
-        l3_hat = out["l3"]
-        l7_hat = out["l7"]
-        logits = out["attack_logits"]
+        
+        quantiles = model.config.quantiles
+        if score_quantile not in quantiles:
+            raise ValueError(f"[ERROR] Model quantiles does not include score_quantile={score_quantile}.")
+        q_idx = quantiles.index(score_quantile)
+        l3_q = out["l3_q"]
+        l7_q = out["l7_q"]
+        l3_p = l3_q[:, q_idx]
+        l7_p = l7_q[:, q_idx]
 
-        # per-sample regression losses (MSE)
-        loss_l3 = ((l3_hat - y3) ** 2) if y3 is not None else None
-        loss_l7 = ((l7_hat - y7) ** 2) if y7 is not None else None
+        # anomaly score as weighted tail risk
+        score = l3_weight * l3_p + l7_weight * l7_p
+
+        # optional diagnostic losses (not for alerting)
+        loss_l3 = pinball_loss_vec(l3_q, y3, quantiles) if y3 is not None else None
+        loss_l7 = pinball_loss_vec(l7_q, y7, quantiles) if y7 is not None else None
 
         # per-sample classification loss (CE)
         loss_attack = None
@@ -53,6 +71,7 @@ def prediction_errors(
         attack_prob_max = None
 
         if ya is not None:
+            logits = out["attack_logits"]
             loss_attack = F.cross_entropy(
                 logits, 
                 ya, 
@@ -63,21 +82,22 @@ def prediction_errors(
             probs = F.softmax(logits, dim=-1)
             attack_pred = probs.argmax(dim=-1)
             attack_prob_max = probs.max(dim=-1).values
-
-        # total per-sample combined loss of regression
-        total = torch.zeros(Xc.size(0), device=device)
-        if loss_l3 is not None:
-            total = total + l3_weight * loss_l3
-        if loss_l7 is not None:
-            total = total + l7_weight * loss_l7
+        
+        total = (
+            model.config.lambda_l3 * loss_l3 +
+            model.config.lambda_l7 * loss_l7 +
+            model.config.lambda_attack * loss_attack
+        )
 
     return {
-        "loss_total": total.detach().cpu().numpy(),
-        "loss_l3": loss_l3.detach().cpu().numpy() if loss_l3 is not None else None,
-        "loss_l7": loss_l7.detach().cpu().numpy() if loss_l7 is not None else None,
+        "score_quantile": int(score_quantile*100),
+        "score": score.detach().cpu().numpy().astype(np.float32),
+        f"l3_p{int(score_quantile*100)}": l3_p.cpu().numpy(),
+        f"l7_p{int(score_quantile*100)}": l7_p.cpu().numpy(),
+        "loss_l3": loss_l3.cpu().numpy() if loss_l3 is not None else None,
+        "loss_l7": loss_l7.cpu().numpy() if loss_l7 is not None else None,
         "loss_attack": loss_attack.detach().cpu().numpy() if loss_attack is not None else None,
-        "l3_pred": l3_hat.detach().cpu().numpy(),
-        "l7_pred": l7_hat.detach().cpu().numpy(),
+        "loss_total": total.detach().cpu().numpy().astype(np.float32),
         "attack_pred": attack_pred.detach().cpu().numpy() if attack_pred is not None else None,
         "attack_prob_max": attack_prob_max.detach().cpu().numpy() if attack_prob_max is not None else None,
     }
@@ -88,24 +108,24 @@ def prediction_errors(
 #########################################
 
 def threshold_percentile(
-    errors: np.ndarray, 
+    scores: np.ndarray, 
     p: float = 99.0
 ) -> float:
-    return float(np.percentile(errors, p))
+    return float(np.percentile(scores, p))
 
 
 def threshold_mad(
-    errors: np.ndarray, 
+    scores: np.ndarray, 
     k: float = 6.0, 
     min_p: float = 99.5, 
     max_p: float = 99.9
 ) -> float:
-    med = np.median(errors)
-    mad = np.median(np.abs(errors - med)) + 1e-12
+    med = np.median(scores)
+    mad = np.median(np.abs(scores - med)) + 1e-12
     nmad = 1.4826 * mad
     thr = med + k * nmad
-    low = np.percentile(errors, min_p)
-    high = np.percentile(errors, max_p)
+    low = np.percentile(scores, min_p)
+    high = np.percentile(scores, max_p)
     thr = np.clip(thr, low, high)
     return float(thr)
 
@@ -115,10 +135,10 @@ def threshold_mad(
 #########################################
 
 def anomaly_mask(
-    errors: np.ndarray, 
+    scores: np.ndarray, 
     threshold: float
 ) -> np.ndarray:
-    return errors > threshold
+    return scores > threshold
 
 
 def find_anomalies(
@@ -181,6 +201,7 @@ def apply_multitask_model(
     l7_weight: float = 1.0,
     min_length: int = 1,
     merge_gap: int = 0,
+    score_quantile: float = 0.99
 ) -> dict[str, Union[np.ndarray, None]]:
     """Computes per-sample combined loss and (optional) anomaly intervals based on a threshold."""
     
@@ -194,20 +215,21 @@ def apply_multitask_model(
         device=device,
         l3_weight=l3_weight,
         l7_weight=l7_weight,
+        score_quantile=score_quantile
     )
 
-    errors = out["loss_total"]
+    scores = out["score"]
 
     if method == "p99":
-        threshold = threshold_percentile(errors, p=99)
+        threshold = threshold_percentile(scores, p=99)
     elif method == "p995":
-        threshold = threshold_percentile(errors, p=99.5)
+        threshold = threshold_percentile(scores, p=99.5)
     elif method == "mad":
-        threshold = threshold_mad(errors)
+        threshold = threshold_mad(scores)
     else:
         raise ValueError(f"[Error] Unknown threshold method: {method}")
 
-    mask = anomaly_mask(errors, threshold)
+    mask = anomaly_mask(scores, threshold)
     intervals = find_anomalies(mask, min_length, merge_gap)
     starts = np.array([s for s, _ in intervals], dtype=int)
     ends = np.array([e for _, e in intervals], dtype=int)

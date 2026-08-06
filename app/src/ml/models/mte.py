@@ -17,6 +17,7 @@ class MTEConfig:
     n_attack_types: int
     hidden_dims: Sequence[int] = (128, 64)
     latent_dim: int = 32
+    quantiles: tuple[float, ...] = (0.5, 0.9, 0.99)
     dropout: float = 0.1
     activation: str = "relu"
     head_hidden_dim: int = 32
@@ -215,37 +216,39 @@ class TrafficAttackPredictor(nn.Module):
         x_cat: torch.Tensor
     ) -> dict[str, torch.Tensor]:
         z = self.encoder(x_cont, x_cat)
+        l3_q = self.l3_head(z)
+        l7_q = self.l7_head(z)
         return {
             "z": z,
-            "l3": self.l3_head(z).squeeze(-1),
-            "l7": self.l7_head(z).squeeze(-1),
+            "l3_q": l3_q,
+            "l7_q": l7_q,
             "attack_logits": self.attack_head(z),
         }
 
-    def compute_loss(
-        self,
-        outputs: dict,
-        y_l3: torch.Tensor,
-        y_l7: torch.Tensor,
-        y_attack: torch.Tensor,
-    ) -> dict[str, torch.Tensor]:
-        l3_loss = F.mse_loss(outputs["l3"], y_l3)
-        l7_loss = F.mse_loss(outputs["l7"], y_l7)
-        attack_loss = F.cross_entropy(
-            outputs["attack_logits"], 
-            y_attack, 
-            weight=self.attack_class_weights
-        )
+    # def compute_loss(
+    #     self,
+    #     outputs: dict,
+    #     y_l3: torch.Tensor,
+    #     y_l7: torch.Tensor,
+    #     y_attack: torch.Tensor,
+    # ) -> dict[str, torch.Tensor]:
+    #     l3_loss = F.mse_loss(outputs["l3"], y_l3)
+    #     l7_loss = F.mse_loss(outputs["l7"], y_l7)
+    #     attack_loss = F.cross_entropy(
+    #         outputs["attack_logits"], 
+    #         y_attack, 
+    #         weight=self.attack_class_weights
+    #     )
 
-        total = (
-            self.config.lambda_l3 * l3_loss +
-            self.config.lambda_l7 * l7_loss +
-            self.config.lambda_attack * attack_loss
-        )
+    #     total = (
+    #         self.config.lambda_l3 * l3_loss +
+    #         self.config.lambda_l7 * l7_loss +
+    #         self.config.lambda_attack * attack_loss
+    #     )
 
-        return {
-            "total": total,
-            "l3": l3_loss,
-            "l7": l7_loss,
-            "attack": attack_loss,
-        }
+    #     return {
+    #         "total": total,
+    #         "l3": l3_loss,
+    #         "l7": l7_loss,
+    #         "attack": attack_loss,
+    #     }
