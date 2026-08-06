@@ -3,6 +3,7 @@ from typing import Union
 import pandas as pd
 import numpy as np
 
+# TODO: test on the Canadian netflow dataset for 4,6 especially
 
 @dataclass
 class AttackThresholds:
@@ -137,6 +138,7 @@ def score_attack_types(
     # ------------------------
     # 4 = GRE flood
     # ------------------------
+    # TODO: test downgraded gre_threshold
     gre_ratio_norm = min(gre / max(gre_threshold, 0.02), 1.0)
     gre_score = (
         gre_ratio_norm * 0.6 + 
@@ -175,6 +177,7 @@ def score_attack_types(
     # ------------------------
     # 7 = stealth scan
     # ------------------------
+    # TODO: too prominent
     #stealth_score = (l3_norm * 0.4 * 0.5 + bots_norm * 0.6) if 0.2 < l3_norm < 0.7 and bots_norm > 0.3 else 0
     l3_band = 1.0 - abs(l3_norm - 0.4) * 2  # peak around 0.4
     l3_band = max(l3_band, 0.0)
