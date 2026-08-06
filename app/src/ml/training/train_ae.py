@@ -391,9 +391,9 @@ def train_autoencoder(
                     break
 
             print(f"Epoch {epoch + 1:3d}/{config.num_epochs}: "
-                  "Train loss: {avg_train_loss:.6f} "
+                  f"Train loss: {avg_train_loss:.6f} "
                   f"({cont_short}: {avg_train_cont:.6f}, {cat_short}: {avg_train_cat:.6f}) | "
-                  "Val loss: {avg_val_loss:.6f} "
+                  f"Val loss: {avg_val_loss:.6f} "
                   f"({cont_short}: {avg_val_cont:.6f}, {cat_short}: {avg_val_cat:.6f}) | "
                   f"LR: {optimizer.param_groups[0]['lr']:.2e}")
             

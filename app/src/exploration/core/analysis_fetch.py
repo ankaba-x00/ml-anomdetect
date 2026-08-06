@@ -28,7 +28,7 @@ custom_rc = {
     "axes.labelpad": 10,
     "xtick.labelsize": 20,
     "ytick.labelsize": 20,
-    "font.family": "Arial",
+    "font.family": "sans-serif",
     "legend.title_fontsize": 16,
     "legend.fontsize": 14,
     "grid.alpha": 0.4,

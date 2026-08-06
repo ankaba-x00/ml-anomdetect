@@ -33,13 +33,13 @@ def calibrate_threshold(
     country: str,
     model: Union[TabularAE, TabularVAE],
     scaler: TransformerMixin,
-    device: str = None,
+    device: str | None = None,
     method: str = "p99",
     cw: int = 30,
     cont_weight: float = 1.0,
     cat_weight: float = 0.0, 
     tune_temperature: bool = True,
-    temperature_range: list = None,
+    temperature_range: list | None = None,
     use_mc_elbo: bool = False,
     beta: float = 1.0
 ) -> tuple[dict[str, Union[np.ndarray, float]], dict[str, Union[np.ndarray, float]]]:
