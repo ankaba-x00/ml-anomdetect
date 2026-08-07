@@ -30,7 +30,7 @@ Outputs:
             best_weights.json
 
 Usage:
-    python -m app.src.pipelines.ae.analyze_tuning [-s] [-M] [-L] <MODEL> <COUNTRY|all|none>
+    python -m app.src.pipelines.ae.analyze_tuning [-s] [-L] [--retune] [--multi] <MODEL> <COUNTRY|all|none>
 """
 
 import json, optuna, torch, pickle
@@ -143,6 +143,7 @@ def plot_latent(
 def multi_analyze(
     ae_type: str, 
     countries: list = COUNTRIES, 
+    tune_phase: str = "base",
     show: bool = False
 ) -> None:
     """Compare best validation losses across countries."""
@@ -159,7 +160,7 @@ def multi_analyze(
     losses_data = {}
     for c in countries:
         cfg_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_params.json"
-        study_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_study.db"
+        study_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_study_{tune_phase}.db"
 
         if not cfg_path.exists() or not study_path.exists():
             print()
@@ -182,12 +183,12 @@ def multi_analyze(
         try:
             model_path = TUNED_DIR / f"{ae_type.upper()}" / f"{c}_best_model.pt"
             if model_path.exists():
-                payload = torch.load(model_path, map_location="cpu")
+                payload = torch.load(model_path, map_location="cpu", weights_only=True)
                 loss_weights = payload.get("additional_info", {}).get("loss_weights", {})
                 weights_data[c] = {
-                    "cont_weight": loss_weights.get("cont_weight", 1.0),
-                    "cat_weight": loss_weights.get("cat_weight", 0.0),
-                    "ratio": loss_weights["cat_weight"] / max(loss_weights["cont_weight"], 1e-8)
+                    "cont_w": loss_weights["cont_w"],
+                    "cat_w": loss_weights["cat_w"],
+                    "ratio": loss_weights["cat_w"] / max(loss_weights["cont_w"], 1e-8)
                 }
         except Exception as e:
             print(f"[ERROR] Failed loading weights for {c}:", e)
@@ -222,6 +223,7 @@ def analyze_country(
     multi: bool = True, 
     all: bool = False, 
     latent: bool = False, 
+    tune_phase: str = "base",
     show: bool = False
 ) -> None:
     """Runs full analysis pipeline of a country model tuning."""
@@ -230,7 +232,7 @@ def analyze_country(
     out_dir = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    db_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_study.db"
+    db_path = TUNED_DIR / f"{ae_type.upper()}" / f"{country}_study_{tune_phase}.db"
     if not db_path.exists():
         raise FileNotFoundError(f"No study DB for {country}")
     
@@ -289,13 +291,14 @@ def analyze_country(
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:
-        multi_analyze(ae_type=ae_type, show=show)
+        multi_analyze(ae_type=ae_type, tune_phase=tune_phase, show=show)
 
 
 def analyze_all(
     ae_type: str, 
     multi: bool = True, 
     latent: bool = False, 
+    tune_phase: str = "base",
     show_plots: bool = False
 ) -> None:
     """Runs full analysis pipeline of all country model tunings."""
@@ -308,11 +311,16 @@ def analyze_all(
             multi=False, 
             all=True,
             latent=latent,
-            show=show_plots
+            tune_phase=tune_phase,
+            show=show_plots,
         )
 
     if multi:
-        multi_analyze(ae_type=ae_type, show=show_plots)
+        multi_analyze(
+            ae_type=ae_type, 
+            tune_phase=tune_phase,
+            show=show_plots
+        )
         
     print(f"\n[DONE] Analysis of all model tunings completed!")
 
@@ -325,13 +333,20 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-r", "--retune",
+        default=0,
+        type=int,
+        help="retune study number [default: 0 = base]"
+    )
+
+    parser.add_argument(
         "-s", "--show",
         action="store_true",
         help="show plots interactively when generated"
     )
 
     parser.add_argument(
-        "-M", "--multi",
+        "--multi",
         action="store_true",
         help="perform multi country analysis"
     )
@@ -361,17 +376,23 @@ if __name__ == "__main__":
         parser.print_help()
         print(f"[Error] Model can either be ae or vae!")
         exit(1)
+
+    tune_phase = "base" if args.retune == 0 else f"retune_{args.retune}"
     
     if target.lower() == "all":
         analyze_all(
             ae_type, 
             args.multi, 
             args.latent, 
+            tune_phase,
             args.show
         )
     elif target.lower() == "none":
         if args.multi:
-            multi_analyze(ae_type=ae_type, show=args.show)
+            multi_analyze(
+                ae_type=ae_type,
+                tune_phase=tune_phase,
+                show=args.show)
         else:
             print(f"[INFO] No analysis selected [target=none and multi=False].")
     else:
@@ -381,5 +402,6 @@ if __name__ == "__main__":
             multi=args.multi, 
             all=False,
             latent=args.latent,
+            tune_phase=tune_phase,
             show=args.show
         )

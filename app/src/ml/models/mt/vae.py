@@ -1,79 +1,3 @@
-# import json, torch
-# import numpy as np
-# from dataclasses import dataclass, asdict
-# from typing import Sequence, Optional
-# import torch.nn as nn
-# import torch.nn.functional as F
-
-# from app.src.ml.models.base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor
-
-
-# ################################################
-# ##                  CONFIG                    ##
-# ################################################
-
-# @dataclass
-# class VAEConfig:
-#     num_cont: int
-#     cat_dims: dict[str, int]
-#     latent_dim: int = 8
-#     hidden_dims: Sequence[int] = (64, 32)
-#     dropout: float = 0.1
-#     embedding_dim: Optional[int] = None
-#     continuous_noise_std: float = 0.0
-#     activation_en: str = "relu"
-#     activation_de: str = "relu"
-#     lr: float = 1e-3
-#     weight_decay: float = 1e-5
-#     batch_size: int = 256
-#     num_epochs: int = 50
-#     patience: int = 5
-#     gradient_clip: float = 1.0
-#     optimizer: str = "adam"
-#     lr_scheduler: str = "none"
-#     use_lr_scheduler: bool = True
-#     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-#     # anomaly / ELBO related
-#     anomaly_threshold: Optional[float] = None
-#     beta: float = 1.0 # weight for KL term in ELBO
-#     temperature: float = 1.0
-
-#     def to_json(self) -> str:
-#         return json.dumps(asdict(self), indent=2)
-
-#     @staticmethod
-#     def from_json(s: str) -> "VAEConfig":
-#         return VAEConfig(**json.loads(s))
-
-
-# ################################################
-# ##         VARIATIONAL ENCODER/DECODER        ##
-# ################################################
-
-# class VEncoder():
-#     pass
-
-
-# class VDecoder():
-#     pass
-
-
-# ################################################
-# ##              HYBRID TABULAR VAE            ##
-# ################################################
-
-# class TabularVAE(BaseTabularPredictor):
-#     """
-#     Tabular variational tabular autoencoder with:
-#       - cont and cat inputs
-#       - learned cat embeddings
-#       - optional denoising for cont features
-#       - separate decoding heads for cont and cat features
-#       - KL + ELBO reconstruction
-#       - anomaly scoring
-#     """
-#     pass
-
 import json, torch
 import numpy as np
 from dataclasses import dataclass, asdict
@@ -81,7 +5,7 @@ from typing import Sequence, Optional
 import torch.nn as nn
 import torch.nn.functional as F
 
-from app.src.ml.models.mt.base_ae import BaseTabularModel
+from app.src.ml.models.ae.base import BaseTabularModel
 
 
 ################################################
@@ -397,8 +321,8 @@ class TabularVAE(BaseTabularModel):
         self,
         x_cont: torch.Tensor,
         x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
+        cont_w: float = 1.0,
+        cat_w: float = 0.0,
         temperature: float = 1.0,
     ) -> torch.Tensor:
         """
@@ -417,7 +341,7 @@ class TabularVAE(BaseTabularModel):
         # Continuous MSE per sample
         cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
 
-        if cat_weight <= 0.0 or len(self.cat_dims) == 0:
+        if cat_w <= 0.0 or len(self.cat_dims) == 0:
             return cont_err
 
         # Categorical CE averaged over categorical features
@@ -432,21 +356,21 @@ class TabularVAE(BaseTabularModel):
 
         cat_err = cat_err / float(n_cats)
 
-        total_weight = cont_weight + cat_weight
+        total_weight = cont_w + cat_w
         # to prevent exploding loss
         if total_weight <= 0:
             total_weight = 1.0
-            cont_weight = 1.0
-            cat_weight = 0.0
-        return (cont_weight * cont_err + cat_weight * cat_err) / total_weight
+            cont_w = 1.0
+            cat_w = 0.0
+        return (cont_w * cont_err + cat_w * cat_err) / total_weight
 
     def elbo_loss(
         self,
         x_cont: torch.Tensor,
         x_cat: torch.Tensor,
         beta: float = 1.0,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
+        cont_w: float = 1.0,
+        cat_w: float = 0.0,
         temperature: float = 1.0,
         reduction: str = "mean",
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -468,7 +392,7 @@ class TabularVAE(BaseTabularModel):
         # -------------------------------
         cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)  # [batch]
 
-        if cat_weight > 0.0 and len(self.cat_dims) > 0:
+        if cat_w > 0.0 and len(self.cat_dims) > 0:
             cat_err = torch.zeros_like(cont_err)
             n_cats = len(self.cat_dims)
             for i, name in enumerate(self.cat_dims.keys()):
@@ -480,13 +404,13 @@ class TabularVAE(BaseTabularModel):
         else:
             cat_err = torch.zeros_like(cont_err)
 
-        total_weight = cont_weight + cat_weight
+        total_weight = cont_w + cat_w
         # to prevent exploding loss
         if total_weight <= 0:
             total_weight = 1.0
-            cont_weight = 1.0
-            cat_weight = 0.0
-        recon_per_sample = (cont_weight * cont_err + cat_weight * cat_err) / max(
+            cont_w = 1.0
+            cat_w = 0.0
+        recon_per_sample = (cont_w * cont_err + cat_w * cat_err) / max(
             total_weight, 1e-8
         )
 
@@ -524,8 +448,8 @@ class TabularVAE(BaseTabularModel):
         self,
         x_cont: torch.Tensor,
         x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
+        cont_w: float = 1.0,
+        cat_w: float = 0.0,
         beta: float = 1.0,
         temperature: float = 1.0,
         score_type: str = "elbo",
@@ -548,7 +472,7 @@ class TabularVAE(BaseTabularModel):
             # recon per sample
             cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
 
-            if cat_weight > 0.0 and len(self.cat_dims) > 0:
+            if cat_w > 0.0 and len(self.cat_dims) > 0:
                 cat_err = torch.zeros_like(cont_err)
                 n_cats = len(self.cat_dims)
                 for i, name in enumerate(self.cat_dims.keys()):
@@ -560,13 +484,13 @@ class TabularVAE(BaseTabularModel):
             else:
                 cat_err = torch.zeros_like(cont_err)
 
-            total_weight = cont_weight + cat_weight
+            total_weight = cont_w + cat_w
             # to prevent exploding loss
             if total_weight <= 0:
                 total_weight = 1.0
-                cont_weight = 1.0
-                cat_weight = 0.0
-            recon = (cont_weight * cont_err + cat_weight * cat_err) / max(total_weight, 1e-8)
+                cont_w = 1.0
+                cat_w = 0.0
+            recon = (cont_w * cont_err + cat_w * cat_err) / max(total_weight, 1e-8)
 
             kl = self.kl_divergence(mu, logvar, reduction="none")
 
@@ -586,8 +510,8 @@ class TabularVAE(BaseTabularModel):
         self,
         x_cont: torch.Tensor,
         x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
+        cont_w: float = 1.0,
+        cat_w: float = 0.0,
         temperature: float = 1.0,
         n_samples: int = 10,
         beta: float = 1.0,
@@ -612,7 +536,7 @@ class TabularVAE(BaseTabularModel):
                 # recon per sample
                 cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
 
-                if cat_weight > 0 and len(self.cat_dims) > 0:
+                if cat_w > 0 and len(self.cat_dims) > 0:
                     cat_err = torch.zeros_like(cont_err)
                     for i, name in enumerate(self.cat_dims.keys()):
                         logits = cat_logits[name]
@@ -623,8 +547,8 @@ class TabularVAE(BaseTabularModel):
                 else:
                     cat_err = torch.zeros_like(cont_err)
 
-                total_weight = max(cont_weight + cat_weight, 1e-8)
-                recon = (cont_weight * cont_err + cat_weight * cat_err) / total_weight
+                total_weight = max(cont_w + cat_w, 1e-8)
+                recon = (cont_w * cont_err + cat_w * cat_err) / total_weight
 
                 kl = self.kl_divergence(mu, logvar, reduction="none")
 

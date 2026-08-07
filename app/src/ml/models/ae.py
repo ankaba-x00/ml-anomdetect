@@ -1,10 +1,10 @@
 import json, torch
 from dataclasses import dataclass, asdict
-from typing import Sequence, Optional
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Sequence
 
-from app.src.ml.models.base import BaseTabularModel
+from app.src.ml.models.base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor, _init_head
 
 
 ################################################
@@ -15,25 +15,31 @@ from app.src.ml.models.base import BaseTabularModel
 class AEConfig:
     num_cont: int
     cat_dims: dict[str, int]
-    latent_dim: int = 8 # bottleneck size
-    hidden_dims: Sequence[int] = (64, 32)
-    dropout: float = 0.1
-    embedding_dim: Optional[int] = None
-    continuous_noise_std: float = 0.0
+    use_embedding: bool = False
+    embedding_dim: int | None = None
+    hidden_dims: Sequence[int] = (128, 64)
+    latent_dim: int = 32
     activation_en: str = "relu"
     activation_de: str = "relu"
-    lr: float = 1e-3
-    weight_decay: float = 1e-5
-    batch_size: int = 256
-    num_epochs: int = 50
-    patience: int = 5
-    gradient_clip: float = 1.0
+    dropout: float = 0.1
     optimizer: str = "adam"
+    lr: float = 1e-5
+    weight_decay: float = 1e-5
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.999
+    sgd_momentum: float = 0.0
     lr_scheduler: str = "none"
-    use_lr_scheduler: bool = True
+    gradient_clip: float | None = None
+    batch_size: int = 256
+    allow_noise_injection: bool = True
+    noise_gauss_std: float = 0.1
+    noise_mask_prob: float = 0.05
+    num_epochs: int = 60
+    warmup_epochs: int = 10
+    patience: int = 10
+    anomaly_threshold: float | None = None 
+    temperature: float = 1.0  
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    anomaly_threshold: Optional[float] = None
-    temperature: float = 1.0
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -44,184 +50,252 @@ class AEConfig:
 
 
 ################################################
-##     HYBRID TABULAR AE WITH EMBEDDINGS      ##
+##               ENCODER/DECODER              ##
 ################################################
 
-class TabularAE(BaseTabularModel):
+class Encoder(BaseTabularEncoder):
     """
-    Hybrid tabular autoencoder with:
-      - continuous + categorical inputs
-      - learned categorical embeddings
-      - optional denoising on continuous inputs
-      - anomaly scoring
+    Encoder class for AE model.
     """
 
     def __init__(
         self,
-        num_cont: int,
-        cat_dims: dict[str, int],
-        latent_dim: int = 8,
-        hidden_dims: Sequence[int] = (64, 32),
-        dropout: float = 0.1,
-        embedding_dim: Optional[int] = None, 
-        continuous_noise_std: float = 0.0,
-        activation_en: str = "relu",
-        activation_de: str = "relu",
+        config: AEConfig
     ):
         super().__init__(
-            num_cont=num_cont,
-            cat_dims=cat_dims,
-            embedding_dim=embedding_dim,
-            continuous_noise_std=continuous_noise_std,
-            activation_en=activation_en,
-            activation_de=activation_de
+            num_cont=config.num_cont,
+            cat_dims=config.cat_dims,
+            hidden_dims=config.hidden_dims,
+            latent_dim=config.latent_dim,
+            use_embedding=config.use_embedding,
+            embedding_dim=config.embedding_dim,
+            dropout=config.dropout,
+            activation=config.activation_en,
+        )
+        
+        self.hidden_dims = config.hidden_dims
+        self.latent_dim = config.latent_dim
+        self.act_name = config.activation_en
+    
+    def make_comp_heads(self) -> None:
+        """Adds final compression heads of encoder."""
+
+        self.comp_head = nn.Linear(min(self.hidden_dims), self.latent_dim)
+    
+    def init_comp_heads(self) -> None:
+        """Initializes final compression heads of encoder."""
+
+        _init_head(self.comp_head, self.act_name)
+
+
+class Decoder(BaseTabularDecoder):
+    """
+    Decoder class for AE model.
+    """
+
+    def __init__(
+        self,
+        config: AEConfig
+    ):
+        super().__init__(
+            num_cont=config.num_cont,
+            cat_dims=config.cat_dims,
+            hidden_dims=config.hidden_dims,
+            latent_dim=config.latent_dim,
+            dropout=config.dropout,
+            activation=config.activation_de
         )
 
-        self.latent_dim = latent_dim
+        self.num_cont = config.num_cont
+        self.cat_dims = config.cat_dims
+        self.hidden_dims = config.hidden_dims
+        self.act_name = config.activation_de
+    
+    def make_recon_heads(self) -> None:
+        """Adds final reconstruction heads of decoder."""
 
-        # -------------------------------
-        # Encoder
-        # -------------------------------
-        self.encoder_layers = nn.ModuleList()
-        prev = self.input_dim
+        dim = max(self.hidden_dims)
         
-        for h in hidden_dims:
-            self.encoder_layers.append(
-                nn.Sequential(
-                    nn.Linear(prev, h),
-                    nn.BatchNorm1d(h),
-                    self.activation_en,
-                    nn.Dropout(dropout)
-                )
-            )
-            prev = h
-        
-        # Final encoder layer (no activation for bottleneck)
-        self.encoder_out = nn.Linear(prev, latent_dim)
-
-        # -------------------------------
-        # Decoder (mirror)
-        # -------------------------------
-        self.decoder_layers = nn.ModuleList()
-        prev = latent_dim
-        
-        for h in reversed(hidden_dims):
-            self.decoder_layers.append(
-                nn.Sequential(
-                    nn.Linear(prev, h),
-                    nn.BatchNorm1d(h),
-                    self.activation_de,
-                    nn.Dropout(dropout)
-                )
-            )
-            prev = h
-        
-        # Continuous reconstruction head
-        self.cont_recon = nn.Linear(prev, num_cont)
-        
-        # Categorical reconstruction heads
+        self.cont_recon_head = nn.Linear(dim, self.num_cont)
+    
         self.cat_recon_heads = nn.ModuleDict()
-        for name, card in cat_dims.items():
-            self.cat_recon_heads[name] = nn.Linear(prev, card)
+        for name, card in self.cat_dims.items():
+            self.cat_recon_heads[name] = nn.Linear(dim, card)
+    
+    def init_recon_heads(self) -> None:
+        """Initializes final reconstruction heads of decoder."""
 
-        # weight initialization
-        self._init_weights()
-        # TODO: Benchmark AE/VAE learning curves with vs. without initialization
+        _init_head(self.cont_recon_head, self.act_name)
 
-    # -------------------------------
-    # Encode/Decode
-    # -------------------------------
+        for module in self.cat_recon_heads.children():
+            _init_head(module, self.act_name)
+
+
+################################################
+##             HYBRID TABULAR AE              ##
+################################################
+
+class TabularAE(BaseTabularPredictor):
+    """
+    Hybrid tabular AE with:
+      - cont and cat inputs
+      - learned cat embeddings
+      - optional noise injection
+      - separate decoding heads for cont and cat features
+      - anomaly scoring
+    """
+    def __init__(
+        self,
+        config: AEConfig,
+    ):
+        super().__init__()
+        self.config = config
+        self.E = Encoder(config)
+        self.D = Decoder(config)
+    
     def encode(
         self, 
         x_cont: torch.Tensor, 
         x_cat: torch.Tensor
     ) -> torch.Tensor:
-        """Encode cont and cat to latent space z."""
-        x_emb = self._embed(x_cat)
+        """Pass input through encoder and return latent variables."""
         
-        # Apply noise to continuous part (denoising AE)
-        x_cont_n = self._maybe_noisy_cont(x_cont)
+        # either embeds or encodes cat feature vector
+        if self.config.use_embedding:
+            x_cat_e = self._embed(x_cat)
+        else:
+            x_cat_e = self._encod(x_cat)
 
-        # Concatenate into unified representation
-        x = torch.cat([x_cont_n, x_emb], dim=1)
-
-        # Forward through encoder
+        x = torch.cat([x_cont, x_cat_e], dim=1)
         h = x
-        for layer in self.encoder_layers:
+        for layer in self.E.encoder_layers:
             h = layer(h)
         
-        z = self.encoder_out(h)
-
+        z = self.E.comp_head(h)
+        
         return z
-    
+
     def decode(
         self, 
-        z: torch.Tensor, 
-        temperature: float = 1.0
+        z: torch.Tensor
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Decode from latent space to cont reconstruction + cat logits with temperature scaling"""
+        """Decode from latent space and apply temperature scaling."""
+        
         h = z
-        for layer in self.decoder_layers:
+        for layer in self.D.decoder_layers:
             h = layer(h)
         
-        # Continuous reconstruction
-        cont_recon = self.cont_recon(h)
-        
-        # Categorical reconstructions
+        cont_recon = self.D.cont_recon_head(h)
+
         cat_logits = {}
-        for name in self.cat_dims.keys():
-            logits = self.cat_recon_heads[name](h)
-            if temperature != 1.0:
-                logits = logits / temperature
+        for name in self.config.cat_dims.keys():
+            logits = self.D.cat_recon_heads[name](h)
+            if self.config.temperature != 0.:
+                logits = logits / self.config.temperature
             cat_logits[name] = logits
         
         return cont_recon, cat_logits
-    
-    # -------------------------------
-    # Anomaly score
-    # -------------------------------
-    def anomaly_score(
+
+    def forward(
         self, 
         x_cont: torch.Tensor, 
-        x_cat: torch.Tensor, 
-        cont_weight: float = 1.0, 
-        cat_weight: float = 0.0, 
-        temperature: float = 1.0
-    ) -> torch.Tensor:
-        """Combined reconstruction error with optional categorical weighting which returns per-sample anomaly score [batch,]."""
-        with torch.no_grad():
-            cont_recon, cat_logits = self.forward(
-                x_cont, 
-                x_cat, 
-                True, 
-                temperature
+        x_cat: torch.Tensor
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Full forward pass through autoencoder."""
+
+        if self.config.allow_noise_injection:
+            Xc, Xk = self._noise_injection(x_cont, x_cat)
+        else:
+            Xc, Xk = x_cont, x_cat
+
+        z = self.encode(x_cont, x_cat)
+        cont_recon, cat_logits = self.decode(z)
+
+        return cont_recon, cat_logits
+    
+    # -----------------------------
+    # Utils
+    # -----------------------------
+    def _embed(self, x_cat: torch.Tensor) -> torch.Tensor:
+        """Embed cat features using Embedding."""
+
+        parts = []
+        for i, name in enumerate(self.config.cat_dims.keys()):
+            parts.append(self.E.embeddings[name](x_cat[:, i].long()))
+        
+        return torch.cat(parts, dim=1)
+    
+    def _encod(self, x_cat: torch.Tensor) -> torch.Tensor:
+        """Encode cat features via OneHotEncoding."""
+        
+        parts = []
+        for i, card in enumerate(self.config.cat_dims.values()):
+            parts.append(F.one_hot(x_cat[:, i].long(), num_classes=card).float())
+        
+        return torch.cat(parts, dim=1)
+    
+    def _noise_injection(self, x_cont, x_cat) -> tuple[torch.Tensor]:
+        """Inject noise to enable denoising autoencoder"""
+
+        # Cont: adds Gaussian noise
+        if self.config.noise_gauss_std > 0:
+            noise = torch.randn_like(x_cont) * self.config.noise_gauss_std
+            x_cont_noisy = x_cont + noise
+        else:
+            x_cont_noisy = x_cont
+
+        # Cat: random masking noise (replaces values with low probability)
+        if self.config.noise_mask_prob > 0:
+            x_cat_noisy = x_cat.clone()
+            mask = torch.randn_like(x_cat.float()) < self.config.noise_mask_prob
+            x_cat_noisy[mask] = 0
+        else:
+            x_cat_noisy = x_cat
+
+        return x_cont_noisy, x_cat_noisy
+
+    # -----------------------------
+    # Model scoring
+    # -----------------------------
+    def scoring(
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor,
+        cont_recon: torch.Tensor,
+        cat_logits: dict[str, torch.Tensor],
+        loss_weights: dict[str, float],
+        in_warmup: bool = False,
+        reduction: str = "mean"
+    ) -> tuple[torch.Tensor] | torch.Tensor:
+        """Calculates normalized weighted per sample score."""
+
+        # Cont Huber loss per sample
+        cont_loss = F.huber_loss(cont_recon, x_cont, reduction="none").mean(dim=1)
+
+        # Cat CE per sample
+        cat_loss = torch.zeros_like(cont_loss)
+        cat_names = self.config.cat_dims.keys()
+        for i, name in enumerate(cat_names):
+            ce = F.cross_entropy(
+                cat_logits[name],
+                x_cat[:, i].long(),
+                reduction="none"
             )
-            
-            # Continuous MSE per sample
-            cont_error = ((cont_recon - x_cont) ** 2).mean(dim=1)
-            
-            if cat_weight <= 0.0 or len(self.cat_dims) == 0:
-                return cont_error
+            cat_loss += ce
+        cat_loss = cat_loss / float(len(cat_names))
+    
+        w_cont, w_cat = loss_weights["cont_w"], loss_weights["cat_w"]
 
-            # Categorical average CE accross cat features 
-            cat_error = torch.zeros_like(cont_error)
-            n_cats = len(self.cat_dims)
-            for i, name in enumerate(self.cat_dims.keys()):
-                targets = x_cat[:, i].long()
-                ce = F.cross_entropy(
-                    cat_logits[name],
-                    targets,
-                    reduction="none"
-                )
-                cat_error += ce
-            cat_error = cat_error / float(n_cats)
+        if in_warmup:
+            per_sample_score = cat_loss
+        else:
+            per_sample_score = (w_cont * cont_loss + w_cat * cat_loss) / (w_cont + w_cat)
 
-            # Weighted combination
-            total_weight = cont_weight + cat_weight
-            # to prevent exploding loss
-            if total_weight <= 0:
-                total_weight = 1.0
-                cont_weight = 1.0
-                cat_weight = 0.0
-            
-            return (cont_weight * cont_error + cat_weight * cat_error) / total_weight
+        if reduction == "mean":
+            return cont_loss, cat_loss, per_sample_score.mean()
+        else:
+            return per_sample_score
+
+    
+    
+

@@ -28,7 +28,7 @@ from sklearn.preprocessing import RobustScaler
 from app.src.data.split import timeseries_seq_split
 from app.src.data.feature_engineering import COUNTRIES
 from app.src.data.feature_engineering import load_supervised_feature_matrix
-from app.src.ml.models.mte import MTEConfig
+from app.src.ml.models.mt.mte import MTEConfig
 from app.src.ml.analysis import plot_latent_space
 from app.src.ml.training.train_mt import (
     train_multitask_model, 

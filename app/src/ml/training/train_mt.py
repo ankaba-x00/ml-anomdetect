@@ -244,7 +244,7 @@ def train_multitask_model(
         model.train()
 
         # -------------------------
-        # Attack-only warmup logic
+        # Attack-only warmup setup
         # -------------------------
         in_warmup = epoch < config.warmup_epochs
 
@@ -266,6 +266,10 @@ def train_multitask_model(
             # use base lr
             for g in optimizer.param_groups:
                 g["lr"] = base_lr
+        
+        # -------------------------
+        # Setup training
+        # -------------------------
 
         tl, tl3, tl7, tatt = 0.0, 0.0, 0.0, 0.0
         n = 0
@@ -383,12 +387,15 @@ def train_multitask_model(
                             ya,
                             model.attack_class_weights
                         )
-
-                    total_loss = (
-                        lambda_l3 * loss_l3 +
-                        lambda_l7 * loss_l7 +
-                        lambda_att * loss_att
-                    )
+                    
+                    if in_warmup:
+                        total_loss = lambda_att * loss_att
+                    else:
+                        total_loss = (
+                            lambda_l3 * loss_l3 +
+                            lambda_l7 * loss_l7 +
+                            lambda_att * loss_att
+                        )
 
                     bs = Xc.size(0)
                     vl += total_loss.item() * bs
@@ -526,7 +533,7 @@ def load_multitask_model(
     device: Optional[str] = "cpu"
 ) -> tuple[TrafficAttackPredictor, MTEConfig, int, dict]:
     """Load model + config from a .pt file."""
-    payload = torch.load(path, map_location=device)
+    payload = torch.load(path, map_location=device, weights_only=True)
 
     num_cont = payload["num_cont"]
     cat_dims = payload["cat_dims"]

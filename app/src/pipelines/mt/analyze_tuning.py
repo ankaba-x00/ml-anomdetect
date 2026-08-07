@@ -149,7 +149,8 @@ def plot_latent(
 
 
 def multi_analyze(
-    countries: list = COUNTRIES, 
+    countries: list = COUNTRIES,
+    tune_phase: str = base,
     show: bool = False
 ) -> None:
     """Compare best validation losses across countries."""
@@ -167,7 +168,7 @@ def multi_analyze(
     attack_class_weights = {}
     for c in countries:
         cfg_path = TUNED_DIR / f"{c}_best_params.json"
-        study_path = TUNED_DIR / f"{c}_study.db"
+        study_path = TUNED_DIR / f"{c}_study_{tune_phase}.db"
 
         if not cfg_path.exists() or not study_path.exists():
             print()
@@ -202,7 +203,7 @@ def multi_analyze(
         try:
             model_path = TUNED_DIR / f"{c}_best_model.pt"
             if model_path.exists():
-                payload = torch.load(model_path, map_location="cpu")
+                payload = torch.load(model_path, map_location="cpu", weights_only=True)
                 loss_weights = payload.get("additional_info", {}).get("loss_weights", {})
                 reg_weights = loss_weights.get("l3", 0.0) + loss_weights.get("l7", 0.0)
                 weights_data[c] = {
@@ -329,7 +330,7 @@ def analyze_country(
     print(f"[OK] Analysis for {country} completed!")
 
     if multi and not all:
-        multi_analyze(show=show)
+        multi_analyze(tune_phase=tune_phase, show=show)
 
 
 def analyze_all(
@@ -352,7 +353,7 @@ def analyze_all(
     )
 
     if multi:
-        multi_analyze(show=show_plots)
+        multi_analyze(tune_phase=tune_phase, show=show_plots)
         
     print(f"\n[DONE] Analysis of all MT model tunings completed!")
 
@@ -365,9 +366,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--retune",
-        action="store_true",
-        help="read retune parameter from yml for retuning]"
+        "-r", "--retune",
+        default=0,
+        type=int,
+        help="retune study number [default: 0 = base]"
     )
 
     parser.add_argument(
@@ -397,18 +399,18 @@ if __name__ == "__main__":
 
     target = args.target
 
-    tune_phase = "retune" if args.retune else "base"
+    tune_phase = "base" if args.retune == 0 else f"retune_{args.retune}"
     
     if target.lower() == "all":
         analyze_all(
             args.multi, 
             args.latent, 
-            args.show,
-            tune_phase
+            tune_phase,
+            args.show
         )
     elif target.lower() == "none":
         if args.multi:
-            multi_analyze(show=args.show)
+            multi_analyze(tune_phase=tune_phase, show=args.show)
         else:
             print(f"[INFO] No analysis selected [target=none and multi=False].")
     else:
@@ -417,6 +419,6 @@ if __name__ == "__main__":
             multi=args.multi, 
             all=False,
             latent=args.latent,
-            show=args.show,
-            tune_phase=tune_phase
+            tune_phase=tune_phase,
+            show=args.show
         )

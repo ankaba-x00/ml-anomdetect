@@ -13,7 +13,7 @@ def _fetch_timedata(
     BASE_PARAMS: dict, 
     date_from: datetime, 
     date_to: datetime
-) -> dict:
+) -> dict | None:
     """
     Fetches timeseries data in memory for country from Cloudflare API in 1-hour buckets.
     """

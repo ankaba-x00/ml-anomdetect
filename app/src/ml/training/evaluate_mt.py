@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from typing import Optional, Union
 
 from app.src.ml.models.mte import TrafficAttackPredictor
-
+from .core.anomaly_utils import get_threshold, get_anomaly_mask, find_anomalies
 
 #########################################
 ##      MULTI-TASK SCORING UTILS       ##
@@ -104,87 +104,6 @@ def prediction_errors(
 
 
 #########################################
-##          THRESHOLD METHODS          ##
-#########################################
-
-def threshold_percentile(
-    scores: np.ndarray, 
-    p: float = 99.0
-) -> float:
-    return float(np.percentile(scores, p))
-
-
-def threshold_mad(
-    scores: np.ndarray, 
-    k: float = 6.0, 
-    min_p: float = 99.5, 
-    max_p: float = 99.9
-) -> float:
-    med = np.median(scores)
-    mad = np.median(np.abs(scores - med)) + 1e-12
-    nmad = 1.4826 * mad
-    thr = med + k * nmad
-    low = np.percentile(scores, min_p)
-    high = np.percentile(scores, max_p)
-    thr = np.clip(thr, low, high)
-    return float(thr)
-
-
-#########################################
-##          ANOMALY DETECTION          ##
-#########################################
-
-def anomaly_mask(
-    scores: np.ndarray, 
-    threshold: float
-) -> np.ndarray:
-    return scores > threshold
-
-
-def find_anomalies(
-    mask: np.ndarray, 
-    min_length: int = 1, 
-    merge_gap: int = 0
-) -> list[tuple[int, int]]:
-    mask = mask.astype(bool)
-    N = len(mask)
-    if N == 0:
-        return []
-
-    intervals = []
-    in_anom = False
-    start = None
-
-    for i, is_anom in enumerate(mask):
-        if is_anom and not in_anom:
-            in_anom = True
-            start = i
-        elif not is_anom and in_anom:
-            intervals.append((start, i))
-            in_anom = False
-
-    if in_anom:
-        intervals.append((start, N))
-
-    if min_length > 1:
-        intervals = [(s, e) for (s, e) in intervals if (e - s) >= min_length]
-
-    if merge_gap > 0 and len(intervals) > 1:
-        merged = []
-        cur_s, cur_e = intervals[0]
-        for s, e in intervals[1:]:
-            if s - cur_e <= merge_gap:
-                cur_e = e
-            else:
-                merged.append((cur_s, cur_e))
-                cur_s, cur_e = s, e
-        merged.append((cur_s, cur_e))
-        intervals = merged
-
-    return intervals
-
-
-#########################################
 ##      FULL EVALUATION PIPELINE       ##
 #########################################
 
@@ -220,17 +139,14 @@ def apply_multitask_model(
 
     scores = out["score"]
 
-    if method == "p99":
-        threshold = threshold_percentile(scores, p=99)
-    elif method == "p995":
-        threshold = threshold_percentile(scores, p=99.5)
-    elif method == "mad":
-        threshold = threshold_mad(scores)
-    else:
-        raise ValueError(f"[Error] Unknown threshold method: {method}")
+    threshold = get_threshold(method, scores)
+    mask = get_anomaly_mask(scores, threshold)
+    intervals = find_anomalies(
+        mask,
+        min_length=min_length,
+        merge_gap=merge_gap,
+    )
 
-    mask = anomaly_mask(scores, threshold)
-    intervals = find_anomalies(mask, min_length, merge_gap)
     starts = np.array([s for s, _ in intervals], dtype=int)
     ends = np.array([e for _, e in intervals], dtype=int)
 

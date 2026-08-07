@@ -1,206 +1,256 @@
+from abc import ABC, abstractmethod
+from typing import Sequence
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from typing import Optional, Union
 
 
-class BaseTabularModel(nn.Module):
+class BaseTabularEncoder(ABC, nn.Module):
     """
-    Base class for tabular autoencoder models that reconstruct inputs and has continuous and categorical reconstruction heads.
+    Base encoder class for tabular autoencoder models.
 
-    Subclasses must implement:
-        encode(x_cont, x_cat) -> latent representation
-        decode(z, temperature=1.0) -> (cont_recon, cat_logits)
+    Tasks incl. setting up embeddings, encoder layers, as well as weight, bias and embedding initialization.
 
-    Subclasses may override:
-        anomaly_score(...)
+    Subclasses may override make_comp_heads() and init_comp_heads() depending on comp head composition.
     """
 
     def __init__(
         self,
         num_cont: int,
         cat_dims: dict[str, int],
-        embedding_dim: Optional[int],
-        continuous_noise_std: float,
-        activation_en: str = "relu",
-        activation_de: str = "relu",
+        hidden_dims: Sequence[int] = (128, 64),
+        latent_dim: int = 32,
+        use_embedding: bool = False,
+        embedding_dim: int | None = None,
+        dropout: float = 0.1,
+        activation: str = "relu"
+    ):
+        super().__init__()
+        
+        self.hidden_dims = hidden_dims
+        self.latent_dim = latent_dim
+        self.act_name = activation
+        self.activation = _pick_act_func(activation)
+
+        # -----------------------------
+        # Categorical embeddings
+        # -----------------------------
+        if use_embedding:
+            self.embeddings = nn.ModuleDict()
+            emb_sizes = {}
+
+            def emb_dim(card: int) -> int:
+                """Determines embedding_dim from cardinality of cat features."""
+                return min(max(4, card // 2), 16)
+
+            for name, card in cat_dims.items():
+                dim = embedding_dim if embedding_dim else emb_dim(card)
+                self.embeddings[name] = nn.Embedding(card, dim)
+                emb_sizes[name] = dim
+
+            emb_total = sum(emb_sizes.values())
+            self.input_dim = num_cont + emb_total
+        else:
+            self.input_dim = num_cont + sum(cat_dims.values())
+
+        # -----------------------------
+        # Encoder layers
+        # -----------------------------
+        self.encoder_layers = nn.ModuleList()
+        prev = self.input_dim
+
+        for h in hidden_dims:
+            self.encoder_layers.append(
+                nn.Sequential(
+                    nn.Linear(prev, h, bias=False),
+                    nn.BatchNorm1d(h),
+                    self.activation,
+                    nn.Dropout(dropout)
+                )
+            )
+            prev = h
+        
+        self.make_comp_heads()
+        
+        # -----------------------------
+        # Weight initialization
+        # -----------------------------
+        if use_embedding:
+            _init_weights(self.embeddings)
+        _init_weights(self.encoder_layers, activation)
+        self.init_comp_heads()
+
+    @abstractmethod
+    def make_comp_heads(self) -> None:
+        """Adds final compression heads of encoder."""
+        pass
+    
+    @abstractmethod
+    def init_comp_heads(self) -> None:
+        """Initializes final compression heads of encoder."""
+        pass
+
+
+class BaseTabularDecoder(ABC, nn.Module):
+    """
+    Base decoder class for tabular autoencoder models.
+
+    Tasks incl. setting up decoder layers, as well as weight initialization.
+
+    Subclasses may override make_recon_heads() and init_recon_heads() depending on recon head schema.
+    """
+    
+    def __init__(
+        self,
+        num_cont: int,
+        cat_dims: dict[str, int],
+        hidden_dims: Sequence[int] = (128, 64),
+        latent_dim: int = 32,
+        dropout: float = 0.1,
+        activation: str = "relu",
     ):
         super().__init__()
 
         self.num_cont = num_cont
         self.cat_dims = cat_dims
-        self.continuous_noise_std = continuous_noise_std
-        # -----------------------
-        # Activation function
-        # -----------------------
-        self.activation_en = self._make_activation(activation_en)
-        self.activation_de = self._make_activation(activation_de)
+        self.hidden_dims = hidden_dims
+        self.act_name = activation
+        self.activation = _pick_act_func(activation)
+    
+        # -----------------------------
+        # Decoder layers
+        # -----------------------------
+        self.decoder_layers = nn.ModuleList()
+        prev = latent_dim
         
-        # -------------------------------
-        # Embeddings
-        # -------------------------------
-        # Example cat_dims:
-        # {"weekday":7, "daytype":2, "daytime":5, "month":12, "week":53}
-        # For embedding dim: d = min( max(4, card//2), 16 )
-        def emb_dim(card: int) -> int:
-            return min(max(4, card // 2), 16)
-
-        self.embeddings = nn.ModuleDict()
-        self.emb_sizes = {}
-
-        for name, card in cat_dims.items():
-            dim = embedding_dim if embedding_dim is not None else emb_dim(card)
-            self.embeddings[name] = nn.Embedding(card, dim)
-            self.emb_sizes[name] = dim
-
-        self.total_emb_dim = sum(self.emb_sizes.values())
-        self.input_dim = num_cont + self.total_emb_dim
-
-    # -------------------------------
-    # Utilities
-    # -------------------------------
-    def _make_activation(self, name: str) -> nn.Module:
-        activations = {
-            "relu": nn.ReLU(inplace=True),
-            "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
-            "gelu": nn.GELU(),
-            "tanh": nn.Tanh(),
-            "sigmoid": nn.Sigmoid(),
-            "elu": nn.ELU(inplace=True),
-            "silu": nn.SiLU(inplace=True)
-        }
-        if name not in activations:
-            raise ValueError(f"[ERROR] Unknown activation: {name}.")
-        return activations[name]
-    
-    def _pick_init_function(self, activation, m) -> None:
-        if activation in ["relu", "leaky_relu", "gelu", "elu", "silu"]:
-            return nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
-        elif activation in ["sigmoid", "tanh"]:
-            return nn.init.xavier_normal_(m.weight)
-    
-    def _init_weights(self) -> None:
-            """Xavier or He init for Linear layers, Normal init for Embeddings."""
-            for name, module_object in self.named_children():
-                if isinstance(module_object, nn.ModuleList):
-                    activation = self.activation_en if name == "encoder_layers" else self.activation_de
-                    for module in module_object.modules():
-                        if isinstance(module, nn.Linear):
-                            self._pick_init_function(activation, module)
-                            if module.bias is not None:
-                                nn.init.zeros_(module.bias)
-                elif isinstance(module_object, nn.ModuleDict):
-                    for module in module_object.modules():
-                        if isinstance(module, nn.Embedding):
-                            nn.init.normal_(module.weight, mean=0.0, std=0.01)
-
-    def _init_decoder_output_layers(self) -> None:
-        # continuous head
-        nn.init.xavier_uniform_(self.cont_recon.weight, gain=0.01)
-        nn.init.zeros_(self.cont_recon.bias)
-
-        # categorical heads
-        for head in self.cat_recon_heads.values():
-            nn.init.xavier_uniform_(head.weight, gain=0.01)
-            nn.init.zeros_(head.bias)
-
-    def _embed(self, x_cat: torch.Tensor) -> torch.Tensor:
-        """Embed categorical features."""
-        parts = []
-        for i, name in enumerate(self.cat_dims.keys()):
-            # cast to long if required
-            parts.append(self.embeddings[name](x_cat[:, i].long()))
-        return torch.cat(parts, dim=1)
-
-    def _maybe_noisy_cont(self, x_cont: torch.Tensor) -> torch.Tensor:
-        """Noise injection for continuous features"""
-        if self.training and self.continuous_noise_std > 0:
-            noise = torch.randn_like(x_cont) * self.continuous_noise_std
-            # Only add noise to continuous part
-            return x_cont + noise
-        return x_cont
-
-    # -------------------------------
-    # Abstract methods
-    # -------------------------------
-    def encode(
-        self, 
-        x_cont: torch.Tensor, 
-        x_cat: torch.Tensor
-    ) -> torch.Tensor:
-        """Return latent variables for AE or (mu, logvar) for VAE."""
-        raise NotImplementedError
-
-    def decode(
-        self, 
-        z: torch.Tensor, 
-        temperature: float = 1.0
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Return continuous reconstruction (batch, num_cont) and categorical logits as {name: logits}."""
-        raise NotImplementedError
-
-    # -------------------------------
-    # Forward
-    # -------------------------------
-    def forward(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        return_cat: bool = True,
-        temperature: float = 1.0,
-    ) -> Union[torch.Tensor, tuple[torch.Tensor, dict[str, torch.Tensor]]]:
-        """
-        Full forward pass: returns cont recon and optionally cat logits.
-        VAE models may override encode to return (mu, logvar, z)
-        """
-        z = self.encode(x_cont, x_cat)
-        cont_recon, cat_logits = self.decode(z, temperature)
-        if return_cat:
-            return cont_recon, cat_logits
-        return cont_recon
-
-    # -------------------------------
-    # Default anomaly score
-    # -------------------------------
-    def anomaly_score(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
-        temperature: float = 1.0,
-    ) -> torch.Tensor:
-        """
-        Generic reconstruction-based anomaly score.
-        VAE subclasses must override to include KL or ELBO.
-        """
-        with torch.no_grad():
-            cont_recon, cat_logits = self.forward(
-                x_cont, 
-                x_cat, 
-                True, 
-                temperature
-            )
-
-            # Continuous MSE per sample
-            cont_error = ((cont_recon - x_cont) ** 2).mean(dim=1)
-            
-            if cat_weight <= 0.0 or len(self.cat_dims) == 0:
-                return cont_error
-
-            # Categorical average CE accross cat features 
-            cat_error = torch.zeros_like(cont_error)
-            n_cats = len(self.cat_dims)
-            for i, name in enumerate(self.cat_dims.keys()):
-                targets = x_cat[:, i].long()
-                ce = F.cross_entropy(
-                    cat_logits[name],
-                    targets,
-                    reduction="none"
+        for h in reversed(hidden_dims):
+            self.decoder_layers.append(
+                nn.Sequential(
+                    nn.Linear(prev, h, bias=False),
+                    nn.BatchNorm1d(h),
+                    self.activation,
+                    nn.Dropout(dropout)
                 )
-                cat_error += ce
-            cat_error = cat_error / float(n_cats)
+            )
+            prev = h
 
-            # Weighted combination
-            total_weight = cont_weight + cat_weight
-            return (cont_weight * cont_error + cat_weight * cat_error) / total_weight
+        self.make_recon_heads()
+
+        # -----------------------------
+        # Weight initialization
+        # -----------------------------
+        _init_weights(self.decoder_layers, activation)
+        self.init_recon_heads()
+
+    @abstractmethod
+    def make_recon_heads(self) -> None:
+        """Adds final reconstruction heads of decoder."""
+        pass
+    
+    @abstractmethod
+    def init_recon_heads(self) -> None:
+        """Initializes final reconstruction heads of decoder."""
+        pass
+
+
+class BaseTabularPredictor(ABC, nn.Module):
+    """
+    Base class for tabular autoencoder models.
+
+    Tasks incl. setting up encoding, decoding, forward passing.
+
+    Subclasses override encode(), decode(), forward().
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    @abstractmethod
+    def encode(self) -> None:
+        """Return latent variables."""
+        pass
+
+    @abstractmethod
+    def decode(self) -> None:
+        """Return cont and cat reconstruction."""
+        pass
+
+    @abstractmethod
+    def forward(self) -> None:
+        """Full forward pass through autoencoder."""
+        pass
+
+
+def _pick_act_func(act_name: str) -> nn.Module:
+    """Selects activation function from a predifined collection."""
+
+    act_dict = {
+        "relu": nn.ReLU(inplace=True),
+        "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
+        "gelu": nn.GELU(),
+        "elu": nn.ELU(inplace=True),
+        "silu": nn.SiLU(inplace=True),
+        "tanh": nn.Tanh(),
+        "sigmoid": nn.Sigmoid(),
+    }
+
+    if act_name not in act_dict:
+        raise ValueError(f"[ERROR] Unknown activation: {act_name}.")
+    
+    return act_dict[act_name]
+
+def _pick_weight_init_func(act_name: str, m: nn.Module) -> None:
+    """Selects init function for weights depending on activation function type."""
+
+    init_dict = {
+        "he_normal": lambda layer: nn.init.kaiming_normal_(layer.weight),
+        "he_uniform": lambda layer: nn.init.kaiming_uniform_(layer.weight, nonlinearity="relu"),
+        "xavier_normal": lambda layer: nn.init.xavier_normal_(layer.weight),
+        "xavier_uniform": lambda layer: nn.init.xavier_uniform_(layer.weight, gain=0.01),
+        "zeros": lambda layer: nn.init.zeros_(layer.weight)
+    }
+
+    if act_name in ["relu", "leaky_relu", "gelu", "elu", "silu"]:
+        init_dict["he_uniform"](m)
+    elif act_name in ["tanh", "sigmoid"]:
+        init_dict["xavier_normal"](m)
+    elif act_name is None:
+        init_dict["zeros"](m)
+    else:
+        raise ValueError(f"[ERROR] Unknown activation for weight init: {act_name}.")
+
+def _pick_bias_init_func(init_name: str, m: nn.Module) -> None:
+    """Selects init function for bias."""
+    
+    init_dict = {
+        "zeros": lambda layer: nn.init.zeros_(layer.bias),
+        "orthogonal": lambda layer: nn.init.orthogonal_(layer.bias)
+    }
+    init_dict[init_name](m)
+
+def _init_weights(modules: nn.ModuleList | nn.ModuleDict, act_name: str | None = None) -> None:
+    """
+    Initializes weights of model layers.
+    Input tensor modification depends on layer connectivity and activation function in use.
+    """
+
+    # encoder_layers / decoder_layers 
+    if isinstance(modules, nn.ModuleList):
+        for m in modules.modules():
+            if isinstance(m, nn.Linear):
+                _pick_weight_init_func(act_name, m)
+                # Does Pytorch automatically for BatchNorm1d, deselect if bias is set to True for other layers
+                # if m.bias is not None:
+                #     _pick_bias_init_func("zeros", m)
+    
+    # embeddings
+    elif isinstance(modules, nn.ModuleDict):
+        for m in modules.children():
+            nn.init.normal_(m.weight, mean=0.0, std=0.01)
+
+def _init_head(module: nn.Linear, act_name: str) -> None:
+    """
+    Initializes weights and biases of final compression and reconstruction heads.
+    """
+
+    _pick_weight_init_func(act_name, module)
+    _pick_bias_init_func("zeros", module)

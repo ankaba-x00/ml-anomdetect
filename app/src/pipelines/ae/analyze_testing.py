@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Visualize test data anomaly detection results:
-- loads testing errors, threshold and anomaly intervals
+- loads testing scores, threshold and anomaly intervals
 - plots raw signal of choice with an error overlay interactively if chosen
 - generates plots
 
@@ -13,7 +13,7 @@ Outputs:
             <COUNTRY>_raw_<SIGNAL>_erroroverlay_<METHOD>.png
 
 Usage:
-    python -m app.src.pipelines.ae.analyze_testing [-s] [-M] [-R] <MODEL> <COUNTRY|all|none>
+    python -m app.src.pipelines.ae.analyze_testing [-s] [-R] [-M] <MODEL> <COUNTRY|all|none>
 """
 
 import json, pickle
@@ -28,7 +28,7 @@ from app.src.ml.analysis import (
     plot_error_curve,
     plot_intervals,
     plot_error_hist,
-    plot_raw_with_errors
+    plot_raw_with_scores
 )
 
 
@@ -50,12 +50,12 @@ def _load_results(
     country: str, 
     method: str
 ) -> tuple[pd.DataFrame, float, pd.DataFrame]:
-    err_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_errors_{method}.csv"
+    err_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_scores_{method}.csv"
     thr_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_threshold_{method}.json"
     int_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_intervals_{method}.csv"
 
     if not err_path.exists():
-        raise FileNotFoundError(f"Errors not found: {err_path}")
+        raise FileNotFoundError(f"Scores not found: {err_path}")
     if not thr_path.exists():
         raise FileNotFoundError(f"Threshold dict not found: {thr_path}")
     if not int_path.exists():
@@ -108,8 +108,8 @@ def analyze_raw(
     raw_test_scald = scaler.transform(raw_test_cont).astype(np.float32)
     ts_eval = ts[len(raw_train)+len(raw_val):]
     
-    # extract computed testset errors and mask
-    errors = df_err["error"].values
+    # extract computed test set scores and mask
+    scores = df_err["scores"].values
     mask = df_err["is_anomaly"].astype(bool).values
     
     # plot interactively
@@ -131,11 +131,11 @@ def analyze_raw(
         try:
             idx = int(signal_idx)
             name = options[int(signal_idx)]
-            plot_raw_with_errors(
+            plot_raw_with_scores(
                 name,
                 ts_eval,
                 raw_test_scald[:, idx],
-                errors,
+                scores,
                 mask,
                 out_dir,
                 f"{country}_raw_{name}_erroroverlay_{method}.png",

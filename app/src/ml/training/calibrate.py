@@ -1,51 +1,32 @@
 import pandas as pd
 import numpy as np
-from typing import Union
 from sklearn.base import TransformerMixin
 
 from app.src.data.feature_engineering import load_feature_matrix
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from app.src.ml.training.evaluate_ae import (
-    reconstruction_error, 
-    threshold_percentile, 
-    threshold_mad
-)
-
-
-def _compute_threshold(
-    method: str, 
-    err_array: np.ndarray
-) -> float:
-    """Computes threshold for a given method and error array"""
-    if method == "p99":
-        return threshold_percentile(err_array, 99)
-    elif method == "p995":
-        return threshold_percentile(err_array, 99.5)
-    elif method == "mad":
-        return threshold_mad(err_array, k=6)
-    else:
-        raise ValueError(f"[ERROR] Unknown threshold method {method}")
+from app.src.ml.training.evaluate_ae import reconstruction
+from .core.anomaly_utils import get_threshold
 
 
 # TODO: benchmark threshold calibration window 7 to 30 days 
 def calibrate_threshold(
     country: str,
-    model: Union[TabularAE, TabularVAE],
+    model: TabularAE | TabularVAE,
     scaler: TransformerMixin,
-    device: str | None = None,
+    device: str = "cpu",
     method: str = "p99",
-    cw: int = 30,
-    cont_weight: float = 1.0,
-    cat_weight: float = 0.0, 
+    cw: int | None = 30,
+    cont_w: float = 1.0,
+    cat_w: float = 0.0, 
     tune_temperature: bool = True,
     temperature_range: list | None = None,
     use_mc_elbo: bool = False,
     beta: float = 1.0
-) -> tuple[dict[str, Union[np.ndarray, float]], dict[str, Union[np.ndarray, float]]]:
+) -> tuple[dict[str, np.ndarray | float], dict[str, np.ndarray |float]]:
     """
     Computes anomaly threshold and temperature scaling for a given model on 
-    a specified calibration window, threshold method and temperature range.
+    a specified calibration window, method and temperature range.
     """
     
     # ------------------------------------
@@ -67,7 +48,7 @@ def calibrate_threshold(
     X_cat_cal = Xk_np[cal_window]
     ts_cal = ts[cal_window]
 
-    print(f"[INFO] Calibration window: {start_time} to {end_time}")
+    print(f"\n[INFO] Calibration window: {start_time} to {end_time}")
     print(f"[INFO] Calibration samples: {len(X_cont_cal)}")
 
     # ------------------------------------
@@ -89,31 +70,31 @@ def calibrate_threshold(
         
         best_temp_metric = float('inf')
         for temp in temperature_range:
-            temp_errors = reconstruction_error(
+            temp_scores = reconstruction(
                 model,
                 X_cont_cal_scld,
                 X_cat_cal,
                 device,
-                cont_weight,
-                cat_weight,
+                cont_w,
+                cat_w,
                 use_mc_elbo,
                 temp,
                 beta
             )
             
             # Compute preliminary threshold with this temperature
-            temp_prelim = _compute_threshold(method, temp_errors)
-            temp_clean_errors = temp_errors[temp_errors < temp_prelim]
-            temp_metric = np.median(temp_clean_errors) if len(temp_clean_errors) > 0 else np.median(temp_errors)
+            temp_prelim = get_threshold(method, temp_scores)
+            temp_clean_scores = temp_scores[temp_scores < temp_prelim]
+            temp_metric = np.median(temp_clean_scores) if len(temp_clean_scores) > 0 else np.median(temp_scores)
             temp_results[temp] = {
-                "errors_mean": float(temp_errors.mean()),
-                "errors_std": float(temp_errors.std()),
-                "errors_median": float(np.median(temp_errors)),
-                "clean_errors_median": float(np.median(temp_clean_errors)) if len(temp_clean_errors) > 0 else float(np.median(temp_errors)),
+                "scores_mean": float(temp_scores.mean()),
+                "scores_std": float(temp_scores.std()),
+                "scores_median": float(np.median(temp_scores)),
+                "clean_scores_median": float(np.median(temp_clean_scores)) if len(temp_clean_scores) > 0 else float(np.median(temp_scores)),
                 "prelim_threshold": float(temp_prelim),
-                "clean_samples": len(temp_clean_errors),
+                "clean_samples": len(temp_clean_scores),
             }
-            stability_score = temp_results[temp]["errors_std"] / (temp_results[temp]["errors_mean"] + 1e-8)
+            stability_score = temp_results[temp]["scores_std"] / (temp_results[temp]["scores_mean"] + 1e-8)
             extreme_penalty = abs(temp - 1.0) * 0.1
             combined_metric = temp_metric * (1 + stability_score * 0.1 + extreme_penalty)
         
@@ -129,38 +110,38 @@ def calibrate_threshold(
     # ------------------------------------
     # Compute recon error in window
     # ------------------------------------ 
-    errors = reconstruction_error(
+    scores = reconstruction(
         model,
         X_cont_cal_scld,
         X_cat_cal,
         device,
-        cont_weight,
-        cat_weight,
+        cont_w,
+        cat_w,
         use_mc_elbo,
         best_temp,
         beta
     )
-    print(f"[INFO] Computed {len(errors)} errors with temp={best_temp}")
+    print(f"[INFO] Computed {len(scores)} scores with temp={best_temp}")
 
     # ------------------------------------
     # Remove spikes/anomalies in window
     # ------------------------------------ 
-    prelim = _compute_threshold(method, errors)
-    clean_errors = errors[errors < prelim]
-    removed_count = len(errors) - len(clean_errors)
+    prelim = get_threshold(method, scores)
+    clean_scores = scores[scores < prelim]
+    removed_count = len(scores) - len(clean_scores)
     print(f"[INFO] Removed {removed_count} preliminary anomalies to clean window")
 
-    if len(clean_errors) < 10:
-        print(f"[WARN] Very few clean samples ({len(clean_errors)}). Using all errors.")
-        clean_errors = errors
+    if len(clean_scores) < 10:
+        print(f"[WARN] Very few clean samples ({len(clean_scores)}). Using all scores.")
+        clean_scores = scores
 
     # ------------------------------------
     # Compute threshold on cleaned window
     # ------------------------------------
-    threshold = _compute_threshold(method, clean_errors)
+    threshold = get_threshold(method, clean_scores)
     print(f"[CAL] Computed threshold ({method}) = {threshold:.6f}")
 
-    anomaly_rate = np.mean(errors > threshold) * 100
+    anomaly_rate = np.mean(scores > threshold) * 100
     print(f"[INFO] Expected anomaly rate: {anomaly_rate:.2f}%")
 
     # ------------------------------------
@@ -173,17 +154,17 @@ def calibrate_threshold(
         "threshold": threshold,
         "calibration_window_days": cw,
         "calibration_samples": len(X_cont_cal),
-        "clean_samples": len(clean_errors),
+        "clean_samples": len(clean_scores),
         "preliminary_anomalies_removed": removed_count,
-        "cont_weight": cont_weight,
-        "cat_weight": cat_weight,
-        "error_stats": {
-            "min": float(errors.min()),
-            "mean": float(errors.mean()),
-            "median": float(np.median(errors)),
-            "max": float(errors.max()),
-            "std": float(errors.std()),
-            "p99": float(np.percentile(errors, 99)),
+        "cont_w": cont_w,
+        "cat_w": cat_w,
+        "scores_stats": {
+            "min": float(scores.min()),
+            "mean": float(scores.mean()),
+            "median": float(np.median(scores)),
+            "max": float(scores.max()),
+            "std": float(scores.std()),
+            "p99": float(np.percentile(scores, 99)),
         },
         "anomaly_rate_pct": float(anomaly_rate),
         "temperature_training": 1.0,
@@ -195,8 +176,8 @@ def calibrate_threshold(
     
     debug_dict = {
         "window": ts_cal, 
-        "errors": errors,
-        "clean_errors": clean_errors,
+        "scores": scores,
+        "clean_scores": clean_scores,
         "preliminary_threshold": float(prelim),
     }
 

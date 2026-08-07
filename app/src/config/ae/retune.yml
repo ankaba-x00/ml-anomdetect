@@ -8,50 +8,56 @@ base_dim:
 latent_dim:
   - 32
   - 64
+activation_en:
+  - "relu"
+  - "leaky_relu"
+  - "tanh"
+  - "sigmoid"
+activation_de:
+  - "relu"
+  - "leaky_relu"
+  - "tanh"
+  - "sigmoid"
 dropout:
   start: 0.0
   end: 0.3
+optimizer:
+  - "adamw"
+lr_scheduler:
+  - "cosine"
 lr:
-  start: 1e-5
-  end: 3e-3
+  start: 1e-6
+  end: 3e-2
 weight_decay:
   start: 1e-6
-  end: 1e-3
+  end: 1e-1
+adam_beta1:
+  start: 0.9
+  end: 0.9
+adam_beta2:
+  start: 0.999
+  end: 0.999
+sgd_momentum:
+  start: 0.0
+  end: 0.0
+gradient_clip:
+  - 0.5
+  - 1.0
+  - 2.0
 batch_size:
   - 64
   - 128
   - 256
   - 512
 patience:
-  start: 4
+  start: 5
   end: 9
-embedding_dim:
-  - 8
-  - 12
-  - 16
-noise_std:
-  start: 0.0
-  end: 0.20
-optimizer:
-  - "adam"
-  - "adamw"
-lr_scheduler:
-  - "none"
-  - "plateau"
-  - "cosine"
-  - "onecycle"
-activation_en:
-  - "relu"
-  - "leaky_relu"
-  - "tanh"
-  - "sigmoid"
-  - "silu"
-activation_de:
-  - "relu"
-  - "leaky_relu"
-  - "tanh"
-  - "sigmoid"
-  - "silu"
+noise_gauss_std:
+  start: 0.1
+  end: 0.3
+noise_mask_prob:
+  start: 0.05
+  end: 0.1
 cont_weight:
   start: 0.0
   end: 2.0

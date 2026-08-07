@@ -4,20 +4,20 @@ Test model to detect anomalies in new data:
 - loads model and features
 - computes reconstruction errors
 - computes threshold of choice (p99, p995, MAD)
-- identifies anomaly intervals of certain min. sample length and sample gap 
+- identifies anomaly intervals of certain min sample length and sample gap 
 - prints summary stats
 - performs latent space analysis if specified
 
 Outputs:
     PATH : results/ae_ml/tested/<MODEL>
-    FILES : <COUNTRY>_errors_<method>.csv, 
+    FILES : <COUNTRY>_scores_<method>.csv, 
             <COUNTRY>_threshold_<method>.json, 
             <COUNTRY>_intervals_<method>.csv, 
             analysis/<COUNTRY>_latent_space_pca_coords.csv, 
             analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.test_model [-M <p99|p995|mad>] [-tr <int>] [-vr <int>] [-L] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.test_model [-tr <int>] [-vr <int>] [-MC] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all>
 """
 
 import pickle, json, torch
@@ -85,8 +85,8 @@ def test_country(
     X_cont_df, X_cat_df, num_cont, cat_dims = load_feature_matrix(country)
 
     # ensure consistent categorical structure
-    assert model_cat_dims == cat_dims, "[Error] Saved cat_dims mismatch — rebuild features."
-    assert model_num_cont == num_cont, "[Error] Saved num_cont mismatch — rebuild features."
+    assert model_num_cont == num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
+    assert model_cat_dims == cat_dims, "[ERROR] cant_dims mismatch between scaler and feature matrix"
 
     X_cont = X_cont_df.values.astype(np.float64)
     X_cat = X_cat_df.values.astype(np.int64)
@@ -112,15 +112,16 @@ def test_country(
     # --------------------
     # Load loss weights
     # --------------------
-    payload = torch.load(model_path, map_location="cpu")
+    payload = torch.load(model_path, map_location="cpu", weights_only=True)
     loss_weights = payload.get("additional_info", {}).get("loss_weights", {
-        "cont_weight": 1.0, "cat_weight": 0.0
+        "cont_w": float(1/cfg.num_cont), 
+        "cat_w": float(1/len(cfg.cat_dims.keys()))
     })
 
-    cont_weight = loss_weights["cont_weight"]
-    cat_weight = loss_weights["cat_weight"]
+    cont_w = loss_weights["cont_w"]
+    cat_w = loss_weights["cat_w"]
 
-    print(f"[INFO] Using loss weights - Continuous: {cont_weight:.2f}, Categorical: {cat_weight:.2f}")
+    print(f"[INFO] Using loss weights Cont: {cont_w:.5f}, Cat: {cat_w:.5f}")
 
     # --------------------
     # Run anomaly detection
@@ -131,14 +132,14 @@ def test_country(
         X_cat=Xk_test,
         method=method,
         device=cfg.device,
-        cont_weight=cont_weight,
-        cat_weight=cat_weight,
+        cont_w=cont_w,
+        cat_w=cat_w,
         temperature=cfg.temperature, 
         use_mc_elbo=use_mc_elbo,
         beta=getattr(cfg, "beta", 1.0)
     )
 
-    errors = results["errors"]
+    scores = results["scores"]
     threshold = results["threshold"]
     mask = results["mask"]
     starts = results["anomaly_starts"]
@@ -148,33 +149,33 @@ def test_country(
     # Print summary
     # -------------------------
     print(f"\n--- Result threshold method: {method} ---")
-    print(f"Total test samples = {len(errors)}")
+    print(f"Total test samples = {len(scores)}")
     print(f"Threshold = {threshold:.6f}")
     print(f"Detected anomalous samples = {mask.sum()}")
-    print(f"Detected anomaly intervals =  {len(starts)}\n")
+    print(f"Detected anomaly intervals = {len(starts)}\n")
 
     for s, e in zip(starts, ends):
         print(f"  > Interval {ts_eval[s]} - {ts_eval[e-1]} ({e-s} anomalies)")
 
-    print(f"\nError Statistics:")
-    print(f"Min:      {errors.min():.6f}")
-    print(f"Mean:     {errors.mean():.6f}")
-    print(f"Median:   {np.median(errors):.6f}")
-    print(f"Max:      {errors.max():.6f}")
-    print(f"Std:      {errors.std():.6f}")
-    print(f"99th pct: {np.percentile(errors, 99):.6f}")    
+    print(f"\nScore Statistics:")
+    print(f"Min:      {scores.min():.6f}")
+    print(f"Mean:     {scores.mean():.6f}")
+    print(f"Median:   {np.median(scores):.6f}")
+    print(f"Max:      {scores.max():.6f}")
+    print(f"Std:      {scores.std():.6f}")
+    print(f"99th pct: {np.percentile(scores, 99):.6f}\n")    
 
     # --------------------
     # Save errors CSV
     # --------------------
     df_err = pd.DataFrame({
         "ts": ts_eval,
-        "error": errors,
+        "scores": scores,
         "is_anomaly": mask.astype(int),
         "threshold": threshold,
     })
 
-    err_path = out_path / f"{country}_errors_{method}.csv"
+    err_path = out_path / f"{country}_scores_{method}.csv"
     df_err.to_csv(err_path, index=False)
     print(f"[OK] Saved error series to {err_path}")
 
@@ -201,16 +202,16 @@ def test_country(
         "method": method,
         "threshold": float(threshold),
         "loss_weights": loss_weights,
-        "test_samples": len(errors),
+        "test_samples": len(scores),
         "anomaly_count": int(mask.sum()),
         "interval_count": len(starts),
         "error_stats": {
-            "min": float(errors.min()),
-            "mean": float(errors.mean()),
-            "median": float(np.median(errors)),
-            "max": float(errors.max()),
-            "std": float(errors.std()),
-            "p99": float(np.percentile(errors, 99)),
+            "min": float(scores.min()),
+            "mean": float(scores.mean()),
+            "median": float(np.median(scores)),
+            "max": float(scores.max()),
+            "std": float(scores.std()),
+            "p99": float(np.percentile(scores, 99)),
         },
         "test_period": {
             "start": str(ts_eval[0].date()),
@@ -275,13 +276,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-M", "--method",
-        choices=["p99", "p995", "mad"],
-        default="p99",
-        help="threshold method [default: p99]"
-    )
-
-    parser.add_argument(
         "-tr",
         type=int,
         default=75,
@@ -299,6 +293,13 @@ if __name__ == "__main__":
         "-MC", "--MC-score",
         action="store_true",
         help="use Monte-Carlo scoring for reconstruction errors"
+    )
+
+    parser.add_argument(
+        "-M", "--method",
+        choices=["p99", "p995", "mad"],
+        default="p99",
+        help="threshold method [default: p99]"
     )
 
     parser.add_argument(

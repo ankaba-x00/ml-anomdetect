@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Train a autoencoder for one or all countries:
-- loads continuous + categorical feature matrices
-- applies scaling to continuous features
+- loads cont + cat feature matrices
+- applies scaling to cont features
 - builds autoencoder configuration (AEConfig or VAEConfig)
 - trains TabularAE or TabularVAE with early stopping
 - performs latent space analysis if specified
@@ -17,13 +17,12 @@ Outputs:
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-MC] [-CW] [-L] <MODEL> <COUNTRY|all>
 """
 
 import json, pickle
 from pathlib import Path
 import numpy as np
-from typing import Optional
 from sklearn.preprocessing import RobustScaler
 
 from app.src.data import timeseries_seq_split
@@ -60,7 +59,6 @@ def train_country(
     method: str, 
     cw: int,
     latent: bool,
-    loss_weights: Optional[dict] = None,
 ) -> None:
     print(f"\n==============================")
     print(f"  TRAIN AUTOENCODER ({country})")
@@ -75,7 +73,7 @@ def train_country(
     Xk_np = X_cat.values.astype(np.int64)
       
     # ------------------------------------
-    # AEConfig object: Load or construct
+    # AEConfig: Load or construct
     # ------------------------------------
     if full or tr == 100:
         print(f"[INFO] Reading {ae_type.upper()}Config from best tuning run.")
@@ -100,12 +98,15 @@ def train_country(
         
         try:
             loss_weights = {
-                "cont_weight": best_params.get("cont_weight", 1.0),
-                "cat_weight": best_params.get("cat_weight", 0.0),
+                "cont_w": best_params["cont_w"],
+                "cat_w": best_params["cat_w"]
             }
             print(f"[INFO] Using tuned loss weights: {loss_weights}")
         except Exception:
-            loss_weights = {"cont_weight": 1.0, "cat_weight": 0.0}
+            loss_weights = {
+                "cont_w": float(1/cfg.num_cont), 
+                "cat_w": float(1/len(cat_dims.keys()))
+            }
             print(f"[INFO] Using default loss weights: {loss_weights}")
 
     else:
@@ -113,35 +114,41 @@ def train_country(
         base_cfg = dict(
             num_cont=num_cont,
             cat_dims=cat_dims,
-            latent_dim=32,
+            use_embedding=False,
             hidden_dims=(128, 64),
-            dropout=0.1,
-            embedding_dim=12,
-            continuous_noise_std=0.01,
-            lr=1e-3,
-            weight_decay=1e-5,
-            batch_size=256,
-            num_epochs=60,
-            patience=6,
-            gradient_clip=1.0,
-            optimizer="adam",
-            lr_scheduler="plateau",
-            use_lr_scheduler=True,
-            anomaly_threshold=None,
+            latent_dim=32,
             activation_en="relu",
             activation_de="relu",
-            temperature=1.0
+            dropout=0.1,
+            optimizer="adam",
+            lr=1e-5,
+            weight_decay=1e-5,
+            adam_beta1=0.9,
+            adam_beta2=0.999,
+            sgd_momentum=0.0,
+            lr_scheduler="none",
+            gradient_clip=1.0,
+            batch_size=256,
+            allow_noise_injection=True,
+            noise_gauss_std=1.0,
+            noise_mask_prob=0.05,
+            num_epochs=60,
+            warmup_epochs=10,
+            patience=10,
+            anomaly_threshold=None,
+            temperature=1.0,  
         )
         config_map = {
             "ae": AEConfig,
             "vae": VAEConfig
         }
         cfg = config_map[ae_type](**base_cfg)
-            
-    
-    # Default loss weights if not provided
-    if loss_weights is None:
-        loss_weights = {"cont_weight": 1.0, "cat_weight": 0.0}
+        
+        # Feature-count loss weights
+        loss_weights = {
+            "cont_w": float(1/cfg.num_cont), 
+            "cat_w": float(1/len(cat_dims.keys()))
+        }
 
     # ------------------------------------
     # Full OR Split : Train model
@@ -217,7 +224,7 @@ def train_country(
     scaler_path = out_path / f"{country}_scaler_cont.pkl"
     with open(scaler_path, "wb") as f:
         pickle.dump(scaler, f)
-    print(f"[OK] Saved continuous scaler to {scaler_path}")
+    print(f"[OK] Saved cont scaler to {scaler_path}")
 
     history_path = out_path / f"{country}_training_history.json"
     with open(history_path, "w") as f:
@@ -257,12 +264,12 @@ def train_country(
             country, 
             model, 
             scaler, 
-            cfg.device, 
+            cfg.device,
             method, 
             cw,
-            cont_weight=loss_weights["cont_weight"],
-            cat_weight=loss_weights["cat_weight"],
-            tune_temperature=True,
+            cont_w=loss_weights["cont_w"],
+            cat_w=loss_weights["cat_w"],
+            tune_temperature=False,
             temperature_range=[0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0],
             use_mc_elbo=use_mc_elbo,
             beta=getattr(cfg, "beta", 1.0)
@@ -317,15 +324,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-MC", "--MC-score",
-        action="store_true",
-        help="use Monte-Carlo scoring for reconstruction errors"
-    )
-
-    parser.add_argument(
         "-F", "--full",
         action="store_true",
         help="train on full dataset, no validation (for inference); overwrites tr and vr"
+    )
+
+    parser.add_argument(
+        "-MC", "--MC-score",
+        action="store_true",
+        help="use Monte-Carlo scoring for reconstruction errors"
     )
 
     parser.add_argument(

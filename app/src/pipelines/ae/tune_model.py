@@ -2,21 +2,24 @@
 """
 Hyperparameter tuning for the TabularAE using Optuna.
 
-Search space:
-- latent_dim
-- hidden_dims (depth + width)
+Currently implemented search space:
+- latent dimensions
+- hidden dimensions (base_dim + depth)
 - dropout
 - learning rate
-- batch size
 - weight decay
-- patience
-- embedding_dim
-- continuous noise_std
-- optimizer (Adam / AdamW)
+- batch size
+- patience for early stopping
+- gradient clipping
+- noise gaussian std and mask probability
+- optimizer type
+- optimizer-specific paramters like beta1, beta2 for adam, sgd_momentum for sgd
 - lr scheduler type
-- activation for encoder and decoder
-- loss weights
-- beta (for VAE)
+- activation function for encoder and decoder
+- loss weights (cont and cat)
+                               # - beta (for VAE)
+
+To add parameters for tuning, check README_tuning.ms
 
 Outputs:
     PATH : results/ae_ml/tuned/<MODEL>
@@ -30,7 +33,7 @@ Outputs:
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] [--retune] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.tune_model [-tr <int>] [-vr <int>] [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-L] [-r <int>] <MODEL> <COUNTRY|all>
 """
 
 import csv, json, pickle, torch, optuna, yaml, sys
@@ -92,7 +95,7 @@ def tune_country(
     tr: int = 75,
     vr: int = 15,
     latent: bool = False,
-    tune_phase: str = "base"
+    retune_no: int = 0
 ) -> None:
     print(f"\n==============================")
     print(f"   OPTUNA TUNING FOR {country}")
@@ -104,11 +107,13 @@ def tune_country(
     # -----------------------------
     # Load search space params
     # -----------------------------
+    tune_phase = "base" if retune_no == 0 else "retune"
     params = load_params(tune_phase)
     required_params = set([
-        "depth", "base_dim", "latent_dim", "dropout", "lr", 
-        "weight_decay", "batch_size", "patience", "embedding_dim", "noise_std", "optimizer", "lr_scheduler", "activation_en", 
-        "activation_de", "cont_weight", "cat_weight"
+        "depth", "base_dim", "latent_dim", "dropout", "optimizer", "lr_scheduler", 
+        "lr", "weight_decay", "adam_beta1", "adam_beta2", "sgd_momentum", 
+        "gradient_clip", "batch_size", "patience", "noise_gauss_std", "noise_mask_prob",
+        "activation_en", "activation_de", "cont_weight", "cat_weight"
     ])
     if set(params.keys()) != required_params:
         raise KeyError(f"[ERROR] yml file is missing parameter: {set({params}.keys()) ^ required_params}")
@@ -129,6 +134,8 @@ def tune_country(
     if pr is None:
         raise ValueError(f"Unknown pruner: {pruner}")
 
+    if tune_phase == "retune":
+        tune_phase = f"retune_{retune_no}"
     db_path = OUT_DIR / f"{ae_type}" / f"{country}_study_{tune_phase}.db"
 
     study = optuna.create_study(
@@ -154,6 +161,7 @@ def tune_country(
     # ------------------------------------
     # Retrain best model fully
     # ------------------------------------
+    print("\n[INFO] Retraining on best params.")
     X_cont_df, X_cat_df, num_cont, cat_dims = load_feature_matrix(country)
     Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)
@@ -170,39 +178,42 @@ def tune_country(
     Xc_val_scald = scaler.transform(Xc_val).astype(np.float32)
 
     p = study.best_trial.params
-    depth = p.get("depth", 2)
-    base_dim = p.get("base_dim", 128)
-    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
-    cont_weight = p.get("cont_weight", 1.0)
-    cat_weight = p.get("cat_weight", 0.0)
-    loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
-    activation_en = p.get("activation_en", "leaky_relu")
-    activation_de = p.get("activation_de", "tanh")
-
+    hidden_dims = [max(32, int(p["base_dim"] / (2**i))) for i in range(p["depth"])]
     best_base_cfg = dict(
         num_cont=num_cont,
         cat_dims=cat_dims,
-        latent_dim=p["latent_dim"],
+        use_embedding=False,
         hidden_dims=tuple(hidden_dims),
+        latent_dim=p["latent_dim"],
+        activation_en=p["activation_en"],
+        activation_de=p["activation_de"],
         dropout=p["dropout"],
+        optimizer=p["optimizer"],
         lr=p["lr"],
         weight_decay=p["weight_decay"],
-        batch_size=p["batch_size"],
-        num_epochs=50,
-        patience=p["patience"],
-        gradient_clip=1.0,
-        use_lr_scheduler=True,
-        embedding_dim=p["embedding_dim"],
-        continuous_noise_std=p["noise_std"],
-        optimizer=p["optimizer"],
+        adam_beta1=p["adam_beta1"],
+        adam_beta2=p["adam_beta2"],
+        sgd_momentum=p["sgd_momentum"],
         lr_scheduler=p["lr_scheduler"],
+        gradient_clip=p["gradient_clip"],
+        batch_size=p["batch_size"],
+        allow_noise_injection=True,
+        noise_gauss_std=p["noise_gauss_std"],
+        noise_mask_prob=p["noise_mask_prob"],
+        num_epochs=60,
+        warmup_epochs=10,
+        patience=p["patience"],
+        anomaly_threshold=None,
+        temperature=1.0,  
         device="cuda" if torch.cuda.is_available() else "cpu",
-        activation_en=activation_en,
-        activation_de=activation_de,
-        temperature=1.0
     )
     if ae_type == "vae":
         best_base_cfg["beta"] = p.get("beta", 1.0)
+    
+    loss_weights = {
+        "cont_w": p["cont_w"], 
+        "cat_w": p["cat_w"]
+    }
 
     config_map = {
         "ae": AEConfig,
@@ -252,11 +263,17 @@ def tune_country(
 
     mode = "w" if tune_phase == "base" else "a"
     clean_params = {}
+    clean_params["phase"] = tune_phase
     for k, v in params.items():
         if isinstance(v, dict):
             clean_params[k] = [v["start"], v["end"]]
         else:
             clean_params[k] = list(v)
+    clean_params["pruner"] = pruner
+    if ae_type == "vae":
+        clean_params["metric"] = metric
+    clean_params["best_trial"] = study.best_trial.number
+    clean_params["best_val_loss"] = study.best_trial.values[0]
     with open(OUT_DIR / f"{ae_type}" /f"{country}_search_space.csv", mode=mode, newline="") as f:
         writer = csv.DictWriter(f, fieldnames=clean_params.keys())
         if tune_phase == "base":
@@ -291,7 +308,7 @@ def tune_all(
     tr: int, 
     vr: int, 
     latent: bool,
-    tune_phase: str = "base"
+    retune_no: int = 0
 ) -> None:
     for c in COUNTRIES:
         try:
@@ -304,7 +321,7 @@ def tune_all(
                 tr=tr, 
                 vr=vr,
                 latent=latent,
-                tune_phase=tune_phase
+                retune_no=retune_no
             )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
@@ -318,9 +335,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tune AE hyperparameters for single or for all countries.")
 
     parser.add_argument(
-        "--retune",
-        action="store_true",
-        help="read retune parameter from yml for retuning]"
+        "-tr",
+        type=int,
+        default=75,
+        help="dataset ratio for training in %% [default: 75%%]"
+    )
+
+    parser.add_argument(
+        "-vr",
+        type=int,
+        default=15,
+        help="dataset ratio for validation in %% [default: 15%%]"
     )
 
     parser.add_argument(
@@ -345,23 +370,16 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-tr",
-        type=int,
-        default=75,
-        help="dataset ratio for training in %% [default: 75%%]"
-    )
-
-    parser.add_argument(
-        "-vr",
-        type=int,
-        default=15,
-        help="dataset ratio for validation in %% [default: 15%%]"
-    )
-
-    parser.add_argument(
         "-L", "--latent",
         action="store_true",
         help="generate latent space plot after tuning"
+    )
+
+    parser.add_argument(
+        "-r", "--retune",
+        type=int,
+        default=0,
+        help="if set, parameter read from yml for retuning and retune phase number is assigned [default: 0 = base]"
     )
 
     parser.add_argument(
@@ -403,7 +421,7 @@ if __name__ == "__main__":
             args.tr, 
             args.vr, 
             args.latent, 
-            tune_phase
+            args.retune
         )
     else:
         tune_country(
@@ -415,5 +433,5 @@ if __name__ == "__main__":
             tr=args.tr, 
             vr=args.vr,
             latent=args.latent,
-            tune_phase=tune_phase
+            retune_no=args.retune
         )

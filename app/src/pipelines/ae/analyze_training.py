@@ -104,7 +104,7 @@ def analyze_country(
         history = load_training_history(in_train)
         val_df = load_validation_errors(ae_type, country, in_val)
 
-        threshold = np.percentile(val_df["error"], 99)
+        threshold = np.percentile(val_df["scores"], 99)
 
         plot_training_curves(
             country,

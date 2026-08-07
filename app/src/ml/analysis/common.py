@@ -11,7 +11,7 @@ from sklearn.manifold import TSNE
 
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from app.src.ml.models.mte import TrafficAttackPredictor
+from app.src.ml.models.mt.mte import TrafficAttackPredictor
 
 
 custom_rc = {

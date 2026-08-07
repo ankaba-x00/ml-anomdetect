@@ -5,7 +5,8 @@ import numpy as np
 
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from app.src.ml.training.evaluate_ae import reconstruction_error, anomaly_mask, find_anomalies
+from app.src.ml.training.evaluate_ae import reconstruction
+from app.src.ml.training.core.anomaly_utils import get_anomaly_mask, find_anomalies
 from app.src.ml.training.train_ae import load_autoencoder
 
 
@@ -22,7 +23,7 @@ MODELS_DIR = FILE_DIR / "models"
 #########################################
 
 def load_inference_bundle(ae_type: str, country: str) -> dict[str, Any]:
-    """Load inference bundle for prediction incl. model, scaler, cat_dims for order."""
+    """Loads inference bundle for prediction."""
     print(f"[INFO] Loading inference bundle for {country}...")
 
     model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
@@ -38,8 +39,11 @@ def load_inference_bundle(ae_type: str, country: str) -> dict[str, Any]:
 
     model, cfg, model_num_cont, model_cat_dims = load_autoencoder(model_path)
     
-    payload = torch.load(model_path, map_location="cpu")
-    loss_weights = payload.get("additional_info", {}).get("loss_weights", {"cont_weight": 1.0, "cat_weight": 1.0})
+    payload = torch.load(model_path, map_location="cpu", weights_only=True)
+    loss_weights = payload.get("additional_info", {}).get("loss_weights", {
+        "cont_w": float(1/cfg.num_cont), 
+        "cat_w": float(1/len(cfg.cat_dims.keys()))
+    })
 
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
@@ -75,23 +79,23 @@ def run_inference(
     device: str = None,
     min_length: int = 1,
     merge_gap: int = 0,
-    cont_weight: float = 1.0,
-    cat_weight: float = 1.0,  
+    cont_w: float = 1.0,
+    cat_w: float = 1.0,  
     temperature: float = 1.0,
 ) -> dict[str, Any]:
-    """Applies model on data and compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
+    """Applies model on data and computes reconstruction errors, threshold, anomaly mask, anomaly intervals."""
 
-    errors = reconstruction_error(
+    scores = reconstruction(
         model,
         X_cont,
         X_cat,
         device=device,
-        cont_weight=cont_weight,
-        cat_weight=cat_weight,
+        cont_w=cont_w,
+        cat_w=cat_w,
         temperature=temperature,
     )
 
-    mask = anomaly_mask(errors, threshold)
+    mask = get_anomaly_mask(scores, threshold)
     intervals = find_anomalies(
         mask,
         min_length=min_length,
@@ -101,7 +105,7 @@ def run_inference(
     ends   = np.array([e for _, e in intervals])
     
     return {
-        "errors": errors,
+        "scores": scores,
         "threshold": threshold,
         "mask": mask,
         "anomaly_starts": starts,
