@@ -27,12 +27,12 @@ def plot_error_histogram(
     """Histogram of log errors with percentile lines."""
     apply_custom_theme()
 
-    errors = df["error"].values
-    log_err = np.log10(errors + 1e-8)
-    p95 = np.percentile(errors, 95)
-    p99 = np.percentile(errors, 99)
-    p995 = np.percentile(errors, 99.5)
-    med = np.median(errors)
+    scores = df["scores"].values
+    log_err = np.log10(scores + 1e-8)
+    p95 = np.percentile(scores, 95)
+    p99 = np.percentile(scores, 99)
+    p995 = np.percentile(scores, 99.5)
+    med = np.median(scores)
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.hist(log_err, bins=60, color="steelblue", alpha=0.7)
@@ -40,7 +40,7 @@ def plot_error_histogram(
     for p, label in [(med, "median"), (p95, "p95"), (p99, "p99"), (p995, "p995")]:
         ax.axvline(np.log10(p + 1e-8), linestyle="--", label=label)
     ax.set_title(f"{country} — Validation Error Distribution (log10 scale)")
-    ax.set_xlabel("log10(error)")
+    ax.set_xlabel("log10(scores)")
     ax.set_ylabel("Count")
     ax.grid(True)
     ax.legend()
@@ -63,7 +63,7 @@ def plot_error_timeseries(
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(df["ts"], df["error"], linewidth=1, label="Error")
+    ax.plot(df["ts"], df["scores"], linewidth=1, label="Scores")
     if threshold is not None:
         ax.axhline(threshold, color="red", linestyle="--", label=f"Threshold={threshold:.2f}")
     ax.set_title(f"{country} — Validation Error Time Series")
@@ -84,19 +84,19 @@ def summarize_validation(
     folder: Path = Path.cwd(),
     fname: str = "summarize_validation.png",
 ) -> None:
-    """Summary statistics for validation error distribution as json."""
-    errors = df["error"].values
+    """Summary statistics for reconstruction error distribution as json."""
+    scores = df["scores"].values
 
     summary = {
         "country": country,
-        "count": int(len(errors)),
-        "min": float(errors.min()),
-        "max": float(errors.max()),
-        "mean": float(errors.mean()),
-        "median": float(np.median(errors)),
-        "p95": float(np.percentile(errors, 95)),
-        "p99": float(np.percentile(errors, 99)),
-        "p995": float(np.percentile(errors, 99.5)),
+        "count": int(len(scores)),
+        "min": float(scores.min()),
+        "max": float(scores.max()),
+        "mean": float(scores.mean()),
+        "median": float(np.median(scores)),
+        "p95": float(np.percentile(scores, 95)),
+        "p99": float(np.percentile(scores, 99)),
+        "p995": float(np.percentile(scores, 99.5)),
     }
 
     with open(folder / fname, "w") as f:

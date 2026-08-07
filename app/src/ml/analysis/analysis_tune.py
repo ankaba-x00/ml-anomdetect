@@ -14,6 +14,7 @@ from optuna.visualization import (
 
 from .common import apply_custom_theme
 
+optuna.logging.set_verbosity(optuna.logging.ERROR)
 
 def save_optuna_plots(
     study: optuna.Study, 
@@ -383,8 +384,8 @@ def plot_multi_weights_overview(
 
     x = np.arange(len(df))
     width = 0.35
-    axes[0].bar(x - width/2, df["cont_weight"], width, label="Continuous", color='blue')
-    axes[0].bar(x + width/2, df["cat_weight"], width, label="Categorical", color='red')
+    axes[0].bar(x - width/2, df["cont_w"], width, label="Continuous", color='blue')
+    axes[0].bar(x + width/2, df["cat_w"], width, label="Categorical", color='red')
     axes[0].set_xlabel("Country")
     axes[0].set_ylabel("Weight")
     axes[0].set_title("Loss Weights by Country")
@@ -393,13 +394,13 @@ def plot_multi_weights_overview(
     axes[0].legend()
     axes[0].grid(True, axis='y', alpha=0.3)
 
-    axes[1].scatter(df["cont_weight"], df["cat_weight"], s=100, alpha=0.7)
+    axes[1].scatter(df["cont_w"], df["cat_w"], s=100, alpha=0.7)
     for i, row in df.iterrows():
-        axes[1].annotate(row["country"], (row["cont_weight"], row["cat_weight"]), 
+        axes[1].annotate(row["country"], (row["cont_w"], row["cat_w"]), 
                         fontsize=9, alpha=0.8, xytext=(5, 5), textcoords='offset points')
     axes[1].axline((0, 0), slope=1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
-    axes[1].set_xlabel("Continuous Weight")
-    axes[1].set_ylabel("Categorical Weight")
+    axes[1].set_xlabel("Cont Weight")
+    axes[1].set_ylabel("Cat Weight")
     axes[1].set_title("Weight Scatter Plot")
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
@@ -435,8 +436,8 @@ def plot_multi_weight_loss_correlation(
     merged = {}
     for country in set(weights_data.keys()) & set(losses_data.keys()):
         merged[country] = {
-            "cont_weight": weights_data[country]["cont_weight"],
-            "cat_weight": weights_data[country]["cat_weight"],
+            "cont_w": weights_data[country]["cont_w"],
+            "cat_w": weights_data[country]["cat_w"],
             "ratio": weights_data[country]["ratio"],
             "loss": losses_data[country],
         }
@@ -447,23 +448,23 @@ def plot_multi_weight_loss_correlation(
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     
-    axes[0, 0].scatter(df["cont_weight"], df["loss"], s=100, alpha=0.7)
+    axes[0, 0].scatter(df["cont_w"], df["loss"], s=100, alpha=0.7)
     for _, row in df.iterrows():
-        axes[0, 0].annotate(row["country"], (row["cont_weight"], row["loss"]), 
+        axes[0, 0].annotate(row["country"], (row["cont_w"], row["loss"]), 
                           fontsize=9, alpha=0.8)
-    axes[0, 0].set_xlabel("Continuous Weight")
+    axes[0, 0].set_xlabel("Cont Weight")
     axes[0, 0].set_ylabel("Validation Loss")
-    axes[0, 0].set_title("Continuous Weight vs Performance")
+    axes[0, 0].set_title("Cont Weight vs Performance")
     axes[0, 0].set_yscale("log")
     axes[0, 0].grid(True, alpha=0.3)
     
-    axes[0, 1].scatter(df["cat_weight"], df["loss"], s=100, alpha=0.7)
+    axes[0, 1].scatter(df["cat_w"], df["loss"], s=100, alpha=0.7)
     for _, row in df.iterrows():
-        axes[0, 1].annotate(row["country"], (row["cat_weight"], row["loss"]), 
+        axes[0, 1].annotate(row["country"], (row["cat_w"], row["loss"]), 
                           fontsize=9, alpha=0.8)
-    axes[0, 1].set_xlabel("Categorical Weight")
+    axes[0, 1].set_xlabel("Cat Weight")
     axes[0, 1].set_ylabel("Validation Loss")
-    axes[0, 1].set_title("Categorical Weight vs Performance")
+    axes[0, 1].set_title("Cat Weight vs Performance")
     axes[0, 1].set_yscale("log")
     axes[0, 1].grid(True, alpha=0.3)
 
@@ -480,10 +481,10 @@ def plot_multi_weight_loss_correlation(
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
 
-    scatter = axes[1, 1].scatter(df["cont_weight"], df["cat_weight"], 
+    scatter = axes[1, 1].scatter(df["cont_w"], df["cat_w"], 
                                  c=df["loss"], s=100, alpha=0.7, cmap='viridis')
     for _, row in df.iterrows():
-        axes[1, 1].annotate(row["country"], (row["cont_weight"], row["cat_weight"]), 
+        axes[1, 1].annotate(row["country"], (row["cont_w"], row["cat_w"]), 
                           fontsize=9, alpha=0.8)
     axes[1, 1].axline((0, 0), slope=1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
     axes[1, 1].set_xlabel("Continuous Weight")

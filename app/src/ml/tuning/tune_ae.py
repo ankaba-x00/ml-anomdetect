@@ -45,6 +45,7 @@ def objective(
     # ------------------------------------
     # Load feature matrix
     # ------------------------------------
+    print(f"\n[INFO] Setting up new trial")
     X_cont_df, X_cat_df, num_cont, cat_dims, = load_feature_matrix(country)
     Xc_np = X_cont_df.values.astype(np.float64)
     Xk_np = X_cat_df.values.astype(np.int64)
@@ -83,10 +84,26 @@ def objective(
         "latent_dim", 
         params["latent_dim"]
     )
+    activation_en = trial.suggest_categorical(
+        "activation_en", 
+        params["activation_en"]
+    )
+    activation_de = trial.suggest_categorical(
+        "activation_de", 
+        params["activation_de"]
+    )
     dropout = trial.suggest_float(
         "dropout", 
         params["dropout"]["start"], 
         params["dropout"]["end"]
+    )
+    optimizer = trial.suggest_categorical(
+        "optimizer", 
+        params["optimizer"]
+    )
+    lr_scheduler = trial.suggest_categorical(
+        "lr_scheduler", 
+        params["lr_scheduler"]
     )
     lr = trial.suggest_float(
         "lr", 
@@ -100,6 +117,25 @@ def objective(
         float(params["weight_decay"]["end"]), 
         log=True
     )
+    adam_beta1 = trial.suggest_float(
+        "adam_beta1", 
+        float(params["adam_beta1"]["start"]), 
+        float(params["adam_beta1"]["end"]), 
+    )
+    adam_beta2 = trial.suggest_float(
+        "adam_beta2", 
+        float(params["adam_beta2"]["start"]), 
+        float(params["adam_beta2"]["end"]), 
+    )
+    sgd_momentum = trial.suggest_float(
+        "sgd_momentum", 
+        float(params["sgd_momentum"]["start"]), 
+        float(params["sgd_momentum"]["end"]), 
+    )
+    gradient_clip = trial.suggest_categorical(
+        "gradient_clip",
+        params["gradient_clip"]
+    )
     batch_size = trial.suggest_categorical(
         "batch_size", 
         params["batch_size"]
@@ -109,42 +145,27 @@ def objective(
         params["patience"]["start"], 
         params["patience"]["end"]
     )
-    embedding_dim = trial.suggest_categorical(
-        "embedding_dim", 
-        params["embedding_dim"]
+    noise_gauss_std = trial.suggest_float(
+        "noise_gauss_std", 
+        float(params["noise_gauss_std"]["start"]), 
+        float(params["noise_gauss_std"]["end"])
     )
-    noise_std = trial.suggest_float(
-        "noise_std", 
-        float(params["noise_std"]["start"]), 
-        float(params["noise_std"]["end"])
+    noise_mask_prob = trial.suggest_float(
+        "noise_mask_prob", 
+        float(params["noise_mask_prob"]["start"]), 
+        float(params["noise_mask_prob"]["end"])
     )
-    optimizer = trial.suggest_categorical(
-        "optimizer", 
-        params["optimizer"]
-    )
-    lr_scheduler = trial.suggest_categorical(
-        "lr_scheduler", 
-        params["lr_scheduler"]
-    )
-    activation_en = trial.suggest_categorical(
-        "activation_en", 
-        params["activation_en"]
-    )
-    activation_de = trial.suggest_categorical(
-        "activation_de", 
-        params["activation_de"]
-    )
-    cont_weight = trial.suggest_float(
-        "cont_weight", 
+    cont_w = trial.suggest_float(
+        "cont_w", 
         float(params["cont_weight"]["start"]), 
         float(params["cont_weight"]["end"])
     )
-    cat_weight = trial.suggest_float(
-        "cat_weight", 
+    cat_w = trial.suggest_float(
+        "cat_w", 
         float(params["cat_weight"]["start"]), 
         float(params["cat_weight"]["end"])
     )
-    loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
+    loss_weights = {"cont_w": cont_w, "cat_w": cat_w}
 
     if ae_type == "vae":
         beta = trial.suggest_float("beta", 0.1, 5.0, log=True)
@@ -157,24 +178,30 @@ def objective(
     base_cfg = dict(
         num_cont=num_cont,
         cat_dims=cat_dims,
-        latent_dim=latent_dim,
+        use_embedding=False,
         hidden_dims=tuple(hidden_dims),
-        dropout=dropout,
-        lr=lr,
-        weight_decay=weight_decay,
-        batch_size=batch_size,
-        num_epochs=50,
-        patience=patience,
-        gradient_clip=1.0,
-        use_lr_scheduler=True,
-        embedding_dim=embedding_dim,
-        continuous_noise_std=noise_std,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        device="cuda" if torch.cuda.is_available() else "cpu",
+        latent_dim=latent_dim,
         activation_en=activation_en,
         activation_de=activation_de,
-        temperature=1.0
+        dropout=dropout,
+        optimizer=optimizer,
+        lr=lr,
+        weight_decay=weight_decay,
+        adam_beta1=adam_beta1,
+        adam_beta2=adam_beta2,
+        sgd_momentum=sgd_momentum,
+        lr_scheduler=lr_scheduler,
+        gradient_clip=1.0,
+        batch_size=batch_size,
+        allow_noise_injection=True,
+        noise_gauss_std=noise_gauss_std,
+        noise_mask_prob=noise_mask_prob,
+        num_epochs=60,
+        warmup_epochs=10,
+        patience=patience,
+        anomaly_threshold=None,
+        temperature=1.0,  
+        device="cuda" if torch.cuda.is_available() else "cpu",
     )
     if ae_type == "vae":
         base_cfg["beta"] = beta
@@ -239,8 +266,8 @@ def objective(
     trial.report(final_val_loss, step=0)
     # Store additional metrics
     trial.set_user_attr("tuning_metric", metric)
-    trial.set_user_attr("cont_weight", cont_weight)
-    trial.set_user_attr("cat_weight", cat_weight)
+    trial.set_user_attr("cont_w", cont_w)
+    trial.set_user_attr("cat_w", cat_w)
     trial.set_user_attr("best_epoch", int(best_epoch) if 'best_epoch' in locals() else -1)
 
     if trial.should_prune():

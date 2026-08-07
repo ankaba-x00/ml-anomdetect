@@ -120,7 +120,7 @@ def validate_country(
     # --------------------
     # Load loss weights (lambdas)
     # --------------------
-    payload = torch.load(model_path, map_location="cpu")
+    payload = torch.load(model_path, map_location="cpu", weights_only=True)
     loss_weights = payload.get("additional_info", {}).get("loss_weights", {
         "l3": 1.0, "l7": 1.0, "attack": 3.0
     })

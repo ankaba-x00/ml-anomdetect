@@ -26,8 +26,8 @@ def detect_anomalies(
         newdata = run_fetch(country, date_from, date_to)
         X_cont_df, X_cat_df, num_cont, cat_dims, = build_features(country, newdata)
         
-        assert bundle["model_num_cont"] == num_cont, "[Error] Saved num_conts fatal mismatch — rebuild features."
-        assert bundle["model_cat_dims"].keys() == cat_dims.keys(), "[Error] Saved cat_dims fatal mismatch — rebuild features."
+        assert bundle["model_num_cont"] == num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
+        assert bundle["model_cat_dims"].keys() == cat_dims.keys(), "[ERROR] cant_dims mismatch between scaler and feature matrix"
 
         X_cont = X_cont_df.values.astype(np.float64)
         X_cat = X_cat_df.values.astype(np.int64)
@@ -44,12 +44,12 @@ def detect_anomalies(
             X_cat=X_cat,
             threshold=bundle["threshold"],
             device=bundle["config"].device,
-            cont_weight=bundle["loss_weights"]["cont_weight"],
-            cat_weight=bundle["loss_weights"]["cat_weight"],
+            cont_w=bundle["loss_weights"]["cont_w"],
+            cat_w=bundle["loss_weights"]["cat_w"],
             temperature=bundle.get("temperature", 1.0),
         )
 
-        errors = results["errors"]
+        scores = results["scores"]
         threshold = results["threshold"]
         mask = results["mask"]
         starts = results["anomaly_starts"]
