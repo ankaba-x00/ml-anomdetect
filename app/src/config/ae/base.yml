@@ -1,0 +1,60 @@
+depth:
+  start: 2
+  end: 3
+base_dim:
+  - 128 
+  - 256
+  - 512
+latent_dim:
+  - 32
+  - 64
+dropout:
+  start: 0.0
+  end: 0.3
+lr:
+  start: 1e-5
+  end: 3e-3
+weight_decay:
+  start: 1e-6
+  end: 1e-3
+batch_size:
+  - 64
+  - 128
+  - 256
+  - 512
+patience:
+  start: 4
+  end: 9
+embedding_dim:
+  - 8
+  - 12
+  - 16
+noise_std:
+  start: 0.0
+  end: 0.20
+optimizer:
+  - "adam"
+  - "adamw"
+lr_scheduler:
+  - "none"
+  - "plateau"
+  - "cosine"
+  - "onecycle"
+activation_en:
+  - "relu"
+  - "leaky_relu"
+  - "tanh"
+  - "sigmoid"
+  - "silu"
+activation_de:
+  - "relu"
+  - "leaky_relu"
+  - "tanh"
+  - "sigmoid"
+  - "silu"
+cont_weight:
+  start: 0.0
+  end: 2.0
+cat_weight:
+  start: 0.0
+  end: 2.0

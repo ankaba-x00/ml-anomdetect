@@ -35,6 +35,7 @@ def objective(
         tr: int, 
         vr: int,
         path: Path,
+        params: dict
     ) -> float:
     set_global_seeds(42)
     
@@ -68,27 +69,82 @@ def objective(
     # ------------------------------------
     # Hyperparameter search space
     # ------------------------------------
-    depth = trial.suggest_int("depth", 2, 3)
-    base_dim = trial.suggest_categorical("base_dim", [128, 256, 512])
-    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
-    latent_dim = trial.suggest_categorical("latent_dim", [32, 64])
-    dropout = trial.suggest_float("dropout", 0.0, 0.3)
-    lr = trial.suggest_float("lr", 1e-5, 3e-3, log=True)
-    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512])
-    patience = trial.suggest_int("patience", 4, 9)
-    embedding_dim = trial.suggest_categorical("embedding_dim", [8, 12, 16])
-    noise_std = trial.suggest_float("noise_std", 0.0, 0.20)
-    optimizer = trial.suggest_categorical("optimizer", ["adam", "adamw"])
-    lr_scheduler = trial.suggest_categorical(
-        "lr_scheduler",
-        ["none", "plateau", "cosine", "onecycle"]
+    depth = trial.suggest_int(
+        "depth", 
+        params["depth"]["start"], 
+        params["depth"]["end"]
     )
-    cont_weight = trial.suggest_float("cont_weight", 0.0, 2.0)
-    cat_weight = trial.suggest_float("cat_weight", 0.0, 2.0)
+    base_dim = trial.suggest_categorical(
+        "base_dim", 
+        params["base_dim"]
+    )
+    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
+    latent_dim = trial.suggest_categorical(
+        "latent_dim", 
+        params["latent_dim"]
+    )
+    dropout = trial.suggest_float(
+        "dropout", 
+        params["dropout"]["start"], 
+        params["dropout"]["end"]
+    )
+    lr = trial.suggest_float(
+        "lr", 
+        float(params["lr"]["start"]), 
+        float(params["lr"]["end"]), 
+        log=True
+    )
+    weight_decay = trial.suggest_float(
+        "weight_decay", 
+        float(params["weight_decay"]["start"]), 
+        float(params["weight_decay"]["end"]), 
+        log=True
+    )
+    batch_size = trial.suggest_categorical(
+        "batch_size", 
+        params["batch_size"]
+    )
+    patience = trial.suggest_int(
+        "patience", 
+        params["patience"]["start"], 
+        params["patience"]["end"]
+    )
+    embedding_dim = trial.suggest_categorical(
+        "embedding_dim", 
+        params["embedding_dim"]
+    )
+    noise_std = trial.suggest_float(
+        "noise_std", 
+        float(params["noise_std"]["start"]), 
+        float(params["noise_std"]["end"])
+    )
+    optimizer = trial.suggest_categorical(
+        "optimizer", 
+        params["optimizer"]
+    )
+    lr_scheduler = trial.suggest_categorical(
+        "lr_scheduler", 
+        params["lr_scheduler"]
+    )
+    activation_en = trial.suggest_categorical(
+        "activation_en", 
+        params["activation_en"]
+    )
+    activation_de = trial.suggest_categorical(
+        "activation_de", 
+        params["activation_de"]
+    )
+    cont_weight = trial.suggest_float(
+        "cont_weight", 
+        float(params["cont_weight"]["start"]), 
+        float(params["cont_weight"]["end"])
+    )
+    cat_weight = trial.suggest_float(
+        "cat_weight", 
+        float(params["cat_weight"]["start"]), 
+        float(params["cat_weight"]["end"])
+    )
     loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
-    activation_en = trial.suggest_categorical("activation_en", ["relu", "leaky_relu", "tanh", "sigmoid", "silu"])
-    activation_de = trial.suggest_categorical("activation_de", ["relu", "leaky_relu", "tanh", "sigmoid", "silu"])
 
     if ae_type == "vae":
         beta = trial.suggest_float("beta", 0.1, 5.0, log=True)

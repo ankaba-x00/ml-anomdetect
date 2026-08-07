@@ -34,7 +34,7 @@ PROJECT_ROOT = FILE_DIR.parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 FEATURE_DIR = PROJECT_ROOT / "datasets" / "featured"
 
-COUNTRIES = load_countries_from_config(FILE_DIR.parent / "ml" / "models" / "models.yml")
+COUNTRIES = load_countries_from_config(FILE_DIR.parent / "config" / "models.yml")
 
 
 ########################################################

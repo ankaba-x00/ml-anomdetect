@@ -63,7 +63,7 @@ BEST_MODELS_DIR = PROJECT_ROOT / "results" / "mt_ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_params(param_type: str) -> dict[str, float | bool | list[float | int | str]]:
-    PARAM_FILE = FILE_DIR.parent.parent / "ml" / "tuning" / f"{param_type}.yml"
+    PARAM_FILE = FILE_DIR.parent.parent / "config" / "mt" / f"{param_type}.yml"
     if not PARAM_FILE.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {PARAM_FILE}")
     

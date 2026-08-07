@@ -20,7 +20,7 @@ Search space:
 
 Outputs:
     PATH : results/ae_ml/tuned/<MODEL>
-    FILES: <COUNTRY>_study.db, 
+    FILES: <COUNTRY>_study_<TUNE_PHASE>.db,
            <COUNTRY>_best_model.pt, 
            <COUNTRY>_best_params.json, 
            <COUNTRY>_best_config.json, 
@@ -30,10 +30,10 @@ Outputs:
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.tune_model [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-tr <int>] [-vr <int>] [-L] [--retune] <MODEL> <COUNTRY|all>
 """
 
-import json, pickle, torch, optuna
+import csv, json, pickle, torch, optuna, yaml, sys
 from pathlib import Path
 import numpy as np
 from sklearn.preprocessing import RobustScaler
@@ -55,12 +55,29 @@ from app.src.ml.analysis import plot_latent_space
 #########################################
 ##                PARAMS               ##
 #########################################
-
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[3]
 OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+def load_params(param_type: str) -> dict[str, float | bool | list[float | int | str]]:
+    PARAM_FILE = FILE_DIR.parent.parent / "config" / "ae" / f"{param_type}.yml"
+    if not PARAM_FILE.exists():
+        raise FileNotFoundError(f"[ERROR] Model not found: {PARAM_FILE}")
+    
+    try:
+        with open(PARAM_FILE, "r") as f:
+            params = yaml.safe_load(f)
+            _ = params.keys()
+        print(f"[OK] YML params of {param_type} loaded!")
+    except AttributeError:
+        print(f"[ERROR] YML file empty!")
+        sys.exit(0)
+    except Exception as e:
+        print(f"[ERROR] YML params load failed for reason: {e}")
+        sys.exit(0)
+    
+    return params
 
 #########################################
 ##                 RUN                 ##
@@ -75,6 +92,7 @@ def tune_country(
     tr: int = 75,
     vr: int = 15,
     latent: bool = False,
+    tune_phase: str = "base"
 ) -> None:
     print(f"\n==============================")
     print(f"   OPTUNA TUNING FOR {country}")
@@ -83,6 +101,21 @@ def tune_country(
     if ae_type == "vae":
         print(f"[INFO] Tuning metric {metric.upper()} selected")
 
+    # -----------------------------
+    # Load search space params
+    # -----------------------------
+    params = load_params(tune_phase)
+    required_params = set([
+        "depth", "base_dim", "latent_dim", "dropout", "lr", 
+        "weight_decay", "batch_size", "patience", "embedding_dim", "noise_std", "optimizer", "lr_scheduler", "activation_en", 
+        "activation_de", "cont_weight", "cat_weight"
+    ])
+    if set(params.keys()) != required_params:
+        raise KeyError(f"[ERROR] yml file is missing parameter: {set({params}.keys()) ^ required_params}")
+
+    # -----------------------------
+    # Prepare study
+    # -----------------------------
     set_global_seeds(42)
 
     out_path = OUT_DIR / f"{ae_type.upper()}"
@@ -96,7 +129,7 @@ def tune_country(
     if pr is None:
         raise ValueError(f"Unknown pruner: {pruner}")
 
-    db_path = out_path / f"{country}_study.db"
+    db_path = OUT_DIR / f"{ae_type}" / f"{country}_study_{tune_phase}.db"
 
     study = optuna.create_study(
         direction="minimize",
@@ -107,7 +140,7 @@ def tune_country(
     )
     study.set_user_attr("tuning_metric", metric)
     study.optimize(
-        lambda t: objective(ae_type, t, metric, country, tr, vr, out_path),
+        lambda t: objective(ae_type, t, metric, country, tr, vr, out_path, params),
         n_trials=n_trials,
         n_jobs=1,
         show_progress_bar=True
@@ -217,6 +250,19 @@ def tune_country(
     with open(out_path / f"{country}_scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
 
+    mode = "w" if tune_phase == "base" else "a"
+    clean_params = {}
+    for k, v in params.items():
+        if isinstance(v, dict):
+            clean_params[k] = [v["start"], v["end"]]
+        else:
+            clean_params[k] = list(v)
+    with open(OUT_DIR / f"{ae_type}" /f"{country}_search_space.csv", mode=mode, newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=clean_params.keys())
+        if tune_phase == "base":
+            writer.writeheader()
+        writer.writerow(clean_params)
+
     print(f"\n[OK] Finished tuning for {country}")
 
     if latent:
@@ -244,7 +290,8 @@ def tune_all(
     metric: str, 
     tr: int, 
     vr: int, 
-    latent: bool
+    latent: bool,
+    tune_phase: str = "base"
 ) -> None:
     for c in COUNTRIES:
         try:
@@ -256,7 +303,8 @@ def tune_all(
                 metric=metric,
                 tr=tr, 
                 vr=vr,
-                latent=latent
+                latent=latent,
+                tune_phase=tune_phase
             )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
@@ -268,6 +316,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Tune AE hyperparameters for single or for all countries.")
+
+    parser.add_argument(
+        "--retune",
+        action="store_true",
+        help="read retune parameter from yml for retuning]"
+    )
 
     parser.add_argument(
         "-N", "--ntrials",
@@ -337,6 +391,8 @@ if __name__ == "__main__":
     if args.metric.lower() not in ["elbo", "recon", "mixed"]:
         parser.print_help()
         exit(1)
+    
+    tune_phase = "retune" if args.retune else "base"
 
     if target.lower() == "all":
         tune_all(
@@ -346,7 +402,8 @@ if __name__ == "__main__":
             args.metric.lower(), 
             args.tr, 
             args.vr, 
-            args.latent
+            args.latent, 
+            tune_phase
         )
     else:
         tune_country(
@@ -357,5 +414,6 @@ if __name__ == "__main__":
             metric=args.metric.lower(),
             tr=args.tr, 
             vr=args.vr,
-            latent=args.latent
+            latent=args.latent,
+            tune_phase=tune_phase
         )
