@@ -22,7 +22,8 @@ class BaseTabularModel(nn.Module):
         cat_dims: dict[str, int],
         embedding_dim: Optional[int],
         continuous_noise_std: float,
-        activation: str = "relu",
+        activation_en: str = "relu",
+        activation_de: str = "relu",
     ):
         super().__init__()
 
@@ -32,7 +33,8 @@ class BaseTabularModel(nn.Module):
         # -----------------------
         # Activation function
         # -----------------------
-        self.activation = self._make_activation(activation)
+        self.activation_en = self._make_activation(activation_en)
+        self.activation_de = self._make_activation(activation_de)
         
         # -------------------------------
         # Embeddings
@@ -65,21 +67,32 @@ class BaseTabularModel(nn.Module):
             "tanh": nn.Tanh(),
             "sigmoid": nn.Sigmoid(),
             "elu": nn.ELU(inplace=True),
+            "silu": nn.SiLU(inplace=True)
         }
         if name not in activations:
             raise ValueError(f"[ERROR] Unknown activation: {name}.")
         return activations[name]
     
+    def _pick_init_function(self, activation, m) -> None:
+        if activation in ["relu", "leaky_relu", "gelu", "elu", "silu"]:
+            return nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
+        elif activation in ["sigmoid", "tanh"]:
+            return nn.init.xavier_normal_(m.weight)
+    
     def _init_weights(self) -> None:
-            """Xavier init for Linear layers, Normal init for Embeddings."""
-            for module in self.modules():
-                if isinstance(module, nn.Linear):
-                    nn.init.xavier_uniform_(module.weight)
-                    if module.bias is not None:
-                        nn.init.zeros_(module.bias)
-
-                elif isinstance(module, nn.Embedding):
-                    nn.init.normal_(module.weight, mean=0.0, std=0.01)
+            """Xavier or He init for Linear layers, Normal init for Embeddings."""
+            for name, module_object in self.named_children():
+                if isinstance(module_object, nn.ModuleList):
+                    activation = self.activation_en if name == "encoder_layers" else self.activation_de
+                    for module in module_object.modules():
+                        if isinstance(module, nn.Linear):
+                            self._pick_init_function(activation, module)
+                            if module.bias is not None:
+                                nn.init.zeros_(module.bias)
+                elif isinstance(module_object, nn.ModuleDict):
+                    for module in module_object.modules():
+                        if isinstance(module, nn.Embedding):
+                            nn.init.normal_(module.weight, mean=0.0, std=0.01)
 
     def _init_decoder_output_layers(self) -> None:
         # continuous head

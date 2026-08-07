@@ -20,8 +20,8 @@ class AEConfig:
     dropout: float = 0.1
     embedding_dim: Optional[int] = None
     continuous_noise_std: float = 0.0
-    residual_strength: float = 0.0
-    activation: str = "relu"
+    activation_en: str = "relu"
+    activation_de: str = "relu"
     lr: float = 1e-3
     weight_decay: float = 1e-5
     batch_size: int = 256
@@ -65,22 +65,19 @@ class TabularAE(BaseTabularModel):
         dropout: float = 0.1,
         embedding_dim: Optional[int] = None, 
         continuous_noise_std: float = 0.0,
-        residual_strength: float = 0.0,
-        activation: str = "relu",
+        activation_en: str = "relu",
+        activation_de: str = "relu",
     ):
         super().__init__(
             num_cont=num_cont,
             cat_dims=cat_dims,
             embedding_dim=embedding_dim,
             continuous_noise_std=continuous_noise_std,
-            activation=activation,
+            activation_en=activation_en,
+            activation_de=activation_de
         )
 
         self.latent_dim = latent_dim
-        self.residual_strength = residual_strength
-
-        if residual_strength > 0:
-            self.residual_proj = nn.Linear(self.input_dim, latent_dim)
 
         # -------------------------------
         # Encoder
@@ -93,7 +90,7 @@ class TabularAE(BaseTabularModel):
                 nn.Sequential(
                     nn.Linear(prev, h),
                     nn.BatchNorm1d(h),
-                    self.activation,
+                    self.activation_en,
                     nn.Dropout(dropout)
                 )
             )
@@ -113,7 +110,7 @@ class TabularAE(BaseTabularModel):
                 nn.Sequential(
                     nn.Linear(prev, h),
                     nn.BatchNorm1d(h),
-                    self.activation,
+                    self.activation_de,
                     nn.Dropout(dropout)
                 )
             )
@@ -154,11 +151,7 @@ class TabularAE(BaseTabularModel):
             h = layer(h)
         
         z = self.encoder_out(h)
-        
-        # Optional residual connection
-        if self.residual_strength > 0:
-            z = z + self.residual_strength * self.residual_proj(x)
-        
+
         return z
     
     def decode(

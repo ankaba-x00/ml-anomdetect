@@ -21,8 +21,8 @@ class VAEConfig:
     dropout: float = 0.1
     embedding_dim: Optional[int] = None
     continuous_noise_std: float = 0.0
-    residual_strength: float = 0.0
-    activation: str = "relu"
+    activation_en: str = "relu"
+    activation_de: str = "relu"
     lr: float = 1e-3
     weight_decay: float = 1e-5
     batch_size: int = 256
@@ -68,27 +68,21 @@ class TabularVAE(BaseTabularModel):
         dropout: float = 0.1,
         embedding_dim: Optional[int] = None,
         continuous_noise_std: float = 0.0,
-        residual_strength: float = 0.0,
-        activation: str = "relu",
+        activation_en: str = "relu",
+        activation_de: str = "relu",
     ):
         super().__init__(
             num_cont=num_cont,
             cat_dims=cat_dims,
             embedding_dim=embedding_dim,
             continuous_noise_std=continuous_noise_std,
-            activation=activation,
+            activation_en=activation_en,
+            activation_de=activation_de,
         )
 
         self.latent_dim = latent_dim
-        self.residual_strength = residual_strength
         self.current_beta = None
         self.beta_max = None
-
-        # optional residual projection to latent space
-        if residual_strength > 0:
-            self.residual_proj = nn.Linear(self.input_dim, latent_dim)
-        else:
-            self.residual_proj = None
 
         # -------------------------------
         # Encoder
@@ -101,7 +95,7 @@ class TabularVAE(BaseTabularModel):
                 nn.Sequential(
                     nn.Linear(prev, h),
                     nn.BatchNorm1d(h),
-                    self.activation,
+                    self.activation_en,
                     nn.Dropout(dropout),
                 )
             )
@@ -122,7 +116,7 @@ class TabularVAE(BaseTabularModel):
                 nn.Sequential(
                     nn.Linear(prev, h),
                     nn.BatchNorm1d(h),
-                    self.activation,
+                    self.activation_de,
                     nn.Dropout(dropout),
                 )
             )
@@ -217,7 +211,6 @@ class TabularVAE(BaseTabularModel):
                 f"logvar mean={logvar.mean().item():.4f} std={logvar.std().item():.4f}"
             )
 
-        # (residual_strength applies later to sampled z)
         return mu, logvar, x
 
     @staticmethod
@@ -281,10 +274,6 @@ class TabularVAE(BaseTabularModel):
         """
         mu, logvar, x_enc = self.encode(x_cont, x_cat)
         z = self.reparameterize(mu, logvar)
-
-        # Optional residual connection in latent space
-        if self.residual_strength > 0.0 and hasattr(self, "residual_proj") and self.residual_proj is not None:
-            z = z + self.residual_strength * self.residual_proj(x_enc)
 
         cont_recon, cat_logits = self.decode(z, temperature)
 

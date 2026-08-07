@@ -91,8 +91,8 @@ def train_autoencoder(
             dropout=config.dropout,
             embedding_dim=config.embedding_dim,
             continuous_noise_std=config.continuous_noise_std,
-            residual_strength=config.residual_strength,
-            activation=config.activation
+            activation_en=config.activation_en,
+            activation_de=config.activation_de
         ).to(device)
         cont_loss_name, cat_loss_name = "cont_loss", "cat_loss"
         cont_short, cat_short = "Cont", "Cat"
@@ -105,8 +105,8 @@ def train_autoencoder(
             dropout=config.dropout,
             embedding_dim=config.embedding_dim,
             continuous_noise_std=config.continuous_noise_std,
-            residual_strength=config.residual_strength,
-            activation=config.activation
+            activation_en=config.activation_en,
+            activation_de=config.activation_de
         ).to(device)
         cont_loss_name, cat_loss_name = "recon_loss", "kl_loss"
         cont_short, cat_short = "Recon", "KL"
@@ -496,8 +496,8 @@ def load_autoencoder(
             dropout=cfg.dropout,
             embedding_dim=cfg.embedding_dim,
             continuous_noise_std=cfg.continuous_noise_std,
-            residual_strength=cfg.residual_strength,
-            activation=cfg.activation
+            activation_en=cfg.activation_en,
+            activation_de=cfg.activation_de
         )
     elif ae_class == "TabularVAE":
         cfg = VAEConfig(**payload["config"])
@@ -509,8 +509,8 @@ def load_autoencoder(
             dropout=cfg.dropout,
             embedding_dim=cfg.embedding_dim,
             continuous_noise_std=cfg.continuous_noise_std,
-            residual_strength=cfg.residual_strength,
-            activation=cfg.activation
+            activation_en=cfg.activation_en,
+            activation_de=cfg.activation_de
         )
     else:
         raise ValueError(f"Unknown model_class: {ae_class}")

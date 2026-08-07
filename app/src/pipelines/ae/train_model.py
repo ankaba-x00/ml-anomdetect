@@ -113,12 +113,11 @@ def train_country(
         base_cfg = dict(
             num_cont=num_cont,
             cat_dims=cat_dims,
-            latent_dim=16,
+            latent_dim=32,
             hidden_dims=(128, 64),
             dropout=0.1,
             embedding_dim=12,
             continuous_noise_std=0.01,
-            residual_strength=0.10,
             lr=1e-3,
             weight_decay=1e-5,
             batch_size=256,
@@ -129,7 +128,8 @@ def train_country(
             lr_scheduler="plateau",
             use_lr_scheduler=True,
             anomaly_threshold=None,
-            activation="relu",
+            activation_en="relu",
+            activation_de="relu",
             temperature=1.0
         )
         config_map = {

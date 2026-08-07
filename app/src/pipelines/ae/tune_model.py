@@ -12,10 +12,9 @@ Search space:
 - patience
 - embedding_dim
 - continuous noise_std
-- residual_strength
 - optimizer (Adam / AdamW)
 - lr scheduler type
-- activation
+- activation for encoder and decoder
 - loss weights
 - beta (for VAE)
 
@@ -75,7 +74,7 @@ def tune_country(
     metric: str = "elbo",
     tr: int = 75,
     vr: int = 15,
-    latent: bool = False
+    latent: bool = False,
 ) -> None:
     print(f"\n==============================")
     print(f"   OPTUNA TUNING FOR {country}")
@@ -138,12 +137,14 @@ def tune_country(
     Xc_val_scald = scaler.transform(Xc_val).astype(np.float32)
 
     p = study.best_trial.params
-    depth = p["depth"]
-    hidden_dims = [p[f"h{i}"] for i in range(depth)]
+    depth = p.get("depth", 2)
+    base_dim = p.get("base_dim", 128)
+    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
     cont_weight = p.get("cont_weight", 1.0)
     cat_weight = p.get("cat_weight", 0.0)
     loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
-    activation = p.get("activation", "relu")
+    activation_en = p.get("activation_en", "leaky_relu")
+    activation_de = p.get("activation_de", "tanh")
 
     best_base_cfg = dict(
         num_cont=num_cont,
@@ -154,17 +155,17 @@ def tune_country(
         lr=p["lr"],
         weight_decay=p["weight_decay"],
         batch_size=p["batch_size"],
-        num_epochs=90,
+        num_epochs=50,
         patience=p["patience"],
         gradient_clip=1.0,
         use_lr_scheduler=True,
         embedding_dim=p["embedding_dim"],
         continuous_noise_std=p["noise_std"],
-        residual_strength=p["residual_strength"],
         optimizer=p["optimizer"],
         lr_scheduler=p["lr_scheduler"],
         device="cuda" if torch.cuda.is_available() else "cpu",
-        activation=activation,
+        activation_en=activation_en,
+        activation_de=activation_de,
         temperature=1.0
     )
     if ae_type == "vae":

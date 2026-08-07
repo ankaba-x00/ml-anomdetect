@@ -34,7 +34,7 @@ def objective(
         country: str, 
         tr: int, 
         vr: int,
-        path: Path
+        path: Path,
     ) -> float:
     set_global_seeds(42)
     
@@ -68,22 +68,17 @@ def objective(
     # ------------------------------------
     # Hyperparameter search space
     # ------------------------------------
-    latent_dim = trial.suggest_categorical("latent_dim", [4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192])
-    depth = trial.suggest_int("depth", 1, 4)
-    possible_h = [32, 64, 96, 128, 192, 256, 384, 512, 768, 1024]
-    hidden_dims = [
-        trial.suggest_categorical(f"h{i}", possible_h)
-        for i in range(depth)
-    ]
-    hidden_dims = [max(h, latent_dim * 2) for h in hidden_dims]
-    dropout = trial.suggest_float("dropout", 0.0, 0.35)
+    depth = trial.suggest_int("depth", 2, 3)
+    base_dim = trial.suggest_categorical("base_dim", [128, 256, 512])
+    hidden_dims = [max(32, int(base_dim / (2**i))) for i in range(depth)]
+    latent_dim = trial.suggest_categorical("latent_dim", [32, 64])
+    dropout = trial.suggest_float("dropout", 0.0, 0.3)
     lr = trial.suggest_float("lr", 1e-5, 3e-3, log=True)
-    weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-4, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512, 1024])
-    patience = trial.suggest_int("patience", 4, 10)
-    embedding_dim = trial.suggest_categorical("embedding_dim", [4, 8, 12, 16, 24])
+    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
+    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512])
+    patience = trial.suggest_int("patience", 4, 9)
+    embedding_dim = trial.suggest_categorical("embedding_dim", [8, 12, 16])
     noise_std = trial.suggest_float("noise_std", 0.0, 0.20)
-    residual_strength = trial.suggest_float("residual_strength", 0.0, 0.5)
     optimizer = trial.suggest_categorical("optimizer", ["adam", "adamw"])
     lr_scheduler = trial.suggest_categorical(
         "lr_scheduler",
@@ -92,7 +87,8 @@ def objective(
     cont_weight = trial.suggest_float("cont_weight", 0.0, 2.0)
     cat_weight = trial.suggest_float("cat_weight", 0.0, 2.0)
     loss_weights = {"cont_weight": cont_weight, "cat_weight": cat_weight}
-    activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "gelu", "tanh", "elu"])
+    activation_en = trial.suggest_categorical("activation_en", ["relu", "leaky_relu", "tanh", "sigmoid", "silu"])
+    activation_de = trial.suggest_categorical("activation_de", ["relu", "leaky_relu", "tanh", "sigmoid", "silu"])
 
     if ae_type == "vae":
         beta = trial.suggest_float("beta", 0.1, 5.0, log=True)
@@ -111,17 +107,17 @@ def objective(
         lr=lr,
         weight_decay=weight_decay,
         batch_size=batch_size,
-        num_epochs=45,
+        num_epochs=50,
         patience=patience,
         gradient_clip=1.0,
         use_lr_scheduler=True,
         embedding_dim=embedding_dim,
         continuous_noise_std=noise_std,
-        residual_strength=residual_strength,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        activation=activation,
+        activation_en=activation_en,
+        activation_de=activation_de,
         temperature=1.0
     )
     if ae_type == "vae":
