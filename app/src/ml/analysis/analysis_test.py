@@ -21,15 +21,15 @@ def plot_error_curve(
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(14, 5))
-    ax.plot(df_err["ts"], df_err["error"], label="Error", alpha=0.6)
+    ax.plot(df_err["ts"], df_err["scores"], label="Scores", alpha=0.6)
     # smoothed error
-    df_err["smooth"] = df_err["error"].rolling(48, min_periods=1).mean()
+    df_err["smooth"] = df_err["scores"].rolling(48, min_periods=1).mean()
     ax.plot(df_err["ts"], df_err["smooth"], label="Smoothed", linewidth=2)
     # threshold
     ax.axhline(threshold, color="red", linestyle="--", label=f"Threshold ({method})")
     # anomalies
     anomalies = df_err[df_err["is_anomaly"] == 1]
-    ax.scatter(anomalies["ts"], anomalies["error"], color="red", s=12, label="Detected")
+    ax.scatter(anomalies["ts"], anomalies["scores"], color="red", s=12, label="Detected")
     ax.set_title(f"{country} – Test Error Curve ({method})")
     ax.set_ylabel("Reconstruction Error")
     ax.legend()
@@ -71,20 +71,20 @@ def plot_error_hist(
     threshold: float, 
     method: str, 
     folder: Path = Path.cwd(),
-    fname: str = "plot_error_hist.png", 
+    fname: str = "plot_score_hist.png", 
     show: bool = False,
     MT: bool = False
 ) -> None:
-    """Histogram showing error counts and threshold."""
+    """Histogram showing score counts and threshold."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    sns.histplot(df["loss_total"] if MT else df["error"], bins=60, ax=ax)
+    sns.histplot(df["loss_total"] if MT else df["scores"], bins=60, ax=ax)
     ax.axvline(threshold, color="red", linestyle="--", label="Threshold")
     ax.legend()
     ax.set_yscale("log")
     ax.set_ylabel("Log(counts)")
-    ax.set_title(f"{country} – Error Histogram ({method})")
+    ax.set_title(f"{country} – Score Histogram ({method})")
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=150)
     print(f"[OK] Saved to {fname}")
@@ -92,26 +92,26 @@ def plot_error_hist(
     plt.close(fig)
 
 
-def plot_raw_with_errors(
+def plot_raw_with_scores(
     signal_name: str,
     ts: Union[np.ndarray, pd.Index, pd.Series], 
     raw_signal: np.ndarray, 
-    errors: np.ndarray, 
+    scores: np.ndarray, 
     mask: np.ndarray, 
     folder: Path = Path.cwd(),
-    fname: str = "plot_raw_with_errors.png", 
+    fname: str = "plot_raw_with_scores.png", 
     show: bool = False
 ) -> None:
-    """Lineplot showing raw target signal with smoothed error scaled on same range and detected anomalies."""
+    """Lineplot showing raw target signal with smoothed score scaled on same range and detected anomalies."""
     apply_custom_theme()
 
-    # normalize errors to same scale as raw signal
-    err_norm = errors / np.max(errors) * (raw_signal.max() - raw_signal.min()) * 0.4
+    # normalize scores to same scale as raw signal
+    err_norm = scores / np.max(scores) * (raw_signal.max() - raw_signal.min()) * 0.4
     err_norm = err_norm + raw_signal.min()  # shift upward
 
     plt.figure(figsize=(16, 6))
     plt.plot(ts, raw_signal, label=f"Raw {signal_name} signal", color='black', linewidth=1.4)
-    plt.plot(ts, err_norm, label="Scaled error", color='orange', alpha=0.7)
+    plt.plot(ts, err_norm, label="Scaled score", color='orange', alpha=0.7)
     # annotate anomalies
     plt.scatter(ts[mask], raw_signal[mask], color='red', label='Detected snomalies', s=25)
     plt.title("Raw Signal with Scaled Reconstruction Error Overlay")

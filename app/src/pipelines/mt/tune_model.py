@@ -29,7 +29,7 @@ Outputs:
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] [--retune] <COUNTRY|all>
+    python -m app.src.pipelines.mt.tune_model [-N <int>] [-P <median|halving|hyperband>] [-tr <int>] [-vr <int>] [-L] [-r <int>] <COUNTRY|all>
 """
 
 import csv, json, pickle, torch, optuna, yaml, sys
@@ -46,7 +46,7 @@ from dataclasses import asdict
 
 from app.src.data.feature_engineering import COUNTRIES, load_supervised_feature_matrix
 from app.src.data.split import timeseries_seq_split
-from app.src.ml.models.mte import MTEConfig
+from app.src.ml.models.mt.mte import MTEConfig
 from app.src.ml.tuning.tune_mt import set_global_seeds, objective
 from app.src.ml.training.train_mt import train_multitask_model, save_multitask_model
 from app.src.ml.analysis import plot_latent_space
@@ -93,7 +93,7 @@ def tune_country(
     tr: int = 75,
     vr: int = 15,
     latent: bool = False,
-    tune_phase: str = "base",
+    retune_no: int = 0
 ) -> None:
     print(f"\n==============================")
     print(f" OPTUNA MT TUNING FOR {country}")
@@ -102,6 +102,7 @@ def tune_country(
     # -----------------------------
     # Load search space params
     # -----------------------------
+    tune_phase = "base" if retune_no == 0 else "retune"
     params = load_params(tune_phase)
     required_params = set([
         "depth", "base_dim", "latent_dim", "head_hidden_dim", "dropout", "lr", 
@@ -125,6 +126,8 @@ def tune_country(
     if pr is None:
         raise ValueError(f"Unknown pruner: {pruner}")
 
+    if tune_phase == "retune":
+        tune_phase = f"retune_{retune_no}"
     db_path = OUT_DIR / f"{country}_study_{tune_phase}.db"
 
     study = optuna.create_study(
@@ -252,6 +255,7 @@ def tune_country(
 
     mode = "w" if tune_phase == "base" else "a"
     clean_params = {}
+    clean_params["phase"] = tune_phase
     for k, v in params.items():
         if isinstance(v, dict):
             clean_params[k] = [v["start"], v["end"]]
@@ -289,7 +293,7 @@ def tune_all(
     tr: int, 
     vr: int, 
     latent: bool,
-    tune_phase: str = "base"
+    retune_no: int = 0
 ) -> None:
     for c in COUNTRIES:
         try:
@@ -300,7 +304,7 @@ def tune_all(
                 tr=tr, 
                 vr=vr,
                 latent=latent,
-                tune_phase=tune_phase
+                retune_no=retune_no
             )
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
@@ -313,12 +317,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Tune MT hyperparameters for single or for all countries."
-    )
-
-    parser.add_argument(
-        "--retune",
-        action="store_true",
-        help="read retune parameter from yml for retuning]"
     )
 
     parser.add_argument(
@@ -356,6 +354,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-r", "--retune",
+        type=int,
+        default=0
+        help="if set, parameter read from yml for retuning and retune phase number is assigned [default: 0 = base]"
+    )
+
+    parser.add_argument(
         "target",
         help="<COUNTRY|all> e.g. 'US' to tune US model, or 'all' to tune all country models"
     )
@@ -367,8 +372,6 @@ if __name__ == "__main__":
     if args.pruner.lower() not in ["median", "halving", "hyperband"]:
         parser.print_help()
         exit(1)
-    
-    tune_phase = "retune" if args.retune else "base"
 
     if target.lower() == "all":
         tune_all(
@@ -377,7 +380,7 @@ if __name__ == "__main__":
             args.tr, 
             args.vr, 
             args.latent,
-            tune_phase
+            args.retune
         )
     else:
         tune_country(
@@ -387,5 +390,5 @@ if __name__ == "__main__":
             tr=args.tr, 
             vr=args.vr,
             latent=args.latent,
-            tune_phase=tune_phase
+            retune_no=args.retune
         )

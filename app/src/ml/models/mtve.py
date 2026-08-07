@@ -11,7 +11,7 @@ import torch.nn.functional as F
 ################################################
 
 @dataclass
-class MTAEConfig:
+class MTVAEConfig:
     num_cont: int
     cat_dims: dict[str, int]
     n_attack_types: int
@@ -47,28 +47,29 @@ class MTAEConfig:
 
 
 ################################################
-##          MULTI-TASK ENCODER/DECODER        ##
+##   MULTI-TASK VARIATIONAL ENCODER/DECODER   ##
 ################################################
 
-class MTEncoder():
+class MTVEncoder():
     pass
 
 
-class MTDecoder():
+class MTVDecoder():
     pass
 
 
 ################################################
-##           MULTI-TASK TABULAR AE            ##
+##          MULTI-TASK TABULAR VAE            ##
 ################################################
 
-class MTTabularAE(BaseTabularPredictor):
+class MTTabularVAE(BaseTabularPredictor):
     """
-    Hybrid tabular autoencoder with:
+    Hybrid tabular variational autoencoder with:
       - cont and cat inputs
       - learned cat embeddings
       - optional denoising for cont features
       - L3/L7 regression heads and attack type classification head 
-      - metrics: pinball loss (for L3/L7) and focal or CE (for attack type)
+      - KL + ELBO reconstruction
+      - metrics: xx (for L3/L7) and xx (for attack type)
     """
     pass

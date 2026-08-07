@@ -14,7 +14,7 @@ Outputs:
             analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [-L] [--tuned] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [-MC] [-L] [--tuned] <MODEL> <COUNTRY|all>
 """
 
 import pickle, torch
@@ -23,7 +23,7 @@ import pandas as pd
 from pathlib import Path
 
 from app.src.data.feature_engineering import load_feature_matrix, COUNTRIES
-from app.src.ml.training.evaluate_ae import reconstruction_error
+from app.src.ml.training.evaluate_ae import reconstruction
 from app.src.ml.training.train_ae import load_autoencoder
 from app.src.data.split import timeseries_seq_split
 from app.src.ml.analysis import plot_latent_space
@@ -115,26 +115,27 @@ def validate_country(
     # --------------------
     # Load loss weights
     # --------------------
-    payload = torch.load(model_path, map_location="cpu")
+    payload = torch.load(model_path, map_location="cpu", weights_only=True)
     loss_weights = payload.get("additional_info", {}).get("loss_weights", {
-        "cont_weight": 1.0, "cat_weight": 0.0
+        "cont_w": float(1/cfg.num_cont), 
+        "cat_w": float(1/len(cfg.cat_dims.keys()))
     })
 
-    cont_weight = loss_weights["cont_weight"]
-    cat_weight = loss_weights["cat_weight"]
+    cont_w = loss_weights["cont_w"]
+    cat_w = loss_weights["cat_w"]
 
-    print(f"[INFO] Using loss weights - Continuous: {cont_weight:.2f}, Categorical: {cat_weight:.2f}")
+    print(f"[INFO] Using loss weights Cont: {cont_w:.5f}, Cat: {cat_w:.5f}")
 
     # --------------------
     # Compute reconstruction error
     # --------------------
-    errors = reconstruction_error(
+    scores = reconstruction(
         model=model,
         X_cont=Xc_val_scald,
         X_cat=Xk_val,
-        device=cfg.device,
-        cont_weight=cont_weight,
-        cat_weight=cat_weight,
+        device=None,#cfg.device,
+        cont_w=cont_w,
+        cat_w=cat_w,
         use_mc_elbo=use_mc_elbo,
         temperature=cfg.temperature,
         beta=getattr(cfg, "beta", 1.0),
@@ -143,20 +144,20 @@ def validate_country(
     # --------------------
     # Print summary
     # --------------------
-    print("\n--- Validation Error Summary ---")
-    print(f"Total samples: {len(errors)}")
-    print(f"Min error:  {errors.min():.6f}")
-    print(f"Max error:  {errors.max():.6f}")
-    print(f"Mean error: {errors.mean():.6f}")
-    print(f"Std error:  {errors.std():.6f}")
-    print(f"Median:     {np.median(errors):.6f}")
-    print(f"95th pct:   {np.percentile(errors, 95):.6f}")
-    print(f"99.5th pct: {np.percentile(errors, 99.5):.6f}")
-    print(f"99th pct:   {np.percentile(errors, 99):.6f}")
+    print("\n--- Validation Recon Error Summary ---")
+    print(f"Total samples: {len(scores)}")
+    print(f"Min score:  {scores.min():.6f}")
+    print(f"Max score:  {scores.max():.6f}")
+    print(f"Mean score: {scores.mean():.6f}")
+    print(f"Std score:  {scores.std():.6f}")
+    print(f"Median:     {np.median(scores):.6f}")
+    print(f"95th pct:   {np.percentile(scores, 95):.6f}")
+    print(f"99.5th pct: {np.percentile(scores, 99.5):.6f}")
+    print(f"99th pct:   {np.percentile(scores, 99):.6f}\n")
 
     df_out = pd.DataFrame({
         "ts": ts_val,
-        "error": errors,
+        "scores": scores,
     })
     val_path = out_path / f"{country}_validation.csv"
     df_out.to_csv(val_path, index=False)
