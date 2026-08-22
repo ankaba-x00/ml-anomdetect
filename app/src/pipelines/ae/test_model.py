@@ -17,7 +17,7 @@ Outputs:
             analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.test_model [-tr <int>] [-vr <int>] [-MC] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.test_model [-tr <int>] [-vr <int>] [-M <p99|p995|mad>] [-L] <MODEL> <COUNTRY|all>
 """
 
 import pickle, json, torch
@@ -53,7 +53,6 @@ def test_country(
     method: str, 
     tr: int = 75, 
     vr: int = 15, 
-    use_mc_elbo: bool = False, 
     latent: bool = False
 ) -> None:
     print(f"\n==============================")
@@ -130,12 +129,11 @@ def test_country(
         model=model,
         X_cont=Xc_test_scald,
         X_cat=Xk_test,
-        method=method,
-        device=cfg.device,
         cont_w=cont_w,
         cat_w=cat_w,
+        device=cfg.device,
+        method=method,
         temperature=cfg.temperature, 
-        use_mc_elbo=use_mc_elbo,
         beta=getattr(cfg, "beta", 1.0)
     )
 
@@ -248,7 +246,6 @@ def test_all(
     method: str, 
     tr: int, 
     vr: int, 
-    use_mc_elbo: bool, 
     latent: bool
 ) -> None:
     for c in COUNTRIES:
@@ -259,7 +256,6 @@ def test_all(
                 method=method, 
                 tr=tr, 
                 vr=vr, 
-                use_mc_elbo=use_mc_elbo, 
                 latent=latent
             )
         except Exception as e:
@@ -287,12 +283,6 @@ if __name__ == "__main__":
         type=int,
         default=15,
         help="dataset ratio for validation in %% [default: 15%%]"
-    )
-
-    parser.add_argument(
-        "-MC", "--MC-score",
-        action="store_true",
-        help="use Monte-Carlo scoring for reconstruction errors"
     )
 
     parser.add_argument(
@@ -332,7 +322,6 @@ if __name__ == "__main__":
             method=args.method, 
             tr=args.tr,
             vr=args.vr,
-            use_mc_elbo=args.MC_score,
             latent=args.latent
         )
     else:
@@ -342,6 +331,5 @@ if __name__ == "__main__":
             method=args.method, 
             tr=args.tr,
             vr=args.vr,
-            use_mc_elbo=args.MC_score,
             latent=args.latent
         )

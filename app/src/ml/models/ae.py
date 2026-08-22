@@ -4,7 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Sequence
 
-from app.src.ml.models.base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor, _init_head
+from .base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor
+from .mixins import TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularLayerInitMixin, TabularReconScoringMixin
 
 
 ################################################
@@ -37,7 +38,6 @@ class AEConfig:
     num_epochs: int = 60
     warmup_epochs: int = 10
     patience: int = 10
-    anomaly_threshold: float | None = None 
     temperature: float = 1.0  
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -53,7 +53,7 @@ class AEConfig:
 ##               ENCODER/DECODER              ##
 ################################################
 
-class Encoder(BaseTabularEncoder):
+class Encoder(BaseTabularEncoder, TabularLayerInitMixin):
     """
     Encoder class for AE model.
     """
@@ -85,10 +85,10 @@ class Encoder(BaseTabularEncoder):
     def init_comp_heads(self) -> None:
         """Initializes final compression heads of encoder."""
 
-        _init_head(self.comp_head, self.act_name)
+        self.init_head(self.comp_head, self.act_name)
 
 
-class Decoder(BaseTabularDecoder):
+class Decoder(BaseTabularDecoder, TabularLayerInitMixin):
     """
     Decoder class for AE model.
     """
@@ -125,22 +125,22 @@ class Decoder(BaseTabularDecoder):
     def init_recon_heads(self) -> None:
         """Initializes final reconstruction heads of decoder."""
 
-        _init_head(self.cont_recon_head, self.act_name)
+        self.init_head(self.cont_recon_head, self.act_name)
 
         for module in self.cat_recon_heads.children():
-            _init_head(module, self.act_name)
+            self.init_head(module, self.act_name)
 
 
 ################################################
 ##             HYBRID TABULAR AE              ##
 ################################################
 
-class TabularAE(BaseTabularPredictor):
+class TabularAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin):
     """
     Hybrid tabular AE with:
       - cont and cat inputs
-      - learned cat embeddings
-      - optional noise injection
+      - Embedding or OneHotEncoding for cat features
+      - (optional) noise injection for cont and cat features
       - separate decoding heads for cont and cat features
       - anomaly scoring
     """
@@ -162,9 +162,16 @@ class TabularAE(BaseTabularPredictor):
         
         # either embeds or encodes cat feature vector
         if self.config.use_embedding:
-            x_cat_e = self._embed(x_cat)
+            x_cat_e = self._embed(
+                x_cat, 
+                self.config.cat_dims, 
+                self.E.embeddings
+            )
         else:
-            x_cat_e = self._encod(x_cat)
+            x_cat_e = self._encod(
+                x_cat, 
+                self.config.cat_dims
+            )
 
         x = torch.cat([x_cont, x_cat_e], dim=1)
         h = x
@@ -172,7 +179,7 @@ class TabularAE(BaseTabularPredictor):
             h = layer(h)
         
         z = self.E.comp_head(h)
-        
+
         return z
 
     def decode(
@@ -204,55 +211,19 @@ class TabularAE(BaseTabularPredictor):
         """Full forward pass through autoencoder."""
 
         if self.config.allow_noise_injection:
-            Xc, Xk = self._noise_injection(x_cont, x_cat)
+            Xc, Xk = self._noise_injection(
+                x_cont, 
+                x_cat,
+                self.config.noise_gauss_std,
+                self.config.noise_mask_prob
+            )
         else:
             Xc, Xk = x_cont, x_cat
 
-        z = self.encode(x_cont, x_cat)
+        z = self.encode(Xc, Xk)
         cont_recon, cat_logits = self.decode(z)
 
         return cont_recon, cat_logits
-    
-    # -----------------------------
-    # Utils
-    # -----------------------------
-    def _embed(self, x_cat: torch.Tensor) -> torch.Tensor:
-        """Embed cat features using Embedding."""
-
-        parts = []
-        for i, name in enumerate(self.config.cat_dims.keys()):
-            parts.append(self.E.embeddings[name](x_cat[:, i].long()))
-        
-        return torch.cat(parts, dim=1)
-    
-    def _encod(self, x_cat: torch.Tensor) -> torch.Tensor:
-        """Encode cat features via OneHotEncoding."""
-        
-        parts = []
-        for i, card in enumerate(self.config.cat_dims.values()):
-            parts.append(F.one_hot(x_cat[:, i].long(), num_classes=card).float())
-        
-        return torch.cat(parts, dim=1)
-    
-    def _noise_injection(self, x_cont, x_cat) -> tuple[torch.Tensor]:
-        """Inject noise to enable denoising autoencoder"""
-
-        # Cont: adds Gaussian noise
-        if self.config.noise_gauss_std > 0:
-            noise = torch.randn_like(x_cont) * self.config.noise_gauss_std
-            x_cont_noisy = x_cont + noise
-        else:
-            x_cont_noisy = x_cont
-
-        # Cat: random masking noise (replaces values with low probability)
-        if self.config.noise_mask_prob > 0:
-            x_cat_noisy = x_cat.clone()
-            mask = torch.randn_like(x_cat.float()) < self.config.noise_mask_prob
-            x_cat_noisy[mask] = 0
-        else:
-            x_cat_noisy = x_cat
-
-        return x_cont_noisy, x_cat_noisy
 
     # -----------------------------
     # Model scoring
@@ -267,35 +238,21 @@ class TabularAE(BaseTabularPredictor):
         in_warmup: bool = False,
         reduction: str = "mean"
     ) -> tuple[torch.Tensor] | torch.Tensor:
-        """Calculates normalized weighted per sample score."""
+        """Computes normalized weighted per-sample score and optionally reduces to average or sum."""
 
-        # Cont Huber loss per sample
-        cont_loss = F.huber_loss(cont_recon, x_cont, reduction="none").mean(dim=1)
-
-        # Cat CE per sample
-        cat_loss = torch.zeros_like(cont_loss)
-        cat_names = self.config.cat_dims.keys()
-        for i, name in enumerate(cat_names):
-            ce = F.cross_entropy(
-                cat_logits[name],
-                x_cat[:, i].long(),
-                reduction="none"
-            )
-            cat_loss += ce
-        cat_loss = cat_loss / float(len(cat_names))
-    
-        w_cont, w_cat = loss_weights["cont_w"], loss_weights["cat_w"]
-
-        if in_warmup:
-            per_sample_score = cat_loss
-        else:
-            per_sample_score = (w_cont * cont_loss + w_cat * cat_loss) / (w_cont + w_cat)
+        cont_score, cat_score, per_sample_score = self.recon_scoring(
+            x_cont,
+            x_cat,
+            cont_recon,
+            cat_logits,
+            self.config.cat_dims,
+            loss_weights,
+            in_warmup
+        )
 
         if reduction == "mean":
-            return cont_loss, cat_loss, per_sample_score.mean()
+            return cont_score, cat_score, per_sample_score.mean()
+        elif reduction == "sum":
+            return cont_score, cat_score, per_sample_score.sum()
         else:
             return per_sample_score
-
-    
-    
-

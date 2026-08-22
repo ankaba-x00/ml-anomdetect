@@ -14,7 +14,7 @@ Outputs:
             analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [-MC] [-L] [--tuned] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.validate_model [-tr <int>] [-vr <int>] [-L] [--tuned] <MODEL> <COUNTRY|all>
 """
 
 import pickle, torch
@@ -51,7 +51,6 @@ def validate_country(
     tuned: bool,
     tr: int, 
     vr: int, 
-    use_mc_elbo: bool, 
     latent: bool
 ) -> None:
     print(f"\n==============================")
@@ -133,10 +132,9 @@ def validate_country(
         model=model,
         X_cont=Xc_val_scald,
         X_cat=Xk_val,
-        device=None,#cfg.device,
+        device=cfg.device,
         cont_w=cont_w,
         cat_w=cat_w,
-        use_mc_elbo=use_mc_elbo,
         temperature=cfg.temperature,
         beta=getattr(cfg, "beta", 1.0),
     )
@@ -188,12 +186,11 @@ def validate_all(
     tuned: bool,
     tr: int, 
     vr: int, 
-    use_mc_elbo: bool, 
     latent: bool
 ) -> None:
     for c in COUNTRIES:
         try:
-            validate_country(ae_type, c, tuned, tr, vr, use_mc_elbo, latent)
+            validate_country(ae_type, c, tuned, tr, vr, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
 
@@ -222,12 +219,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-MC", "--MC-score",
-        action="store_true",
-        help="use Monte-Carlo scoring for reconstruction errors"
-    )
-
-    parser.add_argument(
         "-L", "--latent",
         action="store_true",
         help="generate latent space plot after tuning"
@@ -251,30 +242,26 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    target = args.target
-
     ae_type = args.model.lower() 
     if ae_type not in ["ae", "vae"]:
         parser.print_help()
         print(f"[Error] Model can either be ae or vae!")
         exit(1)
 
-    if target.lower() == "all":
+    if args.target.lower() == "all":
         validate_all(
             ae_type,
             args.tuned,
             args.tr, 
-            args.vr, 
-            args.MC_score, 
+            args.vr,
             args.latent
         )
     else:
         validate_country(
             ae_type, 
-            target.upper(),
+            args.target.upper(),
             args.tuned,
             args.tr, 
             args.vr, 
-            args.MC_score, 
             args.latent
         )

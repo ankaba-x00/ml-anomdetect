@@ -17,7 +17,7 @@ Currently implemented search space:
 - lr scheduler type
 - activation function for encoder and decoder
 - loss weights (cont and cat)
-                               # - beta (for VAE)
+- (for VAE) beta
 
 To add parameters for tuning, check README_tuning.ms
 
@@ -33,7 +33,7 @@ Outputs:
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.tune_model [-tr <int>] [-vr <int>] [-N <int>] [-P <median|halving|hyperband>] [-M <elbo|recon|mixed>] [-L] [-r <int>] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.tune_model [-tr <int>] [-vr <int>] [-N <int>] [-P <median|halving|hyperband>] [-L] [-r <int>] <MODEL> <COUNTRY|all>
 """
 
 import csv, json, pickle, torch, optuna, yaml, sys
@@ -64,7 +64,7 @@ OUT_DIR = PROJECT_ROOT / "results" / "ae_ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_params(param_type: str) -> dict[str, float | bool | list[float | int | str]]:
-    PARAM_FILE = FILE_DIR.parent.parent / "config" / "ae" / f"{param_type}.yml"
+    PARAM_FILE = FILE_DIR.parent.parent / "config" / "tune_ae" / f"{param_type}.yml"
     if not PARAM_FILE.exists():
         raise FileNotFoundError(f"[ERROR] Model not found: {PARAM_FILE}")
     
@@ -91,7 +91,6 @@ def tune_country(
     country: str, 
     n_trials: int = 40, 
     pruner: str = "median",
-    metric: str = "elbo",
     tr: int = 75,
     vr: int = 15,
     latent: bool = False,
@@ -101,8 +100,6 @@ def tune_country(
     print(f"   OPTUNA TUNING FOR {country}")
     print(f"==============================\n")
     print(f"[INFO] Model {ae_type.upper()} selected")
-    if ae_type == "vae":
-        print(f"[INFO] Tuning metric {metric.upper()} selected")
 
     # -----------------------------
     # Load search space params
@@ -115,8 +112,10 @@ def tune_country(
         "gradient_clip", "batch_size", "patience", "noise_gauss_std", "noise_mask_prob",
         "activation_en", "activation_de", "cont_weight", "cat_weight"
     ])
+    if ae_type == "vae":
+        required_params = required_params | set(["beta"])
     if set(params.keys()) != required_params:
-        raise KeyError(f"[ERROR] yml file is missing parameter: {set({params}.keys()) ^ required_params}")
+        raise KeyError(f"[ERROR] yml file is missing parameter: {set(params.keys()) ^ required_params}")
 
     # -----------------------------
     # Prepare study
@@ -145,9 +144,8 @@ def tune_country(
         study_name=f"ae_tuning_{country}",
         load_if_exists=True,
     )
-    study.set_user_attr("tuning_metric", metric)
     study.optimize(
-        lambda t: objective(ae_type, t, metric, country, tr, vr, out_path, params),
+        lambda t: objective(ae_type, t, country, tr, vr, out_path, params),
         n_trials=n_trials,
         n_jobs=1,
         show_progress_bar=True
@@ -203,12 +201,17 @@ def tune_country(
         num_epochs=60,
         warmup_epochs=10,
         patience=p["patience"],
-        anomaly_threshold=None,
-        temperature=1.0,  
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
     if ae_type == "vae":
-        best_base_cfg["beta"] = p.get("beta", 1.0)
+        base_cfg = base_cfg | dict(
+            temperature=1.0,
+            use_beta_annealing=True,
+            beta_schedule="linear",
+            beta=p.get["beta"],
+            debug_kl_stats=True
+        )
+        del base_cfg["warmup_epochs"]
     
     loss_weights = {
         "cont_w": p["cont_w"], 
@@ -244,7 +247,6 @@ def tune_country(
             "val_ratio": vr,
             "loss_weights": loss_weights,
             "total_samples": len(Xc_train_scald),
-            "tuning_metric": metric,
         }
     )
 
@@ -270,8 +272,6 @@ def tune_country(
         else:
             clean_params[k] = list(v)
     clean_params["pruner"] = pruner
-    if ae_type == "vae":
-        clean_params["metric"] = metric
     clean_params["best_trial"] = study.best_trial.number
     clean_params["best_val_loss"] = study.best_trial.values[0]
     with open(OUT_DIR / f"{ae_type}" /f"{country}_search_space.csv", mode=mode, newline="") as f:
@@ -304,7 +304,6 @@ def tune_all(
     ae_type: str, 
     trials: int, 
     pruner: str, 
-    metric: str, 
     tr: int, 
     vr: int, 
     latent: bool,
@@ -317,7 +316,6 @@ def tune_all(
                 c, 
                 n_trials=trials, 
                 pruner=pruner, 
-                metric=metric,
                 tr=tr, 
                 vr=vr,
                 latent=latent,
@@ -363,13 +361,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-M", "--metric",
-        type=str, 
-        default="elbo",
-        help="<elbo|recon|mixed> Optuna tuning metric [default: elbo]"
-    )
-
-    parser.add_argument(
         "-L", "--latent",
         action="store_true",
         help="generate latent space plot after tuning"
@@ -394,8 +385,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    target = args.target
-
     ae_type = args.model.lower() 
     if ae_type not in ["ae", "vae"]:
         parser.print_help()
@@ -405,19 +394,14 @@ if __name__ == "__main__":
     if args.pruner.lower() not in ["median", "halving", "hyperband"]:
         parser.print_help()
         exit(1)
-
-    if args.metric.lower() not in ["elbo", "recon", "mixed"]:
-        parser.print_help()
-        exit(1)
     
     tune_phase = "retune" if args.retune else "base"
 
-    if target.lower() == "all":
+    if args.target.lower() == "all":
         tune_all(
             ae_type, 
             args.ntrials, 
             args.pruner.lower(), 
-            args.metric.lower(), 
             args.tr, 
             args.vr, 
             args.latent, 
@@ -426,10 +410,9 @@ if __name__ == "__main__":
     else:
         tune_country(
             ae_type=ae_type,
-            country=target.upper(),
+            country=args.target.upper(),
             n_trials=args.ntrials,
             pruner=args.pruner.lower(),
-            metric=args.metric.lower(),
             tr=args.tr, 
             vr=args.vr,
             latent=args.latent,

@@ -1,15 +1,12 @@
 countries:
-  - US
-  - SE
-  - DE
-  - GB
-  - RO
-  - FR
-  - JP
-  - SG
-  - MM
-  - TW
-  - IN
-  - ZA
-  - IQ
   - BR
+  - DE
+  - IN
+  - JP
+  - MM
+  - PL
+  - RO
+  - SE
+  - SG
+  - TW
+  - US
