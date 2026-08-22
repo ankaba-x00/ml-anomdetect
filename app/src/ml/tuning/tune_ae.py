@@ -22,7 +22,6 @@ def set_global_seeds(seed: int = 42) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-
 #########################################
 ##          OPTUNA OBJECTIVE           ##
 #########################################
@@ -30,7 +29,6 @@ def set_global_seeds(seed: int = 42) -> None:
 def objective(
         ae_type: str,
         trial: optuna.Trial,
-        metric: str,
         country: str, 
         tr: int, 
         vr: int,
@@ -166,12 +164,7 @@ def objective(
         float(params["cat_weight"]["end"])
     )
     loss_weights = {"cont_w": cont_w, "cat_w": cat_w}
-
-    if ae_type == "vae":
-        beta = trial.suggest_float("beta", 0.1, 5.0, log=True)
-    else:
-        beta = None
-
+    
     # ------------------------------------
     # Config object
     # ------------------------------------
@@ -199,18 +192,33 @@ def objective(
         num_epochs=60,
         warmup_epochs=10,
         patience=patience,
-        anomaly_threshold=None,
-        temperature=1.0,  
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
     if ae_type == "vae":
-        base_cfg["beta"] = beta
+        beta = trial.suggest_float(
+            "beta", 
+            float(params["beta"]["start"]),
+            float(params["beta"]["end"]),
+            log=True
+        )
+        
+        base_cfg = base_cfg | dict(
+            temperature=1.0,
+            use_beta_annealing=True,
+            beta_schedule="linear",
+            beta=beta,
+            debug_kl_stats=True
+        )
+        del base_cfg["warmup_epochs"]
 
     config_map = {
         "ae": AEConfig,
         "vae": VAEConfig
     }
     cfg = config_map[ae_type](**base_cfg)
+
+    metric1_name = "cont_loss" if ae_type == "ae" else "recon_loss"
+    metric2_name = "cat_loss" if ae_type == "ae" else "kl_loss"
 
     # ------------------------------------
     # Train model
@@ -221,54 +229,31 @@ def objective(
         cfg,
         loss_weights=loss_weights
     )
-
-    cont_loss_name = "cont_loss" if ae_type == "ae" else "recon_loss"
-    cat_loss_name = "cat_loss" if ae_type == "ae" else "kl_loss"
     
-    # save per-trial history
+    # ------------------------------------
+    # Score trial
+    # ------------------------------------
+    best_epoch = np.argmin(history[f"val_loss"])
+    final_val_loss = history[f"val_loss"][best_epoch]
+
+    # ------------------------------------
+    # Report trial
+    # ------------------------------------
+    trial.report(final_val_loss, step=0)
+    # Store additional metrics
+    trial.set_user_attr("cont_w", cont_w)
+    trial.set_user_attr("cat_w", cat_w)
+    if ae_type == "vae":
+        trial.set_user_attr("beta", beta)
+    trial.set_user_attr("best_epoch", int(best_epoch) if 'best_epoch' in locals() else -1)
+
+    # ------------------------------------
+    # Store trial
+    # ------------------------------------
     trial_history_path = trial_path / f"{country}_trial_{trial.number:04d}_history.json"
     with open(trial_history_path, "w") as f:
         json.dump(history, f, indent=2)
 
-    # ------------------------------------
-    # Optimization metric: ELBO, recon-only, mixed scoring
-    # ------------------------------------
-    if ae_type == "vae":
-        if metric == "elbo":
-        # OPTION 1 : tune using ELBO : ELBO=ReconLoss+β⋅KL
-        # = to find smoothest latent distributeion; for true generative model
-            best_epoch = np.argmin(history[f"val_loss"])
-            final_val_loss = history[f"val_loss"][best_epoch]
-        elif metric == "recon":
-        # OPTION 2 : tune using recon only 
-        # = then VAE behaves like a regularized AE, sharper recon, KL important for taining stability not for selection
-        # CAREFUL: no best epoch, model selected based on full validation set after training finishes
-            model.eval()
-            Xc_val_t = torch.tensor(Xc_val_scald, dtype=torch.float32, device=cfg.device)
-            Xk_val_t = torch.tensor(Xk_val,       dtype=torch.int64,  device=cfg.device)
-            with torch.no_grad():
-                rec_errors = model.reconstruction_error_per_sample(Xc_val_t, Xk_val_t)
-                final_val_loss = rec_errors.mean().item()
-        elif metric == "mixed":
-        # OPTION 3 : tune using mixed scoring : Recon + λ·KL or Recon + α·CatLoss
-        # when both recon and regularization matter 
-        # when recon-only gives too unstable latent representation, but ELBO is too strict
-            lambda_kl = cfg.beta if isinstance(cfg, VAEConfig) else 0.1
-            mixed_scores = history[f"val_{cont_loss_name}"] + lambda_kl * history[f"val_{cat_loss_name}"]
-            best_epoch = np.argmin(mixed_scores)
-            final_val_loss = mixed_scores[best_epoch]
-        else:
-            raise ValueError("[ERROR] Tuning metric nor recognize, aborting!")
-    else:
-        best_epoch = np.argmin(history[f"val_loss"])
-        final_val_loss = history[f"val_loss"][best_epoch]
-
-    trial.report(final_val_loss, step=0)
-    # Store additional metrics
-    trial.set_user_attr("tuning_metric", metric)
-    trial.set_user_attr("cont_w", cont_w)
-    trial.set_user_attr("cat_w", cat_w)
-    trial.set_user_attr("best_epoch", int(best_epoch) if 'best_epoch' in locals() else -1)
 
     if trial.should_prune():
         raise optuna.TrialPruned()

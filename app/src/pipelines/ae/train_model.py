@@ -17,7 +17,7 @@ Outputs:
            analysis/<COUNTRY>_latent_space.png
 
 Usage:
-    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-MC] [-CW] [-L] <MODEL> <COUNTRY|all>
+    python -m app.src.pipelines.ae.train_model [-tr <int>] [-vr <int>] [-F] [-M <p99|p995|mad>] [-CW] [-L] <MODEL> <COUNTRY|all>
 """
 
 import json, pickle
@@ -54,8 +54,7 @@ def train_country(
     country: str, 
     tr: int, 
     vr: int,
-    use_mc_elbo: bool, 
-    full: bool, 
+    full: bool,
     method: str, 
     cw: int,
     latent: bool,
@@ -132,12 +131,19 @@ def train_country(
             allow_noise_injection=True,
             noise_gauss_std=1.0,
             noise_mask_prob=0.05,
-            num_epochs=60,
-            warmup_epochs=10,
+            num_epochs=2,
+            warmup_epochs=1,
             patience=10,
-            anomaly_threshold=None,
-            temperature=1.0,  
         )
+        if ae_type == "vae":
+            base_cfg = base_cfg | dict(
+                temperature=1.0,
+                use_beta_annealing=True,
+                beta_schedule="linear",
+                beta=1.0,
+                debug_kl_stats=True
+            )
+            del base_cfg["warmup_epochs"] 
         config_map = {
             "ae": AEConfig,
             "vae": VAEConfig
@@ -270,8 +276,6 @@ def train_country(
             cont_w=loss_weights["cont_w"],
             cat_w=loss_weights["cat_w"],
             tune_temperature=False,
-            temperature_range=[0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0],
-            use_mc_elbo=use_mc_elbo,
             beta=getattr(cfg, "beta", 1.0)
         )
 
@@ -287,7 +291,6 @@ def train_all(
     ae_type: str, 
     tr: int, 
     vr: int, 
-    use_mc_elbo: bool, 
     full: bool, 
     method: str, 
     cw: int, 
@@ -295,7 +298,7 @@ def train_all(
 ) -> None:
     for c in COUNTRIES:
         try:
-            train_country(ae_type, c, tr, vr, use_mc_elbo, full, method, cw, latent)
+            train_country(ae_type, c, tr, vr, full, method, cw, latent)
         except Exception as e:
             print(f"[ERROR] Failed for {c}: {e}")
 
@@ -330,12 +333,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-MC", "--MC-score",
-        action="store_true",
-        help="use Monte-Carlo scoring for reconstruction errors"
-    )
-
-    parser.add_argument(
         "-M", "--method",
         choices=["p99", "p995", "mad"],
         default="p99",
@@ -366,21 +363,18 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-   
-    target = args.target
 
     ae_type = args.model.lower() 
     if ae_type not in ["ae", "vae"]:
         parser.print_help()
         print(f"[Error] Model can either be ae or vae!")
         exit(1)
-
-    if target.lower() == "all":
+   
+    if args.target.lower() == "all":
         train_all(
             ae_type, 
             args.tr, 
             args.vr, 
-            args.MC_score, 
             args.full, 
             args.method, 
             args.calwindow, 
@@ -389,10 +383,9 @@ if __name__ == "__main__":
     else:
         train_country(
             ae_type, 
-            target.upper(), 
+            args.target.upper(), 
             args.tr, 
             args.vr, 
-            args.MC_score, 
             args.full, 
             args.method, 
             args.calwindow, 

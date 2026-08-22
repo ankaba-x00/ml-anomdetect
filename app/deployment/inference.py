@@ -1,6 +1,6 @@
+import json, pickle, torch
 from pathlib import Path
 from typing import Any, Union
-import json, pickle, torch
 import numpy as np
 
 from app.src.ml.models.ae import TabularAE
