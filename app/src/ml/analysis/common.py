@@ -59,12 +59,9 @@ def plot_latent_space(
     
     model.eval()
     with torch.no_grad():
-        if isinstance(model, TabularAE):
             z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
-        elif isinstance(model, TabularVAE):
-            z = model.encode_to_latent(Xc_tensor, Xk_tensor, False).cpu().numpy()
-        else:
-            z = model.encoder(Xc_tensor, Xk_tensor).cpu().numpy()
+            # TODO: rewrite mte to use encode()
+            #z = model.encoder(Xc_tensor, Xk_tensor).cpu().numpy()
     if len(z) < 10:
         print(f"[INFO] Not enough samples for latent space visualization: {len(z)}")
         return

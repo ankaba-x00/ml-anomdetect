@@ -13,19 +13,13 @@ def reconstruction(
     model: TabularAE | TabularVAE,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    device: str | None = None,
+    device: str = "cpu",
     cont_w: float = 1.0,
     cat_w: float = 0.0,
-    use_mc_elbo: bool = False,
     temperature: float = 1.0,
     beta: float = 1.0,
 ) -> np.ndarray:
     """Per-sample reconstruction error normalized by features."""
-
-    if device is None:
-        device = next(model.parameters()).device
-    else:
-        device = torch.device(device)
 
     model.eval()
 
@@ -33,24 +27,26 @@ def reconstruction(
     Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
 
     with torch.no_grad():
-        if use_mc_elbo and isinstance(model, TabularVAE):
-            scores = model.mc_elbo_score(
+        if isinstance(model, TabularVAE):
+            cont_recon, cat_logits, mu, logvar = model(Xc, Xk)
+            scores = model.scoring(
                 Xc, 
-                Xk, 
-                cont_w, 
-                cat_w, 
-                temperature, 
-                n_samples=20, 
-                beta=beta
+                Xk,
+                cont_recon,
+                cat_logits,
+                mu,
+                logvar,
+                loss_weights={"cont_w": cont_w, "cat_w": cat_w},
+                reduction="none"
             )
-        else:
+        elif isinstance(model, TabularAE):
             cont_recon, cat_logits = model(Xc, Xk)
             scores = model.scoring(
                 Xc, 
                 Xk,
                 cont_recon,
                 cat_logits,
-                {"cont_w": cont_w, "cat_w": cat_w}, 
+                loss_weights={"cont_w": cont_w, "cat_w": cat_w}, 
                 reduction="none"
             )
 
@@ -64,17 +60,16 @@ def apply_model(
     model: TabularAE | TabularVAE,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
+    cont_w: float,
+    cat_w: float,
+    device: str = "cpu",
     method: str = "p99",
-    device: str | None = None,
-    cont_w: float = 1.0,
-    cat_w: float = 0.0,
     temperature: float = 1.0,
-    use_mc_elbo: bool = False,
     beta: float = 1.0,
     min_length: int = 1,
     merge_gap: int = 0,
 ) -> dict[str, np.ndarray]:
-    """Compute reconstruction errors, threshold, anomaly mask, anomaly intervals."""
+    """Computes reconstruction errors, threshold, anomaly mask and anomaly intervals."""
 
     scores = reconstruction(
         model,
@@ -83,7 +78,6 @@ def apply_model(
         device,
         cont_w,
         cat_w,
-        use_mc_elbo,
         temperature,
         beta
     )

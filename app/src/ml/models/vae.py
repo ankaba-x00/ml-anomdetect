@@ -1,79 +1,3 @@
-# import json, torch
-# import numpy as np
-# from dataclasses import dataclass, asdict
-# from typing import Sequence, Optional
-# import torch.nn as nn
-# import torch.nn.functional as F
-
-# from app.src.ml.models.base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor
-
-
-# ################################################
-# ##                  CONFIG                    ##
-# ################################################
-
-# @dataclass
-# class VAEConfig:
-#     num_cont: int
-#     cat_dims: dict[str, int]
-#     latent_dim: int = 8
-#     hidden_dims: Sequence[int] = (64, 32)
-#     dropout: float = 0.1
-#     embedding_dim: Optional[int] = None
-#     continuous_noise_std: float = 0.0
-#     activation_en: str = "relu"
-#     activation_de: str = "relu"
-#     lr: float = 1e-3
-#     weight_decay: float = 1e-5
-#     batch_size: int = 256
-#     num_epochs: int = 50
-#     patience: int = 5
-#     gradient_clip: float = 1.0
-#     optimizer: str = "adam"
-#     lr_scheduler: str = "none"
-#     use_lr_scheduler: bool = True
-#     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-#     # anomaly / ELBO related
-#     anomaly_threshold: Optional[float] = None
-#     beta: float = 1.0 # weight for KL term in ELBO
-#     temperature: float = 1.0
-
-#     def to_json(self) -> str:
-#         return json.dumps(asdict(self), indent=2)
-
-#     @staticmethod
-#     def from_json(s: str) -> "VAEConfig":
-#         return VAEConfig(**json.loads(s))
-
-
-# ################################################
-# ##         VARIATIONAL ENCODER/DECODER        ##
-# ################################################
-
-# class VEncoder():
-#     pass
-
-
-# class VDecoder():
-#     pass
-
-
-# ################################################
-# ##              HYBRID TABULAR VAE            ##
-# ################################################
-
-# class TabularVAE(BaseTabularPredictor):
-#     """
-#     Tabular variational tabular autoencoder with:
-#       - cont and cat inputs
-#       - learned cat embeddings
-#       - optional denoising for cont features
-#       - separate decoding heads for cont and cat features
-#       - KL + ELBO reconstruction
-#       - anomaly scoring
-#     """
-#     pass
-
 import json, torch
 import numpy as np
 from dataclasses import dataclass, asdict
@@ -81,7 +5,8 @@ from typing import Sequence, Optional
 import torch.nn as nn
 import torch.nn.functional as F
 
-from app.src.ml.models.mt.base_ae import BaseTabularModel
+from .base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor
+from .mixins import TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularLayerInitMixin, TabularReconScoringMixin, TabularKLScoringMixin
 
 
 ################################################
@@ -92,27 +17,33 @@ from app.src.ml.models.mt.base_ae import BaseTabularModel
 class VAEConfig:
     num_cont: int
     cat_dims: dict[str, int]
-    latent_dim: int = 8 # bottleneck size
-    hidden_dims: Sequence[int] = (64, 32)
-    dropout: float = 0.1
-    embedding_dim: Optional[int] = None
-    continuous_noise_std: float = 0.0
+    use_embedding: bool = False
+    embedding_dim: int | None = None
+    hidden_dims: Sequence[int] = (128, 64)
+    latent_dim: int = 32
     activation_en: str = "relu"
     activation_de: str = "relu"
-    lr: float = 1e-3
-    weight_decay: float = 1e-5
-    batch_size: int = 256
-    num_epochs: int = 50
-    patience: int = 5
-    gradient_clip: float = 1.0
+    dropout: float = 0.1
     optimizer: str = "adam"
+    lr: float = 1e-5
+    weight_decay: float = 1e-5
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.999
+    sgd_momentum: float = 0.0
     lr_scheduler: str = "none"
-    use_lr_scheduler: bool = True
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    # anomaly / ELBO related
-    anomaly_threshold: Optional[float] = None
-    beta: float = 1.0 # weight for KL term in ELBO
+    gradient_clip: float | None = None
+    batch_size: int = 256
+    allow_noise_injection: bool = True
+    noise_gauss_std: float = 0.1
+    noise_mask_prob: float = 0.05
+    num_epochs: int = 60
+    patience: int = 10
     temperature: float = 1.0
+    use_beta_annealing: bool = True
+    beta_schedule: str = "linear"
+    beta: float = 1.0
+    debug_kl_stats: bool = True
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -123,519 +54,289 @@ class VAEConfig:
 
 
 ################################################
-##     TABULAR VAE WITH EMBEDDINGS + NOISE    ##
+##         VARIATIONAL ENCODER/DECODER        ##
 ################################################
 
-class TabularVAE(BaseTabularModel):
+class VEncoder(BaseTabularEncoder):
     """
-    Tabular variational autoencoder with:
-      - continuous + categorical inputs
-      - learned categorical embeddings
-      - optional denoising on continuous inputs
-      - KL + ELBO + anomaly scoring
+    Encoder class for VAE model.
     """
 
     def __init__(
         self,
-        num_cont: int,
-        cat_dims: dict[str, int],
-        latent_dim: int = 8,
-        hidden_dims: Sequence[int] = (64, 32),
-        dropout: float = 0.1,
-        embedding_dim: Optional[int] = None,
-        continuous_noise_std: float = 0.0,
-        activation_en: str = "relu",
-        activation_de: str = "relu",
+        config: VAEConfig
     ):
         super().__init__(
-            num_cont=num_cont,
-            cat_dims=cat_dims,
-            embedding_dim=embedding_dim,
-            continuous_noise_std=continuous_noise_std,
-            activation_en=activation_en,
-            activation_de=activation_de,
+            num_cont=config.num_cont,
+            cat_dims=config.cat_dims,
+            hidden_dims=config.hidden_dims,
+            latent_dim=config.latent_dim,
+            use_embedding=config.use_embedding,
+            embedding_dim=config.embedding_dim,
+            dropout=config.dropout,
+            activation=config.activation_en,
         )
-
-        self.latent_dim = latent_dim
-        self.current_beta = None
-        self.beta_max = None
-
-        # -------------------------------
-        # Encoder
-        # -------------------------------
-        self.encoder_layers = nn.ModuleList()
-        prev = self.input_dim
-
-        for h in hidden_dims:
-            self.encoder_layers.append(
-                nn.Sequential(
-                    nn.Linear(prev, h),
-                    nn.BatchNorm1d(h),
-                    self.activation_en,
-                    nn.Dropout(dropout),
-                )
-            )
-            prev = h
-
-        # latent mean and log-variance heads
-        self.mu_head = nn.Linear(prev, latent_dim)
-        self.logvar_head = nn.Linear(prev, latent_dim)
-
-        # -------------------------------
-        # Decoder
-        # -------------------------------
-        self.decoder_layers = nn.ModuleList()
-        prev = latent_dim
-
-        for h in reversed(hidden_dims):
-            self.decoder_layers.append(
-                nn.Sequential(
-                    nn.Linear(prev, h),
-                    nn.BatchNorm1d(h),
-                    self.activation_de,
-                    nn.Dropout(dropout),
-                )
-            )
-            prev = h
-
-        # Continuous reconstruction head
-        self.cont_recon = nn.Linear(prev, num_cont)
-
-        # Categorical reconstruction heads (logits)
-        self.cat_recon_heads = nn.ModuleDict()
-        for name, card in cat_dims.items():
-            self.cat_recon_heads[name] = nn.Linear(prev, card)
-
-        # weight initialization
-        self._init_weights()
-        self._init_vae_heads()
-        self._init_decoder_output_layers()
-        # TODO: Benchmark AE/VAE learning curves with vs. without initialization
+    
+        self.hidden_dims = config.hidden_dims
+        self.latent_dim = config.latent_dim
+        self.act_name = config.activation_en
+    
+    def make_comp_heads(self) -> None:
+        """Adds final compression heads of encoder."""
         
-        # -------------------------------
-        # Benchmark toggles
-        # -------------------------------
+        self.mu_head = nn.Linear(min(self.hidden_dims), self.latent_dim)
+        self.logvar_head = nn.Linear(min(self.hidden_dims), self.latent_dim)
+
+    def init_comp_heads(self) -> None:
+        """Initializes final compression heads of encoder."""
+
+        self.init_head(self.mu_head, None)
+        self.init_head(self.logvar_head, None)
+
+
+class VDecoder(BaseTabularDecoder):
+    """
+    Decoder class for VAE model.
+    """
+
+    def __init__(
+        self,
+        config: VAEConfig
+    ):
+        super().__init__(
+            num_cont=config.num_cont,
+            cat_dims=config.cat_dims,
+            hidden_dims=config.hidden_dims,
+            latent_dim=config.latent_dim,
+            dropout=config.dropout,
+            activation=config.activation_de
+        )
+    
+        self.num_cont = config.num_cont
+        self.cat_dims = config.cat_dims
+        self.hidden_dims = config.hidden_dims
+        self.act_name = config.activation_de
+
+    def make_recon_heads(self) -> None:
+        """Adds final reconstruction heads of decoder."""
+
+        dim = max(self.hidden_dims)
+
+        self.cont_recon_head = nn.Linear(dim, self.num_cont)
+
+        self.cat_recon_heads = nn.ModuleDict()
+        for name, card in self.cat_dims.items():
+            self.cat_recon_heads[name] = nn.Linear(dim, card)
+
+    def init_recon_heads(self) -> None:
+        """Initializes final reconstruction heads of decoder."""
+
+        self.init_head(self.cont_recon_head, self.act_name)
+
+        for module in self.cat_recon_heads.children():
+            self.init_head(module, self.act_name)
+
+
+################################################
+##              HYBRID TABULAR VAE            ##
+################################################
+
+class TabularVAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin, TabularKLScoringMixin):
+    """
+    Hybrid tabular VAE with:
+      - cont and cat inputs
+      - Embedding or OneHotEncoding for cat features
+      - (optional) denoising for cont features
+      - separate decoding heads for cont and cat features
+      - KL + ELBO reconstruction
+      - anomaly scoring
+    """
+    def __init__(
+        self,
+        config: VAEConfig
+    ):
+        super().__init__()
+        self.config = config
+        self.E = VEncoder(config)
+        self.D = VDecoder(config)
         self.debug_kl_stats = False
-
-    # -------------------------------
-    # Utilities
-    # -------------------------------
-    def _init_vae_heads(self) -> None:
-        nn.init.zeros_(self.mu_head.weight)
-        nn.init.zeros_(self.mu_head.bias)
-        nn.init.zeros_(self.logvar_head.weight)
-        nn.init.zeros_(self.logvar_head.bias)
-
-    def set_beta_annealing(
-        self, 
-        epoch: int, 
-        total_epochs: int, 
-        beta_max: float, 
-        schedule: str = "linear"
-    ) -> None:
-        """Beta-annealing helper to give VAE time to learn reconstructions before forcing latent regularization. Function update current_beta each epoch."""
-        self.beta_max = beta_max
-
-        if schedule == "linear":
-            # ramp up over first 40% epochs
-            warmup = int(0.4 * total_epochs)
-            factor = min(1.0, epoch / max(1, warmup))
-            self.current_beta = beta_max * factor
-
-        elif schedule == "cyclic":
-            # cosine-cycle schedule
-            period = total_epochs // 4
-            phase = (epoch % period) / period
-            self.current_beta = beta_max * 0.5 * (1 - np.cos(np.pi * phase))
-
-        else:  # no annealing
-            self.current_beta = beta_max
-
-    # -------------------------------
-    # Encode/Decode
-    # -------------------------------
+        self.current_beta = 0.
+    
     def encode(
         self, 
         x_cont: torch.Tensor, 
+        x_cat: torch.Tensor,
+        param_out: bool = False
+    ) -> torch.Tensor:
+        """Passes input through encoder and returns latent variables."""
+        
+        # either embeds or encodes cat feature vector
+        if self.config.use_embedding:
+            x_cat_e = self._embed(
+                x_cat, 
+                self.config.cat_dims, 
+                self.E.embeddings
+            )
+        else:
+            x_cat_e = self._encod(
+                x_cat, 
+                self.config.cat_dims
+            )
+        
+        x = torch.cat([x_cont, x_cat_e], dim=1)
+
+        mu, logvar = self._parametrize(x)
+        z = self._reparametrize(mu, logvar)
+
+        if not param_out:
+            return z
+        return z, mu, logvar
+    
+    def decode(
+        self, 
+        z: torch.Tensor
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Decodes from latent space and applies temperature scaling."""
+        
+        h = z
+        for layer in self.D.decoder_layers:
+            h = layer(h)
+        
+        cont_recon = self.D.cont_recon_head(h)
+
+        cat_logits = {}
+        for name in self.config.cat_dims.keys():
+            logits = self.D.cat_recon_heads[name](h)
+            if self.config.temperature != 0.:
+                logits = logits / self.config.temperature
+            cat_logits[name] = logits
+        
+        return cont_recon, cat_logits
+    
+    def forward(
+        self, 
+        x_cont: torch.Tensor, 
         x_cat: torch.Tensor
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        """Full forward pass through autoencoder."""
+        
+        if self.config.allow_noise_injection:
+            Xc, Xk = self._noise_injection(
+                x_cont, 
+                x_cat,
+                self.config.noise_gauss_std,
+                self.config.noise_mask_prob
+            )
+        else:
+            Xc, Xk = x_cont, x_cat
+
+        z, mu, logvar = self.encode(Xc, Xk, param_out=True)
+        cont_recon, cat_logits = self.decode(z)
+
+        return cont_recon, cat_logits, mu, logvar
+    
+    # -----------------------------
+    # Utils
+    # -----------------------------
+    def _parametrize(
+        self, 
+        x: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Encode (x_cont, x_cat) -> (mu, logvar)
+        Parametrizes latent distribution determistically. Input data is mapped to the variational distribution and mean (mu) and log-variance (logvar) returned.
         """
-        x_emb = self._embed(x_cat)
-
-        # Apply noise to continuous part (denoising AE)
-        x_cont_n = self._maybe_noisy_cont(x_cont)
         
-        # Concatenate into unified representation
-        x = torch.cat([x_cont_n, x_emb], dim=1)
-
-        # Forward through encoder
         h = x
-        for layer in self.encoder_layers:
+        for layer in self.E.encoder_layers:
             h = layer(h)
-
-        mu = self.mu_head(h)
-        logvar = self.logvar_head(h)
+        
+        mu = self.E.mu_head(h)
+        logvar = self.E.logvar_head(h)
 
         # for benchmarking kl_divergence clamp values
         # μ ~ N(0, 1) → mean near 0, std near 1
         # logvar near 0, between ~[-4, +4]
-        if getattr(self, "debug_kl_stats", False):
+        if self.debug_kl_stats:
             print(
                 f"[KL DIAGNOSTICS] μ mean={mu.mean().item():.4f} std={mu.std().item():.4f} | "
                 f"logvar mean={logvar.mean().item():.4f} std={logvar.std().item():.4f}"
             )
+        
+        return mu, logvar
 
-        return mu, logvar, x
-
-    @staticmethod
-    def reparameterize(
+    def _reparametrize(
+        self, 
         mu: torch.Tensor, 
         logvar: torch.Tensor
     ) -> torch.Tensor:
-        """Reparameterization trick: z = mu + eps * std, eps ~ N(0, I)"""
+        """
+        Reparametrizes to stochastically sample z from the distribution via z = mu + eps ⊙ std with eps ~ N(0, I).
+        """
+
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
+        
         return mu + eps * std
-
-    def encode_to_latent(
-        self, 
-        x_cont: torch.Tensor, 
-        x_cat: torch.Tensor, 
-        deterministic: bool = True
-    ) -> torch.Tensor:
-        """Latent extraction method."""
-        mu, logvar, _ = self.encode(x_cont, x_cat)
-        if deterministic:
-            return mu
-        z = self.reparameterize(mu, logvar)
-        return z
-
-    def decode(
-        self, 
-        z: torch.Tensor, 
-        temperature: float = 1.0
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Decode latent z -> continuous reconstruction + categorical logits."""
-        h = z
-        for layer in self.decoder_layers:
-            h = layer(h)
-
-        # Continuous reconstruction
-        cont_recon = self.cont_recon(h)
-
-        # Categorical logits (optionally temperature-scaled)
-        cat_logits = {}
-        for name in self.cat_dims.keys():
-            logits = self.cat_recon_heads[name](h)
-            if temperature != 1.0:
-                logits = logits / temperature
-            cat_logits[name] = logits
-
-        return cont_recon, cat_logits
-
-    # -------------------------------
-    # Forward
-    # -------------------------------
-    def forward(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        return_cat: bool = True,
-        temperature: float = 1.0,
-    ) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]], torch.Tensor, torch.Tensor]:
-        """
-        Full forward pass: returns cont recon and optional cat_logits, as well as mu, logvar.
-        """
-        mu, logvar, x_enc = self.encode(x_cont, x_cat)
-        z = self.reparameterize(mu, logvar)
-
-        cont_recon, cat_logits = self.decode(z, temperature)
-
-        if return_cat:
-            return cont_recon, cat_logits, mu, logvar
-        else:
-            return cont_recon, None, mu, logvar
-
-    # -------------------------------
-    # KL / ELBO LOSS      
-    # -------------------------------
-    @staticmethod
-    def kl_divergence(
-        mu: torch.Tensor,
-        logvar: torch.Tensor,
-        logvar_clip: Optional[tuple[float, float]] = (-20, 20),
-        eps: float = 1e-8,
-        reduction: str = "mean",
-    ) -> torch.Tensor:
-        """
-        KL(q(z|x) || p(z)) with p(z) ~ N(0, I)
-
-        per-sample KL:
-          KL_i = 0.5 * sum_j (exp(logvar) + mu^2 - 1 - logvar)
-        """
-        # TODO: check gradients, if extremely large/small gradients clamp!
-        logvar = torch.clamp(logvar, min=logvar_clip[0], max=logvar_clip[1])
-        var = torch.exp(logvar)
-        # TODO: add eps to avoid exp(0) = 1 issues OR clamp; ergo numerical stability
-        # var = logvar.exp() + eps 
-        # var = torch.clamp(var, min=1e-12, max=1e6)
-        kl = -0.5 * (1 + logvar - mu.pow(2) - var)
-        kl = kl.sum(dim=1)  # sum over latent dims -> shape [batch]
-
-        if reduction == "none":
-            return kl
-        elif reduction == "mean":
-            return kl.mean()
-        elif reduction == "sum":
-            return kl.sum()
-        else:
-            raise ValueError(f"[ERROR] Unknown KL reduction: {reduction}")
-
-    def reconstruction_error_per_sample(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
-        temperature: float = 1.0,
-    ) -> torch.Tensor:
-        """
-        Compute pure per-sample reconstruction error combining:
-          - continuous MSE
-          - categorical cross-entropy averaged over categories
-        Use when recon-only optimization for tuning to debug recon quality or compate AE/VAE recon capabilities!
-        """
-        cont_recon, cat_logits, _, _ = self.forward(
-            x_cont, 
-            x_cat, 
-            return_cat=True, 
-            temperature=temperature
-        )
-
-        # Continuous MSE per sample
-        cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
-
-        if cat_weight <= 0.0 or len(self.cat_dims) == 0:
-            return cont_err
-
-        # Categorical CE averaged over categorical features
-        cat_err = torch.zeros_like(cont_err)
-        n_cats = len(self.cat_dims)
-
-        for i, name in enumerate(self.cat_dims.keys()):
-            logits = cat_logits[name]
-            targets = x_cat[:, i].long()
-            ce = F.cross_entropy(logits, targets, reduction="none")  # [batch]
-            cat_err = cat_err + ce
-
-        cat_err = cat_err / float(n_cats)
-
-        total_weight = cont_weight + cat_weight
-        # to prevent exploding loss
-        if total_weight <= 0:
-            total_weight = 1.0
-            cont_weight = 1.0
-            cat_weight = 0.0
-        return (cont_weight * cont_err + cat_weight * cat_err) / total_weight
-
-    def elbo_loss(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        beta: float = 1.0,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
-        temperature: float = 1.0,
-        reduction: str = "mean",
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Compute ELBO components:
-          recon_loss  = E_q[ -log p(x|z) ]  (here: weighted recon error)
-          kl_loss     = KL(q(z|x) || p(z))
-          total_loss  = recon_loss + beta * kl_loss
-        """
-        cont_recon, cat_logits, mu, logvar = self.forward(
-            x_cont, 
-            x_cat, 
-            return_cat=True, 
-            temperature=temperature
-        )
-
-        # -------------------------------
-        # Reconstruction error (per-sample)
-        # -------------------------------
-        cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)  # [batch]
-
-        if cat_weight > 0.0 and len(self.cat_dims) > 0:
-            cat_err = torch.zeros_like(cont_err)
-            n_cats = len(self.cat_dims)
-            for i, name in enumerate(self.cat_dims.keys()):
-                logits = cat_logits[name]
-                targets = x_cat[:, i].long()
-                ce = F.cross_entropy(logits, targets, reduction="none")
-                cat_err += ce
-            cat_err = cat_err / float(n_cats)
-        else:
-            cat_err = torch.zeros_like(cont_err)
-
-        total_weight = cont_weight + cat_weight
-        # to prevent exploding loss
-        if total_weight <= 0:
-            total_weight = 1.0
-            cont_weight = 1.0
-            cat_weight = 0.0
-        recon_per_sample = (cont_weight * cont_err + cat_weight * cat_err) / max(
-            total_weight, 1e-8
-        )
-
-        # aggregate reconstruction loss
-        if reduction == "mean":
-            recon_loss = recon_per_sample.mean()
-        elif reduction == "sum":
-            recon_loss = recon_per_sample.sum()
-        elif reduction == "none":
-            recon_loss = recon_per_sample
-        else:
-            raise ValueError(f"[ERROR] Unknown reduction: {reduction}")
-
-        # KL loss
-        kl_per_sample = self.kl_divergence(mu, logvar, reduction="none")
-
-        if reduction == "mean":
-            kl_loss = kl_per_sample.mean()
-        elif reduction == "sum":
-            kl_loss = kl_per_sample.sum()
-        elif reduction == "none":
-            kl_loss = kl_per_sample
-        else:
-            raise ValueError(f"[ERROR] Unknown reduction: {reduction}")
-
-        beta_used = self.current_beta if self.current_beta is not None else (beta or 1.0)
-
-        total_loss = recon_loss + beta_used * kl_loss
-        return total_loss, recon_loss, kl_loss
-
-    # -------------------------------
-    # Anomaly score
-    # -------------------------------
-    def anomaly_score(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
-        beta: float = 1.0,
-        temperature: float = 1.0,
-        score_type: str = "elbo",
-    ) -> torch.Tensor:
-        """
-        Compute per-sample anomaly scores; score_type options:
-          - recon : reconstruction error only
-          - kl    : KL divergence only
-          - elbo  : recon + beta * KL
-        """
-        self.eval()
-        with torch.no_grad():
-            cont_recon, cat_logits, mu, logvar = self.forward(
-                x_cont, 
-                x_cat, 
-                return_cat=True, 
-                temperature=temperature
-            )
-
-            # recon per sample
-            cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
-
-            if cat_weight > 0.0 and len(self.cat_dims) > 0:
-                cat_err = torch.zeros_like(cont_err)
-                n_cats = len(self.cat_dims)
-                for i, name in enumerate(self.cat_dims.keys()):
-                    logits = cat_logits[name]
-                    targets = x_cat[:, i].long()
-                    ce = F.cross_entropy(logits, targets, reduction="none")
-                    cat_err += ce
-                cat_err = cat_err / float(n_cats)
-            else:
-                cat_err = torch.zeros_like(cont_err)
-
-            total_weight = cont_weight + cat_weight
-            # to prevent exploding loss
-            if total_weight <= 0:
-                total_weight = 1.0
-                cont_weight = 1.0
-                cat_weight = 0.0
-            recon = (cont_weight * cont_err + cat_weight * cat_err) / max(total_weight, 1e-8)
-
-            kl = self.kl_divergence(mu, logvar, reduction="none")
-
-            if score_type == "recon":
-                return recon
-            elif score_type == "kl":
-                return kl
-            elif score_type == "elbo":
-                return recon + beta * kl
-            else:
-                raise ValueError(
-                    f"[ERROR] Unknown score_type: {score_type}. "
-                    f"Use 'recon', 'kl', or 'elbo'."
-                )
-
-    def mc_elbo_score(
-        self,
-        x_cont: torch.Tensor,
-        x_cat: torch.Tensor,
-        cont_weight: float = 1.0,
-        cat_weight: float = 0.0,
-        temperature: float = 1.0,
-        n_samples: int = 10,
-        beta: float = 1.0,
-    ) -> torch.Tensor:
-        """
-        Monte-Carlo ELBO estimate for anomaly scoring.
-        Uses multiple z~q(z|x) samples to reduce variance of ELBO estimates.
-        """
-
-        self.eval()
-        scores = torch.zeros(x_cont.size(0), device=x_cont.device)
-
-        with torch.no_grad():
-            for _ in range(n_samples):
-                cont_recon, cat_logits, mu, logvar = self.forward(
-                    x_cont, 
-                    x_cat, 
-                    temperature=temperature, 
-                    return_cat=True
-                )
-
-                # recon per sample
-                cont_err = ((cont_recon - x_cont) ** 2).mean(dim=1)
-
-                if cat_weight > 0 and len(self.cat_dims) > 0:
-                    cat_err = torch.zeros_like(cont_err)
-                    for i, name in enumerate(self.cat_dims.keys()):
-                        logits = cat_logits[name]
-                        tgt = x_cat[:, i].long()
-                        ce = F.cross_entropy(logits, tgt, reduction="none")
-                        cat_err += ce
-                    cat_err /= len(self.cat_dims)
-                else:
-                    cat_err = torch.zeros_like(cont_err)
-
-                total_weight = max(cont_weight + cat_weight, 1e-8)
-                recon = (cont_weight * cont_err + cat_weight * cat_err) / total_weight
-
-                kl = self.kl_divergence(mu, logvar, reduction="none")
-
-                # if beta annealing is active
-                beta_used = (
-                    self.current_beta 
-                    if getattr(self, "current_beta", None) is not None 
-                    else beta
-                )
-
-                scores += (recon + beta_used * kl)
-
-        return scores / n_samples
     
+    def set_beta_annealing(
+        self, 
+        epoch: int, 
+    ) -> None:
+        """Beta-annealing gives model time to learn reconstructions before forcing latent regularization. Dynamically adjusts beta for each epoch."""
+
+        # linear schedule within 40% of epochs
+        if self.config.beta_schedule == "linear":
+            warmup = int(0.4 * self.config.num_epochs)
+            factor = min(1.0, epoch / max(1, warmup))
+            self.current_beta = self.config.beta * factor
+
+        # cosine-cycle schedule
+        elif self.config.beta_schedule == "cyclic":
+            period = self.config.num_epochs // 4
+            phase = (epoch % period) / period
+            self.current_beta = self.config.beta * 0.5 * (1 - np.cos(np.pi * phase))
+
+        # no annealing
+        else:  
+            self.current_beta = self.config.beta
+
+    # -----------------------------
+    # Model scoring
+    # -----------------------------
+    def scoring(
+        self,
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor,
+        cont_recon: torch.Tensor,
+        cat_logits: dict[str, torch.Tensor],
+        mu: torch.Tensor | None,
+        logvar: torch.Tensor | None,
+        loss_weights: dict[str, float],
+        reduction: str = "mean"
+    ) -> tuple[torch.Tensor] | torch.Tensor:
+        """Computes normalized weighted per-sample score and optionally reduces to average or sum."""
+
+        cont_score, cat_score, recon_score = self.recon_scoring(
+            x_cont,
+            x_cat,
+            cont_recon,
+            cat_logits,
+            self.config.cat_dims,
+            loss_weights,
+        )
+
+        kl_score = self.kl_scoring(
+            mu,
+            logvar,
+            logvar_clip=(-20., 20.),
+            eps=1e-8
+        )
+            
+        per_sample_score = recon_score + self.current_beta * kl_score
+
+        if reduction == "mean":
+            return recon_score, kl_score, per_sample_score.mean()
+        elif reduction == "sum":
+            return recon_score, kl_score, per_sample_score.sum()
+        else:
+            return per_sample_score

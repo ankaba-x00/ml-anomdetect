@@ -20,8 +20,6 @@ def calibrate_threshold(
     cont_w: float = 1.0,
     cat_w: float = 0.0, 
     tune_temperature: bool = True,
-    temperature_range: list | None = None,
-    use_mc_elbo: bool = False,
     beta: float = 1.0
 ) -> tuple[dict[str, np.ndarray | float], dict[str, np.ndarray |float]]:
     """
@@ -65,8 +63,7 @@ def calibrate_threshold(
     if tune_temperature and len(X_cont_cal) > 100:
         print(f"[INFO] Tuning inference temperature...")
         
-        if temperature_range is None:
-            temperature_range = [0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
+        temperature_range = [0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
         
         best_temp_metric = float('inf')
         for temp in temperature_range:
@@ -77,7 +74,6 @@ def calibrate_threshold(
                 device,
                 cont_w,
                 cat_w,
-                use_mc_elbo,
                 temp,
                 beta
             )
@@ -90,7 +86,7 @@ def calibrate_threshold(
                 "scores_mean": float(temp_scores.mean()),
                 "scores_std": float(temp_scores.std()),
                 "scores_median": float(np.median(temp_scores)),
-                "clean_scores_median": float(np.median(temp_clean_scores)) if len(temp_clean_scores) > 0 else float(np.median(temp_scores)),
+                "clean_scores_median": float(temp_metric),
                 "prelim_threshold": float(temp_prelim),
                 "clean_samples": len(temp_clean_scores),
             }
@@ -117,7 +113,6 @@ def calibrate_threshold(
         device,
         cont_w,
         cat_w,
-        use_mc_elbo,
         best_temp,
         beta
     )

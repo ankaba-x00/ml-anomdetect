@@ -1,9 +1,8 @@
+import torch
+import numpy as np
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
-import numpy as np
-import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
 from app.src.ml.models.ae import AEConfig, TabularAE
@@ -55,7 +54,7 @@ def train_autoencoder(
     """
 
     if loss_weights is None:
-        loss_weights = {"cont_w": float(1/config.num_cont), "cat_w": float(1/len(cat_dims.keys()))}
+        loss_weights = {"cont_w": float(1/config.num_cont), "cat_w": float(1/len(config.cat_dims.keys()))}
     
     device = torch.device(config.device)
 
@@ -79,45 +78,24 @@ def train_autoencoder(
     ) 
 
     # -------------------------
-    # Build model
+    # Model configs
     # -------------------------
     if isinstance(config, AEConfig):
         model = TabularAE(config=config).to(device)
-        cont_loss_name, cat_loss_name = "cont_loss", "cat_loss"
-        cont_short, cat_short = "Cont", "Cat"
+        metric1_name, metric2_name = "cont_loss", "cat_loss"
+        metric1_short, metric2_short = "Cont", "Cat"
     elif isinstance(config, VAEConfig):
-        model = TabularVAE(
-            num_cont=config.num_cont,
-            cat_dims=config.cat_dims,
-            latent_dim=config.latent_dim,
-            hidden_dims=config.hidden_dims,
-            dropout=config.dropout,
-            embedding_dim=config.embedding_dim,
-            continuous_noise_std=config.continuous_noise_std,
-            activation_en=config.activation_en,
-            activation_de=config.activation_de
-        ).to(device)
-        cont_loss_name, cat_loss_name = "recon_loss", "kl_loss"
-        cont_short, cat_short = "Recon", "KL"
+        model = TabularVAE(config=config).to(device)
+        metric1_name, metric2_name = "recon_loss", "kl_loss"
+        metric1_short, metric2_short = "Recon", "KL"
     else: 
         raise ValueError(f"[ERROR] Unsupported model config type; exprected AEConfig or VAEConfig.")
 
-    # -------------------------
-    # Model-specific option
-    # -------------------------
-    use_beta_annealing = isinstance(config, VAEConfig) and hasattr(model, "set_beta_annealing")
-
-    if config.warmup_epochs > 0:
+    if isinstance(config, AEConfig) and config.warmup_epochs > 0:
         print(
             f"[INFO] Cat-only warmup enabled for "
             f"{config.warmup_epochs} epochs"
         )
-
-    # -------------------------------
-    # Benchmark toggles
-    # -------------------------------
-    if hasattr(model, "debug_kl_stats"):
-        model.debug_kl_stats = False 
 
     # -------------------------
     # Optimizer
@@ -188,11 +166,11 @@ def train_autoencoder(
     # -------------------------
     history = {
         "train_loss": [],
-        f"train_{cont_loss_name}": [],
-        f"train_{cat_loss_name}": [],
+        f"train_{metric1_name}": [],
+        f"train_{metric2_name}": [],
         "val_loss": [] if val_loader else None,
-        f"val_{cont_loss_name}": [] if val_loader else None,
-        f"val_{cat_loss_name}": [] if val_loader else None,
+        f"val_{metric1_name}": [] if val_loader else None,
+        f"val_{metric2_name}": [] if val_loader else None,
         "warmup": [],
         "learning_rates": [],
         "best_epoch": 0,
@@ -217,7 +195,10 @@ def train_autoencoder(
     print(f"\tLR scheduler         {config.lr_scheduler}")
     print(f"\tNoise injection      {'enabled' if config.allow_noise_injection else 'disabled'}")
     print(f"\tNum of epochs        {config.num_epochs}")
-    print(f"\tNum of warmup epochs {config.warmup_epochs}")
+    if isinstance(config, VAEConfig) and config.use_beta_annealing:
+        print(f"\tBeta annealing       {config.beta_schedule} | {config.beta}")
+    else:
+        print(f"\tNum of warmup epochs {config.warmup_epochs}")
     print(f"\tDevice               {device}")
     print(f"\tLoss weights Cont    {loss_weights['cont_w']:.5f}")
     print(f"\t             Cat     {loss_weights['cat_w']:.5f}")
@@ -229,40 +210,42 @@ def train_autoencoder(
         model.train()    
 
         # -------------------------
-        # Cat-only warmup setup
+        # Warmup setup
         # -------------------------
-        in_warmup = epoch < config.warmup_epochs
-
-        if in_warmup:
-            # freeze cont heads
-            for p in model.D.cont_recon_head.parameters():
-                p.requires_grad = False
-            # adjust lr to avoid overfitting
-            for g in optimizer.param_groups:
-                g["lr"] = config.lr * float((epoch+1) / config.warmup_epochs)
+        if isinstance(model, TabularAE):
+            in_warmup = epoch < config.warmup_epochs
+            if in_warmup:
+                # freeze cont heads
+                for p in model.D.cont_recon_head.parameters():
+                    p.requires_grad = False
+                # adjust lr to avoid overfitting
+                for g in optimizer.param_groups:
+                    g["lr"] = config.lr * float((epoch+1) / config.warmup_epochs)
+                # disable beta annealing
+                if isinstance(config, VAEConfig):
+                    config.use_beta_annealing = False
+            else:
+                # unfreeze cont heads
+                for p in model.D.cont_recon_head.parameters():
+                    p.requires_grad = True
+                # adjust lr to avoid overfitting
+                for g in optimizer.param_groups:
+                    g["lr"] = config.lr
+                # enable beta annealing
+                if isinstance(config, VAEConfig):
+                    config.use_beta_annealing = True
         else:
-            # unfreeze cont heads
-            for p in model.D.cont_recon_head.parameters():
-                p.requires_grad = True
-            # adjust lr to avoid overfitting
-            for g in optimizer.param_groups:
-                g["lr"] = config.lr
+            in_warmup = False
+            if config.use_beta_annealing:
+                model.set_beta_annealing(epoch=epoch)
 
         # -------------------------
         # Setup training
         # -------------------------
         epoch_train_loss = 0.0
-        epoch_train_cont = 0.0
-        epoch_train_cat = 0.0
+        epoch_train_metric1 = 0.0
+        epoch_train_metric2 = 0.0
         n_train_batches = 0
-
-        if use_beta_annealing:
-            model.set_beta_annealing(
-                epoch=epoch,
-                total_epochs=config.num_epochs,
-                beta_max=config.beta,
-                schedule="linear" # or "cyclic"
-            )
         
         for batch_Xc, batch_Xk in train_loader:
             batch_Xc = batch_Xc.to(device, non_blocking=True)
@@ -280,18 +263,19 @@ def train_autoencoder(
                     loss_weights,
                     in_warmup
                 )
-
+                metric1, metric2 = cont_loss, cat_loss
             elif isinstance(config, VAEConfig):
-                total_loss, recon_loss, kl_loss = model.elbo_loss(
-                    batch_Xc,
+                cont_recon, cat_logits, mu, logvar = model(batch_Xc, batch_Xk)
+                recon_loss, kl_loss, total_loss = model.scoring(
+                    batch_Xc, 
                     batch_Xk,
-                    beta=config.beta,
-                    cont_w=loss_weights["cont_w"],
-                    cat_w=loss_weights["cat_w"],
-                    temperature=config.temperature,
-                    reduction="mean",
+                    cont_recon,
+                    cat_logits,
+                    mu,
+                    logvar,
+                    loss_weights,
                 )
-                cont_loss, cat_loss = recon_loss, kl_loss
+                metric1, metric2 = recon_loss, kl_loss
 
             # Backward pass
             total_loss.backward()
@@ -311,18 +295,18 @@ def train_autoencoder(
             # Accumulate metrics
             batch_size = batch_Xc.size(0)
             epoch_train_loss += total_loss.item() * batch_size
-            epoch_train_cont += cont_loss.sum().item()
-            epoch_train_cat += cat_loss.sum().item()
+            epoch_train_metric1 += metric1.sum().item()
+            epoch_train_metric2 += metric2.sum().item()
             n_train_batches += batch_size
 
         # Calculate epoch averages
         avg_train_loss = epoch_train_loss / max(n_train_batches, 1)
-        avg_train_cont = epoch_train_cont / max(n_train_batches, 1)
-        avg_train_cat = epoch_train_cat / max(n_train_batches, 1)
+        avg_train_metric1 = epoch_train_metric1 / max(n_train_batches, 1)
+        avg_train_metric2 = epoch_train_metric2 / max(n_train_batches, 1)
         
         history["train_loss"].append(avg_train_loss)
-        history[f"train_{cont_loss_name}"].append(avg_train_cont)
-        history[f"train_{cat_loss_name}"].append(avg_train_cat)
+        history[f"train_{metric1_name}"].append(avg_train_metric1)
+        history[f"train_{metric2_name}"].append(avg_train_metric2)
         history["warmup"].append(in_warmup),
 
         # -----------------------------
@@ -331,8 +315,8 @@ def train_autoencoder(
         if val_loader:
             model.eval()
             epoch_val_loss = 0.0
-            epoch_val_cont = 0.0
-            epoch_val_cat = 0.0
+            epoch_val_metric1 = 0.0
+            epoch_val_metric2 = 0.0
             n_val_batches = 0
 
             with torch.no_grad():
@@ -349,33 +333,35 @@ def train_autoencoder(
                             cat_logits,
                             loss_weights,
                         )
+                        metric1, metric2 = cont_loss, cat_loss 
                     elif isinstance(config, VAEConfig):
-                        total_loss, recon_loss, kl_loss = model.elbo_loss(
-                            batch_Xc,
+                        cont_recon, cat_logits, mu, logvar = model(batch_Xc, batch_Xk)
+                        recon_loss, kl_loss, total_loss = model.scoring(
+                            batch_Xc, 
                             batch_Xk,
-                            beta=None,
-                            cont_w=loss_weights["cont_w"],
-                            cat_w=loss_weights["cat_w"],
-                            temperature=config.temperature,
-                            reduction="mean",
+                            cont_recon,
+                            cat_logits,
+                            mu,
+                            logvar,
+                            loss_weights,
                         )
-                        cont_loss, cat_loss = recon_loss, kl_loss
+                        metric1, metric2  = recon_loss, kl_loss
 
                     # Accumulate
                     batch_size = batch_Xc.size(0)
                     epoch_val_loss += total_loss.item() * batch_size
-                    epoch_val_cont += cont_loss.sum().item()
-                    epoch_val_cat += cat_loss.sum().item()
+                    epoch_val_metric1 += metric1.sum().item()
+                    epoch_val_metric2 += metric2.sum().item()
                     n_val_batches += batch_size
 
             # Calculate validation averages
             avg_val_loss = epoch_val_loss / max(n_val_batches, 1)
-            avg_val_cont = epoch_val_cont / max(n_val_batches, 1)
-            avg_val_cat = epoch_val_cat / max(n_val_batches, 1)
+            avg_val_metric1 = epoch_val_metric1 / max(n_val_batches, 1)
+            avg_val_metric2 = epoch_val_metric2 / max(n_val_batches, 1)
             
             history["val_loss"].append(avg_val_loss)
-            history[f"val_{cont_loss_name}"].append(avg_val_cont)
-            history[f"val_{cat_loss_name}"].append(avg_val_cat)
+            history[f"val_{metric1_name}"].append(avg_val_metric1)
+            history[f"val_{metric2_name}"].append(avg_val_metric2)
 
             if scheduler is not None:
                 if config.lr_scheduler == "plateau":
@@ -400,9 +386,9 @@ def train_autoencoder(
             print(f"Epoch {epoch + 1:2d}/{config.num_epochs}: "
                   f"Mode {mode:<6} | "
                   f"Train loss: {avg_train_loss:.6f} "
-                  f"({cont_short}: {avg_train_cont:.6f}, {cat_short}: {avg_train_cat:.6f}) | "
+                  f"({metric1_short}: {avg_train_metric1:.6f}, {metric2_short}: {avg_train_metric2:.6f}) | "
                   f"Val loss: {avg_val_loss:.6f} "
-                  f"({cont_short}: {avg_val_cont:.6f}, {cat_short}: {avg_val_cat:.6f}) | "
+                  f"({metric1_short}: {avg_val_metric1:.6f}, {metric2_short}: {avg_val_metric2:.6f}) | "
                   f"LR: {optimizer.param_groups[0]['lr']:.2e}")
             
         # -----------------------------
@@ -421,7 +407,7 @@ def train_autoencoder(
             print(f"Epoch {epoch + 1:2d}/{config.num_epochs}: "
                     f"Mode {mode:<6} | "
                     f"Loss: {avg_train_loss:.6f} "
-                    f"({cont_short}: {avg_train_cont:.6f}, {cat_short}: {avg_train_cat:.6f}) | "
+                    f"({metric1_short}: {avg_train_metric1:.6f}, {metric2_short}: {avg_train_metric2:.6f}) | "
                     f"LR: {optimizer.param_groups[0]['lr']:.2e}")
 
         # Track learning rate
@@ -443,6 +429,9 @@ def train_autoencoder(
     if best_state is not None:
         model.load_state_dict(best_state)
         print(f"Restored best model from epoch {history['best_epoch']}")
+    
+    if isinstance(model, TabularVAE):
+        del history["warmup"]
     
     return model.eval(), history
 
@@ -491,17 +480,7 @@ def load_autoencoder(
         model = TabularAE(config=cfg)
     elif ae_class == "TabularVAE":
         cfg = VAEConfig(**payload["config"])
-        model = TabularVAE(
-            num_cont=num_cont,
-            cat_dims=cat_dims,
-            latent_dim=cfg.latent_dim,
-            hidden_dims=cfg.hidden_dims,
-            dropout=cfg.dropout,
-            embedding_dim=cfg.embedding_dim,
-            continuous_noise_std=cfg.continuous_noise_std,
-            activation_en=cfg.activation_en,
-            activation_de=cfg.activation_de
-        )
+        model = TabularVAE(config=cfg)
     else:
         raise ValueError(f"Unknown model_class: {ae_class}")
     
