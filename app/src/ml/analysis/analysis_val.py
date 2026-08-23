@@ -15,6 +15,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 from app.src.data.attack_labelling import ATTACK_LABELS, ID_TO_ATTACK
 from .common import apply_custom_theme
+from app.src.ml.training.anomaly_utils import get_threshold
 
 
 def plot_error_histogram(
@@ -29,15 +30,15 @@ def plot_error_histogram(
 
     scores = df["scores"].values
     log_err = np.log10(scores + 1e-8)
-    p95 = np.percentile(scores, 95)
-    p99 = np.percentile(scores, 99)
-    p995 = np.percentile(scores, 99.5)
-    med = np.median(scores)
+    p95 = get_threshold("p95", scores)
+    p99 = get_threshold("p99", scores)
+    p995 = get_threshold("p995", scores)
+    mad = get_threshold("mad", scores)
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.hist(log_err, bins=60, color="steelblue", alpha=0.7)
     # marker lines (in log space for consistency)
-    for p, label in [(med, "median"), (p95, "p95"), (p99, "p99"), (p995, "p995")]:
+    for p, label in [(mad, "mad"), (p95, "p95"), (p99, "p99"), (p995, "p995")]:
         ax.axvline(np.log10(p + 1e-8), linestyle="--", label=label)
     ax.set_title(f"{country} — Validation Error Distribution (log10 scale)")
     ax.set_xlabel("log10(scores)")
@@ -49,7 +50,6 @@ def plot_error_histogram(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_error_timeseries(
     country: str,
@@ -77,7 +77,6 @@ def plot_error_timeseries(
     if show: plt.show()
     plt.close(fig)
 
-
 def summarize_validation(
     country: str,
     df: pd.DataFrame,
@@ -87,22 +86,22 @@ def summarize_validation(
     """Summary statistics for reconstruction error distribution as json."""
     scores = df["scores"].values
 
+
     summary = {
         "country": country,
         "count": int(len(scores)),
         "min": float(scores.min()),
         "max": float(scores.max()),
         "mean": float(scores.mean()),
-        "median": float(np.median(scores)),
-        "p95": float(np.percentile(scores, 95)),
-        "p99": float(np.percentile(scores, 99)),
-        "p995": float(np.percentile(scores, 99.5)),
+        "p95": get_threshold("p95", scores),
+        "p99": get_threshold("p99", scores),
+        "p995": get_threshold("p995", scores),
+        "mad": get_threshold("mad", scores)
     }
 
     with open(folder / fname, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"[OK] Saved to {fname}")
-
 
 def summarize_mt_validation(
     country: str,
@@ -198,7 +197,6 @@ def summarize_mt_validation(
         json.dump(summary, f, indent=2)
     print(f"[OK] Saved to {fname}")
 
-
 def plot_regression_scatter(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -235,7 +233,6 @@ def plot_regression_scatter(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_attack_confusion_matrix(
     country: str,
     df: pd.DataFrame,
@@ -244,14 +241,14 @@ def plot_attack_confusion_matrix(
     show: bool = False,
 ) -> None:
     """Confusion matrix for attack classification head."""
-    required = ["attack_pred", "attack_true"]
+    required = ["at_pred", "at_true"]
     if not all(k in df for k in required):
         print(f"[INFO] Confusion matrix components not available for {country}")
         return
     apply_custom_theme()
 
-    y_true = df["attack_true"]
-    y_pred = df["attack_pred"]
+    y_true = df["at_true"]
+    y_pred = df["at_pred"]
     labels = list(range(len(ATTACK_LABELS)))
     cm_raw = confusion_matrix(y_true, y_pred, labels=labels)
     cm_norm = confusion_matrix(y_true, y_pred, labels=labels, normalize="true")
@@ -304,7 +301,6 @@ def plot_attack_confusion_matrix(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_attack_confidence_hist(
     country: str,
     df: pd.DataFrame,
@@ -313,14 +309,14 @@ def plot_attack_confidence_hist(
     show: bool = False,
 ) -> None:
     """Histogram of max softmax confidence for attack predictions."""
-    required = ["attack_conf", "attack_true"]
+    required = ["at_conf", "at_true"]
     if not all(k in df for k in required):
         print(f"[INFO] Confidence histogram components not available for {country}")
         return
     apply_custom_theme()
     
-    attack_prob_max = df["attack_conf"]
-    y_true = df["attack_true"]
+    attack_prob_max = df["at_conf"]
+    y_true = df["at_true"]
     benign_mask = y_true == 0
     attack_mask = y_true != 0
 
@@ -353,12 +349,11 @@ def plot_attack_confidence_hist(
     if show: plt.show()
     plt.close(fig)
 
-
-def plot_mt_anomaly_timeseries(
+def plot_anomaly_timeseries(
     country: str,
     df: pd.DataFrame,
     folder: Path = Path.cwd(),
-    fname: str = "plot_mt_anomaly_timeseries.png",
+    fname: str = "plot_anomaly_timeseries.png",
     show: bool = False,
     show_components: bool = True,
     show_attack_conf: bool = True,
@@ -454,11 +449,11 @@ def plot_mt_anomaly_timeseries(
     # -----------------------------
     # Attack confidence (secondary axis)
     # -----------------------------
-    if show_attack_conf and "attack_conf" in df:
+    if show_attack_conf and "at_conf" in df:
         ax2 = ax.twinx()
         ax2.plot(
             ts,
-            df["attack_conf"],
+            df["at_conf"],
             lw=1.0,
             color="purple",
             alpha=0.35,

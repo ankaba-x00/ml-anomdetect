@@ -9,7 +9,7 @@ Visually and numerically explores datasets as pulled from Cloudflare
 - attack profiles : lineplots cluster eval and scatter plots PCA on specified final_k cluster L3, L7 resolved
 - attack profiles : radar plots with attack fingerprint for specified countries origin, target resolved
 
-Outputs:
+Output:
     png files : results/exploration/<figure_type>.png
 
 Usage: 

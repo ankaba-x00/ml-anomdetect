@@ -15,16 +15,12 @@ warnings.filterwarnings("ignore", message=".*tight_layout.*")
 pd.set_option('future.no_silent_downcasting', True)
 
 
-#########################################
-##                CONFIG               ##
-#########################################
-
 custom_rc = {
     "figure.figsize": (24, 6),
     "figure.titlesize": 25,
     "axes.titlesize": 23,
     "axes.titlepad": 35,
-    "axes.labelsize": 22,
+    "axes.labelsize": 20,
     "axes.labelpad": 10,
     "xtick.labelsize": 20,
     "ytick.labelsize": 20,

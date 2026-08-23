@@ -1,0 +1,83 @@
+description: > 
+  Config parameters for tuning VAE autoencoder. 
+    static : holds fixed parameters not included in search space
+    tune: holds search space parameters
+  
+  Format: 
+    static: key/value pairs
+    tune:
+      int/float: dict with start/end keys
+        adam_beta1, adam_beta2, beta, cat_w, depth, dropout, kl_clamp, lr, sgd_momentum, noise_gauss_std, noise_mask_prob, weight_decay
+      categorical: list
+        activation_en, activation_de, base_dim, batch_size, gradient_clip, latent_dim, lr_scheduler, optimizer 
+
+static:
+  use_embedding: True
+  embedding_dim: null
+  optimizer: "adam"
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  sgd_momentum: 0.0
+  lr_scheduler: plateau
+  allow_noise_injection: True
+  num_epochs: 60
+  patience: 8
+  temperature: 1.0
+  use_beta_annealing: True
+  beta_schedule: "linear"
+  use_kl_clipping: True
+  debug_kl_stats: False
+  logvar_clamp: 5.0
+  cont_w: 1.0
+  device: "cpu"
+tune:
+  depth:
+    start: 2
+    end: 3
+  base_dim:
+    - 128 
+    - 256
+    - 512
+  latent_dim:
+    - 32
+    - 64
+  activation_en:
+    - "relu"
+    - "leaky_relu"
+    - "tanh"
+  activation_de:
+    - "leaky_relu"
+    - "tanh"
+    - "sigmoid"
+  dropout:
+    start: 0.0
+    end: 0.3
+  lr:
+    start: 1.0e-6
+    end: 3.0e-2
+  weight_decay:
+    start: 1.0e-6
+    end: 1.0e-2
+  gradient_clip:
+    - 0.5
+    - 1.0
+    - 2.0
+  batch_size:
+    - 128
+    - 256
+    - 512
+  noise_gauss_std:
+    start: 0.1
+    end: 0.3
+  noise_mask_prob:
+    start: 0.05
+    end: 0.1
+  beta:
+    start: 0.001
+    end: 0.3
+  kl_clamp:
+    start: 0.0005
+    end: 0.002
+  cat_w:
+    start: 0.1
+    end: 0.5

@@ -7,7 +7,7 @@ class TabularLayerActMixin:
     """
 
     @staticmethod
-    def _pick_act_func(act_name: str) -> nn.Module:
+    def pick_act_func(act_name: str) -> nn.Module:
         """Selects activation function from a predifined collection."""
 
         act_dict = {

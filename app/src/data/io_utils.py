@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
+"""
+Processes and flattens nesting level of pkl files for specified key after fetching and preprocessing.
 
+Usage:
+    python -m app.src.data.io_utils [-k] <FILE_KEY>
+"""
 import pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
-
-#########################################
-##                PARAMS               ##
-#########################################
 
 DSFILE_MAP = {
     "aibots_crawlers_time": "aibots_crawlers_time.pkl",
@@ -40,20 +41,11 @@ DSFILE_MAP = {
 }
 
 
-#########################################
-##            SANITY CHECK             ##
-#########################################
-
 def check_dsfiles_exist(file: str, folder: Path) -> Path:
     file_path = folder / file
     if not file_path.is_file():
         raise FileNotFoundError(f"[ERROR] FileNotFound: {file}")
     return file_path
-
-
-#########################################
-##             FLATTENING              ##
-#########################################
 
 def conv_maxlayer_3(data: dict) -> pd.DataFrame:
     """
@@ -104,7 +96,6 @@ def conv_maxlayer_3(data: dict) -> pd.DataFrame:
 
     return pd.concat(records, ignore_index=True)
 
-
 def conv_maxlayer_2(data: dict) -> pd.DataFrame:
     """
     Vectorized flattening of 2-layered data dictionary into dataframe. 
@@ -119,11 +110,6 @@ def conv_maxlayer_2(data: dict) -> pd.DataFrame:
         records.append(df)
         
     return pd.concat(records, ignore_index=True)
-
-
-#########################################
-##               HELPER                ##
-#########################################
 
 def _detect_nesting_level(data) -> int:
     if not isinstance(data, dict) or not data:
@@ -141,17 +127,11 @@ def _detect_nesting_level(data) -> int:
     else:
         return 1
 
-
 def _load_dsfile(file: str, folder: Path) -> dict:
     path = check_dsfiles_exist(DSFILE_MAP[file], folder)
     with open(path, "rb") as f:
         data = pickle.load(f)
     return data
-
-
-#########################################
-##                MAIN                 ##
-#########################################
 
 def conv_pkltodf(file: str, folder: Path) -> pd.DataFrame:
     data = _load_dsfile(file, folder)
@@ -168,7 +148,7 @@ if __name__=="__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Process and flatten pickled dataset files."
+        description="Process and flatten pickled dataset files"
     )
 
     parser.add_argument(

@@ -38,4 +38,4 @@ def plot_log_candidates(
         plt.close()
 
     except (Exception, BaseException):
-        print(f"[INFO] Log scaling not possible for feature '{feature_name}'.")
+        print(f"[INFO] Log scaling not possible for feature: {feature_name}")

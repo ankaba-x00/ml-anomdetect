@@ -4,14 +4,13 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from typing import Union
 import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from app.src.ml.models.mt.mte import TrafficAttackPredictor
+from app.src.ml.models.mtae import MTTabularAE
 
 
 custom_rc = {
@@ -33,12 +32,11 @@ def apply_custom_theme() -> None:
     mpl.rcParams.update(custom_rc)
     sns.set_style("whitegrid")
 
-
 def plot_latent_space(
     country: str,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    model: Union[TabularAE, TabularVAE, TrafficAttackPredictor],
+    model: TabularAE | TabularVAE | MTTabularAE,
     device: str,
     max_samples: int = 1000,
     folder: Path = Path.cwd(),

@@ -38,12 +38,8 @@
       add "name_" before the param with name being name of optimizer or LR scheduler  
     - to add new parameters to search space, adjust these files:
         1. add search space params
-            app/src/config/<model_type>/base.yml or retune.yml
+            app/src/config/tune/param_<MODEL>.yml
         2. add params to config class of respective models
             app/src/ml/models/<model>.py
-        3. add params in config call of train_model.py if you want to train model once before tuning
-            app/src/pipelines/<model_type>/train_model.py
-        4. adjust objects to read new search space params from config during training
-            app/src/ml/training/train_<model_type>.py
-        5. read new search space params during objective
-            app/src/ml/tuning/tune_<model_type>.py
+        3. add params in model read-in config
+            app/src/config/train/config_<MODEL>.json

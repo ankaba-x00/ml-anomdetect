@@ -3,10 +3,6 @@ from datetime import datetime, timezone
 from app.src.data.fetch import _headers, _requests_session
 
 
-#########################################
-##            HELPER FETCH             ##
-#########################################
-
 def _fetch_timedata(
     TITLE: str, 
     URL: str, 
@@ -14,9 +10,7 @@ def _fetch_timedata(
     date_from: datetime, 
     date_to: datetime
 ) -> dict | None:
-    """
-    Fetches timeseries data in memory for country from Cloudflare API in 1-hour buckets.
-    """
+    """Fetches timeseries data in memory for country from Cloudflare API in 15-min buckets."""
     DATE_MIN, DATE_MAX = date_from, date_to.replace(hour=23, minute=45)
 
     session = _requests_session()
@@ -75,17 +69,13 @@ def _fetch_timedata(
 
     return region_results
 
-
-#########################################
-##             MAIN FETCH              ##
-#########################################
-
 def run_fetch(country: str, date_from: datetime, date_to: datetime) -> dict:
     """
-    Fetches all datasets for AE in memory and returns timestamps and values only.
-        ASSUMES:
-        - DATE_FROM: incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
-        - DATE_TO: incl. end e.g. (2024-12-15); automatically sets time to 23:45
+    Fetches datasets in memory.
+
+    Assumes:
+    - date_from : incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
+    - date_to : incl. end e.g. (2024-12-15); automatically sets time to 23:45
     """
     print(f"[INFO] Fetching data for {country}...")
     

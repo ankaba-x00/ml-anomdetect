@@ -1,39 +1,50 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+import torch
 from sklearn.base import TransformerMixin
 
-from app.src.data.feature_engineering import load_feature_matrix
+from app.src.data.feature_engineering import (
+    load_feature_matrix, 
+    load_supervised_feature_matrix
+)
+from .anomaly_utils import get_threshold
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
+from app.src.ml.models.mtae import MTTabularAE
 from app.src.ml.training.evaluate_ae import reconstruction
-from .core.anomaly_utils import get_threshold
+from app.src.ml.training.evaluate_mt import prediction
 
 
-# TODO: benchmark threshold calibration window 7 to 30 days 
 def calibrate_threshold(
     country: str,
-    model: TabularAE | TabularVAE,
+    model: TabularAE | TabularVAE | MTTabularAE,
     scaler: TransformerMixin,
-    device: str = "cpu",
+    device: str,
+    loss_weights: dict[str, float],
+    attack_type_weights: torch.Tensor | None,
+    pred_quantiles: list[float] | None,
+    beta: float,
+    cw: int = 30,
     method: str = "p99",
-    cw: int | None = 30,
-    cont_w: float = 1.0,
-    cat_w: float = 0.0, 
-    tune_temperature: bool = True,
-    beta: float = 1.0
+    tune_temperature: bool = True
 ) -> tuple[dict[str, np.ndarray | float], dict[str, np.ndarray |float]]:
-    """
-    Computes anomaly threshold and temperature scaling for a given model on 
-    a specified calibration window, method and temperature range.
-    """
+    """Computes anomaly threshold with optional temperature scaling for specified calibration window and method."""
     
     # ------------------------------------
-    # Build raw feature matrix
-    # ------------------------------------ 
-    X_cont, X_cat, _, _ = load_feature_matrix(country)
-    Xc_np = X_cont.values.astype(np.float64)
-    Xk_np = X_cat.values.astype(np.int64)
+    # Build features
+    # ------------------------------------
+    if isinstance(model, MTTabularAE):
+        X_cont, X_cat, y_l3, y_l7, y_at, _, _ = load_supervised_feature_matrix(country)
+    else:
+        X_cont, X_cat, _, _ = load_feature_matrix(country)
+
+    Xc = X_cont.values.astype(np.float32)
+    Xk = X_cat.values.astype(np.int64)
     ts = X_cont.index
+    if isinstance(model, MTTabularAE):
+        y3 = y_l3.values.astype(np.float32)
+        y7 = y_l7.values.astype(np.float32)
+        ya = y_at.values.astype(np.int64)
 
     # ------------------------------------
     # Select calibration window
@@ -42,43 +53,61 @@ def calibrate_threshold(
     start_time = end_time - pd.Timedelta(days=cw)
     cal_window = (ts >= start_time)
 
-    X_cont_cal = Xc_np[cal_window]
-    X_cat_cal = Xk_np[cal_window]
+    Xc_cal = Xc[cal_window]
+    Xk_cal = Xk[cal_window]
     ts_cal = ts[cal_window]
+    if isinstance(model, MTTabularAE):
+        y3_cal = y3[cal_window]
+        y7_cal = y7[cal_window]
+        ya_cal = ya[cal_window]
 
-    print(f"\n[INFO] Calibration window: {start_time} to {end_time}")
-    print(f"[INFO] Calibration samples: {len(X_cont_cal)}")
+    print(f"[INFO] Calibration window: {start_time} to {end_time}")
+    print(f"[INFO] Calibration samples: {len(Xc_cal)}")
 
     # ------------------------------------
-    # Apply scaler from fit_transforming full data on cont data
+    # Apply scaler
     # ------------------------------------ 
-    X_cont_cal_scld = scaler.transform(X_cont_cal).astype(np.float32)
+    Xc_cal_scld = scaler.transform(Xc_cal).astype(np.float32)
 
     # ------------------------------------
-    # Tune inference temperature scaling 
+    # Tune temperature scaling 
     # ------------------------------------
     best_temp = 1.0
     temperature_tuned = False
     temp_results = {}
-    if tune_temperature and len(X_cont_cal) > 100:
+    if tune_temperature and len(Xc_cal) > 100:
         print(f"[INFO] Tuning inference temperature...")
         
         temperature_range = [0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
         
         best_temp_metric = float('inf')
         for temp in temperature_range:
-            temp_scores = reconstruction(
-                model,
-                X_cont_cal_scld,
-                X_cat_cal,
-                device,
-                cont_w,
-                cat_w,
-                temp,
-                beta
-            )
+            if isinstance(model, MTTabularAE):
+                temp_scores = prediction(
+                    model,
+                    Xc_cal_scld,
+                    Xk_cal,
+                    y3_cal,
+                    y7_cal, 
+                    ya_cal,
+                    loss_weights,
+                    attack_type_weights,
+                    pred_quantiles,
+                    temp,
+                    device,
+                    calibration=True
+                )
+            else:
+                temp_scores = reconstruction(
+                    model,
+                    Xc_cal_scld,
+                    Xk_cal,
+                    loss_weights,
+                    temp,
+                    beta,
+                    device
+                )
             
-            # Compute preliminary threshold with this temperature
             temp_prelim = get_threshold(method, temp_scores)
             temp_clean_scores = temp_scores[temp_scores < temp_prelim]
             temp_metric = np.median(temp_clean_scores) if len(temp_clean_scores) > 0 else np.median(temp_scores)
@@ -98,25 +127,41 @@ def calibrate_threshold(
                 best_temp_metric = combined_metric
                 best_temp = temp
         
-        print(f"[CAL] Computed optimal inference temperature in cw: {best_temp:.3f}")
+        print(f"[CAL] Computed optimal inference temperature in cw: {best_temp:.1f}")
         temperature_tuned = True
     else:
-        best_temp = 1.0
+        print(f"[INFO] Inference temperature set to config default: {model.config.temperature}")
+        best_temp = model.config.temperature
 
     # ------------------------------------
     # Compute recon error in window
     # ------------------------------------ 
-    scores = reconstruction(
-        model,
-        X_cont_cal_scld,
-        X_cat_cal,
-        device,
-        cont_w,
-        cat_w,
-        best_temp,
-        beta
-    )
-    print(f"[INFO] Computed {len(scores)} scores with temp={best_temp}")
+    if isinstance(model, MTTabularAE):
+        scores = prediction(
+            model,
+            Xc_cal_scld,
+            Xk_cal,
+            y3_cal,
+            y7_cal, 
+            ya_cal,
+            loss_weights,
+            attack_type_weights,
+            pred_quantiles,
+            best_temp,
+            device,
+            calibration=True
+        )
+    else:
+        scores = reconstruction(
+            model,
+            Xc_cal_scld,
+            Xk_cal,
+            loss_weights,
+            best_temp,
+            beta,
+            device
+        )
+    print(f"[CAL] Computed {len(scores)} scores")
 
     # ------------------------------------
     # Remove spikes/anomalies in window
@@ -124,10 +169,10 @@ def calibrate_threshold(
     prelim = get_threshold(method, scores)
     clean_scores = scores[scores < prelim]
     removed_count = len(scores) - len(clean_scores)
-    print(f"[INFO] Removed {removed_count} preliminary anomalies to clean window")
+    print(f"[CAL] Removed {removed_count} preliminary anomalies to clean window")
 
     if len(clean_scores) < 10:
-        print(f"[WARN] Very few clean samples ({len(clean_scores)}). Using all scores.")
+        print(f"[WARN] Very few clean samples ({len(clean_scores)}). Using all scores")
         clean_scores = scores
 
     # ------------------------------------
@@ -137,10 +182,10 @@ def calibrate_threshold(
     print(f"[CAL] Computed threshold ({method}) = {threshold:.6f}")
 
     anomaly_rate = np.mean(scores > threshold) * 100
-    print(f"[INFO] Expected anomaly rate: {anomaly_rate:.2f}%")
+    print(f"[CAL] Expected anomaly rate: {anomaly_rate:.2f}%")
 
     # ------------------------------------
-    # Output
+    # Return results
     # ------------------------------------
     threshold_dict = {
         "country": country,
@@ -148,11 +193,11 @@ def calibrate_threshold(
         "method": method, 
         "threshold": threshold,
         "calibration_window_days": cw,
-        "calibration_samples": len(X_cont_cal),
+        "calibration_samples": len(Xc_cal),
         "clean_samples": len(clean_scores),
         "preliminary_anomalies_removed": removed_count,
-        "cont_w": cont_w,
-        "cat_w": cat_w,
+        "cont_w": loss_weights["cont_w"],
+        "cat_w": loss_weights["cat_w"],
         "scores_stats": {
             "min": float(scores.min()),
             "mean": float(scores.mean()),

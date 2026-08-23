@@ -16,16 +16,15 @@ from .common import apply_custom_theme
 
 optuna.logging.set_verbosity(optuna.logging.ERROR)
 
+
 def save_optuna_plots(
     study: optuna.Study, 
     folder: Path, 
+    retune_no: int = 0,
     html_out: bool = True, 
     png_out: bool = False
 ) -> None:
-    """
-    Save Optuna-provided visualizations as png if kaleido is installed and/or 
-    html file which requires no add package and has nicer formatting.
-    """
+    "Saves Optuna-provided plots as png if kaleido is installed and/or html with no add package requirements."
 
     figs = {
         "optimization_history": plot_optimization_history(study),
@@ -37,14 +36,15 @@ def save_optuna_plots(
     for fname, fig in figs.items():
         try:
             if png_out: 
-                png_fname = folder / f"{fname}.png"
+                png_fname = folder / f"{retune_no}_{fname}.png"
                 fig.write_image(str(png_fname), scale=2)
+                print(f"[OK] Saved to {retune_no}_{fname}.png")
             if html_out:
-                html_fname = folder / f"{fname}.html"
+                html_fname = folder / f"{retune_no}_{fname}.html"
                 fig.write_html(str(html_fname))
+                print(f"[OK] Saved to {retune_no}_{fname}.html")
         except Exception:
             pass
-
 
 def plot_correlation_heatmap(
     df: pd.DataFrame, 
@@ -52,7 +52,7 @@ def plot_correlation_heatmap(
     fname: str = "plot_correlation_heatmap.png",
     show: bool = False
 ) -> None:
-    """Heatmaps to show correlation between hyperparameters and val loss."""
+    """Generates heatmaps to show correlation between hyperparameters and val loss."""
     apply_custom_theme()
 
     plt.figure(figsize=(12, 10))
@@ -65,7 +65,6 @@ def plot_correlation_heatmap(
     if show: plt.show()
     plt.close()
 
-
 def plot_loss_curves_all_trials(
     study: optuna.Study, 
     country: str, 
@@ -74,7 +73,7 @@ def plot_loss_curves_all_trials(
     fname: str = "plot_loss_curves_all_trials.png", 
     show: bool = False
 ) -> None:
-    """Lineplot train/val loss curves for each finished trial. Skipped if not saved during tuning."""
+    """Generates lineplot train/val loss curves for each finished trial. Skipped if not saved during tuning."""
     apply_custom_theme()
 
     plt.figure(figsize=(20, 12))
@@ -110,7 +109,6 @@ def plot_loss_curves_all_trials(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
-
 
 def plot_best_trial_learning_curve(
     best_history: dict, 
@@ -167,7 +165,6 @@ def plot_best_trial_learning_curve(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
-
 
 def plot_3d_scatter(
     df: pd.DataFrame, 
@@ -231,7 +228,6 @@ def plot_3d_scatter(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_loss_component_analysis(
     ae_type: str, 
     study: optuna.Study,
@@ -244,8 +240,8 @@ def plot_loss_component_analysis(
     """Scatter plots showing how continuous vs categorical losses contribute to total loss."""
     apply_custom_theme()
     
-    cont_loss_name = "cont_loss" if ae_type == "ae" else "recon_loss"
-    cat_loss_name = "cat_loss" if ae_type == "ae" else "kl_loss"
+    m1_key = "cont_loss" if ae_type == "ae" else "recon_loss"
+    m2_key = "cat_loss" if ae_type == "ae" else "kl_loss"
     
     cont_losses = []
     cat_losses = []
@@ -259,9 +255,9 @@ def plot_loss_component_analysis(
             continue
         with open(hist_file, "r") as f:
             hist = json.load(f)
-        if f"val_{cont_loss_name}" in hist and f"val_{cat_loss_name}" in hist:
-            cont_losses.append(hist[f"val_{cont_loss_name}"][-1])
-            cat_losses.append(hist[f"val_{cat_loss_name}"][-1])
+        if f"val_{m1_key}" in hist and f"val_{m2_key}" in hist:
+            cont_losses.append(hist[f"val_{m1_key}"][-1])
+            cat_losses.append(hist[f"val_{m2_key}"][-1])
             total_losses.append(trial.value)
             trial_numbers.append(trial.number)
     if len(cont_losses) < 3:
@@ -321,7 +317,6 @@ def plot_loss_component_analysis(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_multi_loss_overview(
     best_losses: dict, 
     folder: Path = Path.cwd(),
@@ -361,7 +356,6 @@ def plot_multi_loss_overview(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_multi_weights_overview(
     best_weights: dict,
@@ -405,7 +399,7 @@ def plot_multi_weights_overview(
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].bar(df["country"], df["ratio"], color='purple')
+    axes[2].bar(df["country"], df["ratio_ck"], color='purple')
     axes[2].axhline(1.0, color='gray', linestyle='--', alpha=0.5, label='Ratio = 1')
     axes[2].set_xlabel("Country")
     axes[2].set_ylabel("Ratio (cat/cont)")
@@ -421,7 +415,6 @@ def plot_multi_weights_overview(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_multi_weight_loss_correlation(
     weights_data: dict,
@@ -501,7 +494,6 @@ def plot_multi_weight_loss_correlation(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_mt_loss_component_analysis(
     study: optuna.Study,
     country: str, 
@@ -514,7 +506,7 @@ def plot_mt_loss_component_analysis(
     apply_custom_theme()
     
     reg_losses = []
-    attack_losses = []
+    cls_losses = []
     total_losses = []
     trial_numbers = []
 
@@ -526,16 +518,16 @@ def plot_mt_loss_component_analysis(
             continue
         with open(hist_file, "r") as f:
             hist = json.load(f)
-        required = ["val_l3", "val_l7", "val_attack"]
+        required = ["val_l3", "val_l7", "val_at"]
         if not all(k in hist for k in required):
             continue
        
         l3 = hist["val_l3"][-1]
         l7 = hist["val_l7"][-1]
-        attack = hist["val_attack"][-1]
+        attack = hist["val_at"][-1]
 
         reg_losses.append(l3 + l7)
-        attack_losses.append(attack)
+        cls_losses.append(attack)
         total_losses.append(trial.value)
         trial_numbers.append(trial.number)
 
@@ -543,30 +535,30 @@ def plot_mt_loss_component_analysis(
         print(f"[INFO] Not enough loss component data for {country}")
         return
     
-    ratios = [a / (r + 1e-8) for r, a in zip(reg_losses, attack_losses)]
+    ratios = [a / (r/2 + 1e-8) for r, a in zip(reg_losses, cls_losses)]
     best_idx = int(np.argmin(total_losses))
 
     df = pd.DataFrame({
         "trial": trial_numbers,
-        "reg_loss": reg_losses,
-        "attack_loss": attack_losses,
+        "sum_reg_loss": reg_losses,
+        "cls_loss": cls_losses,
         "total_loss": total_losses,
-        "ratio": ratios,
+        "ratio_avgreg_cls": ratios,
     })
     
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     # Regression vs total
     axes[0, 0].scatter(reg_losses, total_losses, alpha=0.7)
-    axes[0, 0].set_xlabel("Regression Loss (L3 + L7)")
+    axes[0, 0].set_xlabel("Sum Regression Loss")
     axes[0, 0].set_ylabel("Total Validation Loss")
     axes[0, 0].set_title("Regression Loss Contribution")
     axes[0, 0].grid(True, alpha=0.3)
 
     # Attack vs total
-    axes[0, 1].scatter(attack_losses, total_losses, alpha=0.7)
-    axes[0, 1].set_xlabel("Attack Classification Loss")
+    axes[0, 1].scatter(cls_losses, total_losses, alpha=0.7)
+    axes[0, 1].set_xlabel("Classification Loss")
     axes[0, 1].set_ylabel("Total Validation Loss")
-    axes[0, 1].set_title("Attack Loss Contribution")
+    axes[0, 1].set_title("Classification Loss Contribution")
     axes[0, 1].grid(True, alpha=0.3)
     
     # Ratio plot
@@ -581,7 +573,7 @@ def plot_mt_loss_component_analysis(
     )
     axes[1, 0].legend()
     axes[1, 0].axvline(1, color="gray", linestyle="--", alpha=0.5)
-    axes[1, 0].set_xlabel("Loss Ratio (Attack / Regression)")
+    axes[1, 0].set_xlabel("Loss Ratio (Attack / Avg Regression)")
     axes[1, 0].set_ylabel("Total Validation Loss")
     axes[1, 0].set_title("Loss Ratio vs Performance")
     axes[1, 0].set_xscale("log")
@@ -589,8 +581,8 @@ def plot_mt_loss_component_analysis(
     
     # Component comparison
     axes[1, 1].plot(
-        ["reg_loss", "attack_loss", "total_loss"],
-        df.loc[best_idx, ["reg_loss", "attack_loss", "total_loss"]],
+        ["sum_reg_loss", "cls_loss", "total_loss"],
+        df.loc[best_idx, ["sum_reg_loss", "cls_loss", "total_loss"]],
         "ro-",
         linewidth=3,
         label="Best Trial",
@@ -599,8 +591,8 @@ def plot_mt_loss_component_analysis(
     for idx, row in df.iterrows():
         if idx != best_idx:
             axes[1, 1].plot(
-                ["reg_loss", "attack_loss", "total_loss"],
-                row[["reg_loss", "attack_loss", "total_loss"]],
+                ["sum_reg_loss", "cls_loss", "total_loss"],
+                row[["sum_reg_loss", "cls_loss", "total_loss"]],
                 "b-",
                 alpha=0.2,
             )
@@ -617,26 +609,25 @@ def plot_mt_loss_component_analysis(
     if show: plt.show()
     plt.close(fig)
 
-
-def plot_attack_class_weights(
+def plot_attack_type_weights(
     country: str,
-    attack_class_weights: np.ndarray,
-    class_names: list[str],
+    attack_type_weights: np.ndarray,
+    type_names: list[str],
     folder: Path = Path.cwd(),
-    fname: str = "plot_attack_class_weights.png",
+    fname: str = "plot_attack_type_weights.png",
     show: bool = False,
 ):
-    """Bar plot of attack class weights for given country."""
+    """Bar plot of attack type weights for given country."""
     apply_custom_theme()
 
-    if class_names is None:
-        class_names = [f"class_{i}" for i in range(len(attack_class_weights))]
+    if type_names is None:
+        type_names = [f"type_{i}" for i in range(len(attack_type_weights))]
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.bar(class_names, attack_class_weights)
-    ax.set_title(f"{country} — Attack Class Weights")
+    ax.bar(type_names, attack_type_weights)
+    ax.set_title(f"{country} — Attack Type Weight")
     ax.set_ylabel("Weight")
-    ax.set_xlabel("Attack Class")
+    ax.set_xlabel("Attack Type")
     ax.tick_params(axis="x", rotation=45, labelsize=11)
     ax.set_yscale("log")
     ax.grid(True, axis="y", alpha=0.3)
@@ -646,46 +637,47 @@ def plot_attack_class_weights(
     if show: plt.show()
     plt.close(fig)
 
-
-def plot_attack_class_balance(
+def plot_attack_type_balance(
     country: str,
-    attack_class_weights: np.ndarray,
-    attack_class_counts: np.ndarray,
-    class_names: list[str],
+    attack_type_weights: np.ndarray,
+    train_type_counts: np.ndarray,
+    val_type_counts: np.ndarray,
+    type_names: list[str],
     folder: Path = Path.cwd(),
-    fname: str = "plot_attack_class_balance.png",
+    fname: str = "plot_attack_type_balance.png",
     show: bool = False,
 ):
-    """Bar plots of class frequencies and weights for given country."""
+    """Bar plots of type weights and counts for given country."""
     apply_custom_theme()
 
-    classes = class_names #[f"class_{i}" for i in range(len(attack_class_weights))]
+    types = type_names #[f"type_{i}" for i in range(len(attack_type_weights))]
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
 
-    # Frequencies
-    axes[0].bar(classes, attack_class_counts)
-    axes[0].set_title("Attack Class Frequencies (Train)")
-    axes[0].set_ylabel("Samples")
-    axes[0].set_yscale("log")
+    # weights
+    axes[0].bar(types, attack_type_weights)
+    axes[0].set_title("Attack Type Weights (Train)")
+    axes[0].set_ylabel("Weights (inv. freq)")
     axes[0].tick_params(axis="x", rotation=45, labelsize=11)
     axes[0].grid(True, axis="y", alpha=0.3)
+    axes[0].set_ylim(0.0, 1.2)
 
-    # Weights
-    axes[1].bar(classes, attack_class_weights)
-    axes[1].set_title("Attack Class Weights")
-    axes[1].set_ylabel("Weight")
-    axes[1].set_yscale("log")
+    # counts
+    counts = {"train": train_type_counts, "val": val_type_counts}
+    axes[1].grouped_bar(counts, tick_labels=types)
+    axes[1].set_title("Attack Type Counts")
+    axes[1].set_ylabel("Counts")
+    axes[1].legend()
     axes[1].tick_params(axis="x", rotation=45, labelsize=11)
     axes[1].grid(True, axis="y", alpha=0.3)
+    axes[1].set_ylim(0, max(np.max(train_type_counts), np.max(val_type_counts))+20)
 
-    plt.suptitle(f"{country} — Attack Class Balance")
+    plt.suptitle(f"{country} — Attack Type Balance")
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_multi_mt_weights_overview(
     best_weights: dict,
@@ -708,8 +700,8 @@ def plot_multi_mt_weights_overview(
 
     x = np.arange(len(df))
     width = 0.35
-    axes[0].bar(x - width/2, df["reg"], width, label="regression (l3 + l7)", color='blue')
-    axes[0].bar(x + width/2, df["class"], width, label="classification", color='red')
+    axes[0].bar(x - width/2, df["reg"], width, label="avg reg", color='blue')
+    axes[0].bar(x + width/2, df["cls"], width, label="cls", color='red')
     axes[0].set_xlabel("Country")
     axes[0].set_ylabel("Weight")
     axes[0].set_title("Loss Weights by Country")
@@ -720,31 +712,31 @@ def plot_multi_mt_weights_overview(
 
     axes[1].scatter(
         df["reg"], 
-        df["class"], 
+        df["cls"], 
         s=100, 
         alpha=0.7
     )
     for _, row in df.iterrows():
         axes[1].annotate(
             row["country"], 
-            (row["reg"], row["class"]), 
+            (row["reg"], row["cls"]), 
             fontsize=9, 
             alpha=0.8, 
             xytext=(5, 5), 
             textcoords='offset points'
         )
     axes[1].axline((0, 0), slope=1, color='gray', linestyle='--', alpha=0.5, label='Equal weights')
-    axes[1].set_xlabel("regression (l3 + l7)")
-    axes[1].set_ylabel("classification")
-    axes[1].set_title("Weight Balance (Regression vs Attack)")
+    axes[1].set_xlabel("Avg. Regression Weights")
+    axes[1].set_ylabel("Classification Weights")
+    axes[1].set_title("Weight Balance (Regression vs Classification)")
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].bar(df["country"], df["ratio"], color='purple')
+    axes[2].bar(df["country"], df["ratio_mt"], color='purple')
     axes[2].axhline(1.0, color='gray', linestyle='--', alpha=0.5, label='Ratio = 1')
     axes[2].set_xlabel("Country")
-    axes[2].set_ylabel("Classification/Regression Ratio")
-    axes[2].set_title("Weight Ratio by Country")
+    axes[2].set_ylabel("Classification/Regression Weight Ratio")
+    axes[2].set_title("Loss Weight Ratio by Country")
     axes[2].tick_params(axis='x', rotation=45)
     axes[2].legend()
     axes[2].grid(True, axis='y', alpha=0.3)
@@ -755,7 +747,6 @@ def plot_multi_mt_weights_overview(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_multi_mt_weight_loss_correlation(
     weights_data: dict,
@@ -771,8 +762,8 @@ def plot_multi_mt_weight_loss_correlation(
     for country in set(weights_data.keys()) & set(losses_data.keys()):
         merged[country] = {
             "reg_weight": weights_data[country]["reg"],
-            "class_weight": weights_data[country]["class"],
-            "ratio": weights_data[country]["ratio"],
+            "class_weight": weights_data[country]["cls"],
+            "ratio": weights_data[country]["ratio_mt"],
             "loss": losses_data[country],
         }
     
@@ -836,9 +827,9 @@ def plot_multi_mt_weight_loss_correlation(
         )
 
     axes[1, 1].axline((0, 0), slope=1, linestyle="--", color="gray", alpha=0.5)
-    axes[1, 1].set_xlabel("Regression Weight (L3 + L7)")
+    axes[1, 1].set_xlabel("Avg. Regression Weight")
     axes[1, 1].set_ylabel("Classification Weight")
-    axes[1, 1].set_title("Weight Space (color = validation loss)")
+    axes[1, 1].set_title("Weight Space (validation loss color-coded)")
     plt.colorbar(scatter, ax=axes[1, 1], label="Validation Loss")
     axes[1, 1].grid(alpha=0.3)
 
@@ -849,24 +840,23 @@ def plot_multi_mt_weight_loss_correlation(
     if show: plt.show()
     plt.close(fig)
 
-
-def plot_multi_country_attack_weights(
+def plot_multi_attack_type_weights(
     weights_by_country: dict[str, list[float]],
-    class_names: list[str],
+    type_names: list[str],
     folder: Path = Path.cwd(),
-    fname: str = "plot_multi_country_attack_weights.png",
+    fname: str = "plot_multi_attack_type_weights.png",
     show: bool = False,
 ):
-    """Heatmap of attack class weights across countries."""
+    """Heatmap of attack type weights across countries."""
     apply_custom_theme()
 
     df = pd.DataFrame.from_dict(
         weights_by_country,
         orient="index"
     )
-    if df.shape[1] != len(class_names):
-        raise ValueError("[Error] len class_weights do not match len class_names")
-    df.columns = class_names #[f"{i}" for i in range(df.shape[1])]
+    if df.shape[1] != len(type_names):
+        raise ValueError("[Error] Number of attack types does not match with weights")
+    df.columns = type_names #[f"{i}" for i in range(df.shape[1])]
 
     fig, ax = plt.subplots(figsize=(12, max(4, 0.5 * len(df))))
     sns.heatmap(
@@ -876,8 +866,8 @@ def plot_multi_country_attack_weights(
         cmap="viridis",
         ax=ax
     )
-    ax.set_title("Attack Class Weights (log10 scale)")
-    ax.set_xlabel("Attack Class")
+    ax.set_title("Attack Type Weights (log10 scale)")
+    ax.set_xlabel("Attack Type")
     ax.set_ylabel("Country")
     ax.set_xticklabels(
         ax.get_xticklabels(),
