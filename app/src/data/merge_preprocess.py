@@ -6,11 +6,11 @@ internal df structure
 - converts raw datasets as defined in DSFILE_MAP
 - outputs pkl files
 
-Outputs:
+Output:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m app.src.data.merge_preprocess [-S] [-N <int>] <all|FILE_KEY> <MERGE_DIR>
+    python -m app.src.data.merge_preprocess [-k] [-d] [-S] [-N <int>] <all|FILE_KEY> <MERGE_DIR>
 """
 
 import json
@@ -18,10 +18,6 @@ from pathlib import Path
 
 from app.src.data.preprocess import  read_json_time_csplit, save_data
 
-
-#########################################
-##                PARAMS               ##
-#########################################
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
@@ -50,22 +46,16 @@ TIME_DSFILE_MAP = {
 } # name: time_data, csplit, file
 
 
-#########################################
-##            INTIAL CHECK             ##
-#########################################
-
 def _pullversions_exist(value: list) -> None:
     prefix = value[-1]
     match = list(RAW_DIR.glob(f"{prefix}*.json"))
     if len(match) <= 1:
         raise FileNotFoundError(f"[Error] Pull versions starting with '{prefix}' not found. Aborting preprocessing stage.")
 
-
 def check_pullversions_exist(file_map: dict) -> None:
     for name in file_map:
         _pullversions_exist(file_map[name])
     print("[INFO] All dataset prefix pull versions validated. Starting merging stage...")
-
 
 def check_ts_order(l1: list, l2: list) -> None:
     ts1 = l1[-1]["fetch"]["value"]["result"]["main"]["timestamps"][-1]
@@ -78,11 +68,6 @@ def check_ts_order(l1: list, l2: list) -> None:
             "\nExpected: last_ts_file1 < first_ts_file2. Use different merge dir."
         )
 
-
-#########################################
-##             MERGE HELPER            ##
-#########################################
-
 def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not matches:
@@ -90,11 +75,9 @@ def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
     matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[i], matches[j]
 
-
 def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
-
 
 def _merge_dicts(d1: dict, d2: dict) -> dict:
     merged = {}
@@ -112,7 +95,6 @@ def _merge_dicts(d1: dict, d2: dict) -> dict:
         
         merged[region] = combined
     return merged
-
 
 def run_merger(prefix: str, dir: int, n: int, d: dict = None) -> dict:
     if n == 1:
@@ -133,30 +115,19 @@ def run_merger(prefix: str, dir: int, n: int, d: dict = None) -> dict:
         p1, _ = _find_latest_pulls(prefix, n, n-1)
         d1 = _read_file(p1)
         return _merge_dicts(d1, d)
-            
-
-#########################################
-##          POST MERGE HELPER          ##
-#########################################
 
 def save_merged_data(data: dict, name: str) -> None:
     outfile = RAW_DIR / f"{name}_merged.json"
     with open(outfile, "w") as f:
         json.dump(data, f, indent=2)
-    print(f"[DONE] {name}\t saved to {outfile}!")
-
+    print(f"[DONE] {name}\t saved to {outfile}")
 
 def preprocess_merged_data(data: dict, name: str) -> None:
     conv_data = read_json_time_csplit(data, name)
     if conv_data:
         save_data(conv_data, name)
     else:
-        print(f"[Error] No data extracted for {name}, skipping save.")
-
-
-#########################################
-##                MERGE                ##
-#########################################
+        print(f"[Error] No data extracted for {name}, skipping save")
 
 def merge_single(
     name: str, 
@@ -178,12 +149,11 @@ def merge_single(
             d=merged if n > 1 else None
         )
     
-    print(f"[OK]   {name}\t successfully merged!")
+    print(f"[OK]   {name}\t successfully merged")
     if save_only:
         save_merged_data(merged, name)
     else:
         preprocess_merged_data(merged, name)
-
 
 def merge_all(dir: int, save_only: bool = False, n_pulls: int = 2) -> None:
     print(f"[INFO] Multi-pull merger starting...")
@@ -199,7 +169,7 @@ if __name__=='__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Merge and preprocess all or single dataset with multiple pull dates."
+        description="Merge and preprocess all or single dataset with multiple pull dates"
     )
 
     parser.add_argument(
@@ -253,13 +223,11 @@ if __name__=='__main__':
         exit(0)
 
     if args.file_key not in ["all", *TIME_DSFILE_MAP.keys()]:
-        if args.file_key != None:
-            print(f"[Error] file_key {args.file_key} cannot be processed.\n")
+        print(f"[Error] file_key {args.file_key} cannot be processed, u")
         parser.print_help()
         exit(1)
 
     if args.merge_dir not in ["0", "1"]:
-        print(f"[Error] merge_dir {args.merge_dir} cannot be processed.\n")
         parser.print_help()
         exit(1)
 

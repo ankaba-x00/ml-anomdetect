@@ -85,7 +85,6 @@ def plot_training_curves(
     if show: plt.show()
     plt.close(fig2)
 
-
 def plot_detailed_loss_curves(
     ae_type: str,
     country: str,
@@ -149,7 +148,7 @@ def plot_detailed_loss_curves(
     if "loss_weights" in history:
         weights = history["loss_weights"]
         axes[1, 1].bar(["Continuous", "Categorical"], 
-                      [weights.get("cont_weight", 1.0), weights.get("cat_weight", 0.0)],
+                      [weights.get("cont_w", 1.0), weights.get("cat_w", 0.0)],
                       color=['blue', 'red'])
         axes[1, 1].set_title("Loss Weights")
         axes[1, 1].set_ylabel("Weight")
@@ -162,7 +161,6 @@ def plot_detailed_loss_curves(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_detailed_mt_loss_curves(
     country: str,
     history: dict,
@@ -173,18 +171,18 @@ def plot_detailed_mt_loss_curves(
     """Plot separate loss curves for L3 and l7 regression losses and attack classification loss."""
     apply_custom_theme()
 
-    required = ["train_l3", "train_l7", "train_attack"]
+    required = ["train_l3", "train_l7", "train_at"]
     if not all(k in history for k in required):
         print(f"[INFO] Detailed MT loss components not available for {country}")
         return
     
     train_l3 = np.array(history["train_l3"], dtype=float)
     train_l7 = np.array(history["train_l7"], dtype=float)
-    train_la = np.array(history["train_attack"], dtype=float)
+    train_at = np.array(history["train_at"], dtype=float)
     
     val_l3 = np.array(history.get("val_l3", []), dtype=float)
     val_l7 = np.array(history.get("val_l7", []), dtype=float)
-    val_la = np.array(history.get("val_attack", []), dtype=float)
+    val_at = np.array(history.get("val_at", []), dtype=float)
     
     epochs = np.arange(1, len(train_l3) + 1)
 
@@ -217,9 +215,9 @@ def plot_detailed_mt_loss_curves(
     axes[0, 0].legend()
     axes[0, 0].grid(True)
 
-    axes[0, 1].plot(epochs, train_la, label="Train Attack", lw=2, color="red")
-    if len(val_la):
-        axes[0, 1].plot(epochs, val_la, "--", label="Val Attack", lw=2, color="orange")
+    axes[0, 1].plot(epochs, train_at, label="Train Attack", lw=2, color="red")
+    if len(val_at):
+        axes[0, 1].plot(epochs, val_at, "--", label="Val Attack", lw=2, color="orange")
 
     axes[0, 1].set_title("Attack Classification Loss")
     axes[0, 1].set_xlabel("Epoch")
@@ -232,14 +230,14 @@ def plot_detailed_mt_loss_curves(
     eps = 1e-8
     axes[1, 0].plot(
         epochs,
-        train_la / (train_l3 + eps),
+        train_at / (train_l3 + eps),
         label="Attack / L3",
         lw=2,
         color="purple"
     )
     axes[1, 0].plot(
         epochs,
-        train_la / (train_l7 + eps),
+        train_at / (train_l7 + eps),
         label="Attack / L7",
         lw=2,
         color="darkkhaki"

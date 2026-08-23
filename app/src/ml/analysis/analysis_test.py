@@ -22,13 +22,14 @@ def plot_error_curve(
 
     fig, ax = plt.subplots(figsize=(14, 5))
     ax.plot(df_err["ts"], df_err["scores"], label="Scores", alpha=0.6)
+
     # smoothed error
     df_err["smooth"] = df_err["scores"].rolling(48, min_periods=1).mean()
     ax.plot(df_err["ts"], df_err["smooth"], label="Smoothed", linewidth=2)
     # threshold
     ax.axhline(threshold, color="red", linestyle="--", label=f"Threshold ({method})")
     # anomalies
-    anomalies = df_err[df_err["is_anomaly"] == 1]
+    anomalies = df_err[df_err["is_flagged"] == 1]
     ax.scatter(anomalies["ts"], anomalies["scores"], color="red", s=12, label="Detected")
     ax.set_title(f"{country} – Test Error Curve ({method})")
     ax.set_ylabel("Reconstruction Error")
@@ -38,7 +39,6 @@ def plot_error_curve(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_intervals(
     country: str, 
@@ -63,7 +63,6 @@ def plot_intervals(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def plot_error_hist(
     country: str, 
@@ -91,7 +90,6 @@ def plot_error_hist(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_raw_with_scores(
     signal_name: str,
     ts: Union[np.ndarray, pd.Index, pd.Series], 
@@ -111,7 +109,7 @@ def plot_raw_with_scores(
 
     plt.figure(figsize=(16, 6))
     plt.plot(ts, raw_signal, label=f"Raw {signal_name} signal", color='black', linewidth=1.4)
-    plt.plot(ts, err_norm, label="Scaled score", color='orange', alpha=0.7)
+    plt.plot(ts, scores, label="Scaled score", color='orange', alpha=0.7)
     # annotate anomalies
     plt.scatter(ts[mask], raw_signal[mask], color='red', label='Detected snomalies', s=25)
     plt.title("Raw Signal with Scaled Reconstruction Error Overlay")
@@ -121,7 +119,6 @@ def plot_raw_with_scores(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
-
 
 def plot_true_pred_anomalies(
     signal_name: str,
@@ -188,7 +185,6 @@ def plot_true_pred_anomalies(
     if show: plt.show()
     plt.close()
 
-
 def plot_attack_timeline(
     df, 
     folder: Path = Path.cwd(), 
@@ -201,8 +197,8 @@ def plot_attack_timeline(
     fig, ax = plt.subplots(figsize=(14, 2))
     ax.scatter(
         df["ts"],
-        df["attack_pred"],
-        c=df["attack_pred"],
+        df["at_pred"],
+        c=df["at_pred"],
         cmap="tab10",
         s=12,
         alpha=0.8
@@ -216,7 +212,6 @@ def plot_attack_timeline(
     if show: plt.show()
     plt.close(fig)
 
-
 def plot_loss_components_timeseries(
     df, 
     folder: Path = Path.cwd(), 
@@ -229,8 +224,8 @@ def plot_loss_components_timeseries(
     fig, ax = plt.subplots(figsize=(14, 4))
     ax.plot(df["ts"], df["loss_l3"], label="L3 loss", alpha=0.7)
     ax.plot(df["ts"], df["loss_l7"], label="L7 loss", alpha=0.7)
-    if "loss_attack" in df:
-        ax.plot(df["ts"], df["loss_attack"], label="Attack loss", alpha=0.7)
+    if "loss_at" in df:
+        ax.plot(df["ts"], df["loss_at"], label="Attack loss", alpha=0.7)
 
     ax.set_yscale("log")
     ax.set_title(f"Loss components over time")

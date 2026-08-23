@@ -1,30 +1,28 @@
 import numpy as np
 import torch
 
+from .anomaly_utils import get_threshold, get_anomaly_mask, find_anomalies
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
-from .core.anomaly_utils import get_threshold, get_anomaly_mask, find_anomalies
 
-##############################
-##       SCORING UTILS      ##
-##############################
 
 def reconstruction(
     model: TabularAE | TabularVAE,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    device: str = "cpu",
-    cont_w: float = 1.0,
-    cat_w: float = 0.0,
+    loss_weights: dict[str, float],
     temperature: float = 1.0,
     beta: float = 1.0,
+    device: str = "cpu"
 ) -> np.ndarray:
-    """Per-sample reconstruction error normalized by features."""
+    """Computes per-sample reconstruction error normalized by features."""
 
     model.eval()
 
-    Xc = torch.from_numpy(X_cont.astype(np.float32)).to(device)
-    Xk = torch.from_numpy(X_cat.astype(np.int64)).to(device)
+    Xc = torch.from_numpy(X_cont).to(device)
+    Xk = torch.from_numpy(X_cat).to(device)
+
+    model.config.temperature = temperature
 
     with torch.no_grad():
         if isinstance(model, TabularVAE):
@@ -36,66 +34,62 @@ def reconstruction(
                 cat_logits,
                 mu,
                 logvar,
-                loss_weights={"cont_w": cont_w, "cat_w": cat_w},
+                loss_weights,
                 reduction="none"
             )
         elif isinstance(model, TabularAE):
             cont_recon, cat_logits = model(Xc, Xk)
             scores = model.scoring(
-                Xc, 
+                Xc,
                 Xk,
                 cont_recon,
                 cat_logits,
-                loss_weights={"cont_w": cont_w, "cat_w": cat_w}, 
+                loss_weights, 
                 reduction="none"
             )
 
     return scores.cpu().numpy()
 
-#########################################
-##      FULL EVALUATION PIPELINE       ##
-#########################################
-
 def apply_model(
     model: TabularAE | TabularVAE,
     X_cont: np.ndarray,
     X_cat: np.ndarray,
-    cont_w: float,
-    cat_w: float,
+    loss_weights: dict[str, float],
     device: str = "cpu",
     method: str = "p99",
     temperature: float = 1.0,
     beta: float = 1.0,
     min_length: int = 1,
     merge_gap: int = 0,
+    threshold: float | None = None
 ) -> dict[str, np.ndarray]:
-    """Computes reconstruction errors, threshold, anomaly mask and anomaly intervals."""
+    """Applies autoencoder and returns reconstruction errors, threshold, anomaly mask and anomaly intervals."""
 
     scores = reconstruction(
         model,
         X_cont,
         X_cat,
-        device,
-        cont_w,
-        cat_w,
+        loss_weights,
         temperature,
-        beta
+        beta,
+        device
     )
-    
-    threshold = get_threshold(method, scores)
+
+    if threshold is None:
+        threshold = get_threshold(method, scores)
     mask = get_anomaly_mask(scores, threshold)
     intervals = find_anomalies(
         mask,
-        min_length=min_length,
-        merge_gap=merge_gap,
+        min_length,
+        merge_gap,
     )
-    starts = np.array([s for s, _ in intervals])
-    ends   = np.array([e for _, e in intervals])
+    starts = np.array([s for s, _ in intervals], dtype=int)
+    ends   = np.array([e for _, e in intervals], dtype=int)
     
     return {
         "scores": scores,
         "threshold": threshold,
         "mask": mask,
         "anomaly_starts": starts,
-        "anomaly_ends": ends,
+        "anomaly_ends": ends
     }

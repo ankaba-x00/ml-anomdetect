@@ -4,11 +4,11 @@ Converts all or single raw dataset file as fetched from Cloudflare to internal d
 - converts raw dataset as defined in DSFILE_MAP
 - outputs pkl file
 
-Outputs:
+Output:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m app.src.data.preprocess <all|FILE_KEY>
+    python -m app.src.data.preprocess [-k] <all|FILE_KEY>
 """
 
 import json
@@ -16,10 +16,6 @@ import numpy as np
 import pickle
 from pathlib import Path
 
-
-#########################################
-##                PARAMS               ##
-#########################################
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[1]
@@ -55,22 +51,16 @@ DSFILE_MAP = {
 } # name: time_data, csplit, file
 
 
-#########################################
-##            INTIAL CHECK             ##
-#########################################
-
 def _dsfile_exists(value: list) -> None:
     prefix = value[-1]
     match = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not match:
         raise FileNotFoundError(f"[Error] No JSON file starting with '{prefix}' found. Aborting preprocessing stage.")
 
-
 def check_dsfiles_exist(file_map: dict) -> None:
     for name in file_map:
         _dsfile_exists(file_map[name])
     print("[INFO] All dataset prefixes validated. Starting preprocessing stage...")
-
 
 def find_latest_pull(prefix: str) -> Path:
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
@@ -78,11 +68,6 @@ def find_latest_pull(prefix: str) -> Path:
         raise FileNotFoundError(f"[Error] No files found starting with: {prefix}")
     matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return matches[0]
-
-
-#########################################
-##              EXTRACTION             ##
-#########################################
 
 def nontemp_extraction(
     data: dict, 
@@ -119,7 +104,6 @@ def nontemp_extraction(
 
     return data_dict
 
-
 def nontemp_csplit_extraction(
     data: dict, 
     field_map: dict, 
@@ -133,7 +117,6 @@ def nontemp_csplit_extraction(
             data_dict[region] = region_result
 
     return data_dict
-
 
 def temp_csplit_extraction(
     data: dict, 
@@ -177,15 +160,9 @@ def temp_csplit_extraction(
 
     return data_dict
 
-
-#########################################
-##               CONVERTER             ##
-#########################################
-
 def _read_file(file: Path) -> dict:
     with open(file,'r') as f:
         return json.load(f)
-
 
 def read_json_notime(data: dict, name: str) -> dict:
     print(f"[INFO] {name}\t processed as non-temporal data...")
@@ -219,7 +196,6 @@ def read_json_notime(data: dict, name: str) -> dict:
     
     return data_dict
 
-
 def read_json_notime_csplit(data: dict, name: str) -> dict:
     print(f"[INFO] {name}\t processed as non-temporal, country-resolved data...")
         
@@ -238,7 +214,6 @@ def read_json_notime_csplit(data: dict, name: str) -> dict:
     )
     
     return data_dict
-
 
 def read_json_time_csplit(data: dict, name: str) -> dict:
     print(f"[INFO] {name}\t processed as temporal, country-resolved data...")
@@ -299,11 +274,6 @@ def read_json_time_csplit(data: dict, name: str) -> dict:
     
     return data_dict
 
-
-#########################################
-##             PRINT-OUT               ##
-#########################################
-
 def save_data(data: dict, name: str) -> None:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     outfile = PROCESSED_DIR / f"{name}.pkl"
@@ -311,17 +281,11 @@ def save_data(data: dict, name: str) -> None:
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
     print(f"[DONE] {name}\t saved to {outfile}!")
 
-
-#########################################
-##                MAIN                 ##
-#########################################
-
 def preprocess_all() -> None:
     check_dsfiles_exist(DSFILE_MAP)
     
     for key in DSFILE_MAP:
         preprocess_single(key, check=False)
-
 
 def preprocess_single(name: str, check: bool = True) -> None:
     value = DSFILE_MAP[name]
@@ -347,14 +311,14 @@ def preprocess_single(name: str, check: bool = True) -> None:
     if conv_data:
         save_data(conv_data, name)
     else:
-        print(f"[Error] No data extracted for {name}, skipping save.")
+        print(f"[Error] No data extracted for {name}, skipping save")
 
 
 if __name__=='__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Preprocess all or single dataset file."
+        description="Preprocess all or single dataset file"
     )
 
     parser.add_argument(

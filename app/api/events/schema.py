@@ -13,4 +13,16 @@ class PredictionResponse(BaseModel):
     threshold: float
     detected: int
     anomalies: list[str]
+    predictions: bool
+    status: str
+
+class MTPredictionResponse(BaseModel):
+    country: str
+    threshold: float
+    detected: int
+    anomalies: list[str]
+    predictions: bool
+    l3_intensity: list[float]
+    l7_intensity: list[float]
+    attack_type: list[str]
     status: str

@@ -90,9 +90,12 @@ async function runInference() {
     // Display detection result
     out.style.display = "block";
 
-    if (data.detected > 0) {
+    if (data.detected > 0 && !data.predictions) {
       out.className = "result-box bad";
       out.innerHTML = `<b>${data.detected}</b> anomalies detected<br><small>${data.anomalies.join(", ")}</small>`;
+    } else if (data.detected > 0 && data.predictions) {
+      out.className = "result-box bad";
+      out.innerHTML = `<b>${data.detected}</b> anomalies detected<br><small>${data.anomalies.join(", ")}</small><br><small>l3 intensities: ${data.l3_intensity}</small><br><small>l7 intensities: ${data.l7_intensity}</small><br><small>attack type: ${data.attack_type}</small>`;
     } else {
       out.className = "result-box good";
       out.innerHTML = `No anomalies detected`;
