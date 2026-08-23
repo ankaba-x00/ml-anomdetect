@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
 import torch.nn as nn
 
+from .configs import AEConfig, VAEConfig, MTAEConfig, MTVAEConfig
 from .mixins import TabularLayerActMixin, TabularLayerInitMixin
+
 
 class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitMixin):
     """
@@ -15,26 +16,17 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
 
     def __init__(
         self,
-        num_cont: int,
-        cat_dims: dict[str, int],
-        hidden_dims: Sequence[int] = (128, 64),
-        latent_dim: int = 32,
-        use_embedding: bool = False,
-        embedding_dim: int | None = None,
-        dropout: float = 0.1,
-        activation: str = "relu"
+        config: AEConfig | VAEConfig | MTAEConfig | MTVAEConfig
     ):
         super().__init__()
         
-        self.hidden_dims = hidden_dims
-        self.latent_dim = latent_dim
-        self.act_name = activation
-        self.activation = self._pick_act_func(activation)
+        self.config = config
+        self.activation = self.pick_act_func(config.activation_en)
 
         # -----------------------------
         # Categorical embeddings
         # -----------------------------
-        if use_embedding:
+        if config.use_embedding:
             self.embeddings = nn.ModuleDict()
             emb_sizes = {}
 
@@ -42,15 +34,15 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
                 """Determines embedding_dim from cardinality of cat features."""
                 return min(max(4, card // 2), 16)
 
-            for name, card in cat_dims.items():
-                dim = embedding_dim if embedding_dim else emb_dim(card)
+            for name, card in config.cat_dims.items():
+                dim = embedding_dim if config.embedding_dim else emb_dim(card)
                 self.embeddings[name] = nn.Embedding(card, dim)
                 emb_sizes[name] = dim
 
             emb_total = sum(emb_sizes.values())
-            self.input_dim = num_cont + emb_total
+            self.input_dim = config.num_cont + emb_total
         else:
-            self.input_dim = num_cont + sum(cat_dims.values())
+            self.input_dim = config.num_cont + sum(config.cat_dims.values())
 
         # -----------------------------
         # Encoder layers
@@ -58,13 +50,13 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
         self.encoder_layers = nn.ModuleList()
         prev = self.input_dim
 
-        for h in hidden_dims:
+        for h in config.hidden_dims:
             self.encoder_layers.append(
                 nn.Sequential(
                     nn.Linear(prev, h, bias=False),
                     nn.BatchNorm1d(h),
                     self.activation,
-                    nn.Dropout(dropout)
+                    nn.Dropout(config.dropout)
                 )
             )
             prev = h
@@ -74,9 +66,9 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
         # -----------------------------
         # Weight initialization
         # -----------------------------
-        if use_embedding:
+        if config.use_embedding:
             self.init_weights(self.embeddings)
-        self.init_weights(self.encoder_layers, activation)
+        self.init_weights(self.encoder_layers, config.activation_en)
         self.init_comp_heads()
 
     @abstractmethod
@@ -101,34 +93,26 @@ class BaseTabularDecoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
     
     def __init__(
         self,
-        num_cont: int,
-        cat_dims: dict[str, int],
-        hidden_dims: Sequence[int] = (128, 64),
-        latent_dim: int = 32,
-        dropout: float = 0.1,
-        activation: str = "relu",
+        config: AEConfig | VAEConfig | MTAEConfig | MTVAEConfig
     ):
         super().__init__()
 
-        self.num_cont = num_cont
-        self.cat_dims = cat_dims
-        self.hidden_dims = hidden_dims
-        self.act_name = activation
-        self.activation = self._pick_act_func(activation)
+        self.config = config
+        self.activation = self.pick_act_func(config.activation_de)
     
         # -----------------------------
         # Decoder layers
         # -----------------------------
         self.decoder_layers = nn.ModuleList()
-        prev = latent_dim
+        prev = config.latent_dim
         
-        for h in reversed(hidden_dims):
+        for h in reversed(config.hidden_dims):
             self.decoder_layers.append(
                 nn.Sequential(
                     nn.Linear(prev, h, bias=False),
                     nn.BatchNorm1d(h),
                     self.activation,
-                    nn.Dropout(dropout)
+                    nn.Dropout(config.dropout)
                 )
             )
             prev = h
@@ -138,7 +122,7 @@ class BaseTabularDecoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
         # -----------------------------
         # Weight initialization
         # -----------------------------
-        self.init_weights(self.decoder_layers, activation)
+        self.init_weights(self.decoder_layers, config.activation_de)
         self.init_recon_heads()
 
     @abstractmethod
@@ -156,9 +140,9 @@ class BaseTabularPredictor(ABC, nn.Module):
     """
     Base class for tabular autoencoder models.
 
-    Tasks incl. setting up encoding, decoding, forward passing.
+    Tasks incl. setting up encoding, decoding, forward passing and scoring.
 
-    Subclasses override encode(), decode(), forward().
+    Subclasses override encode(), decode(), forward(), scoring().
     """
 
     def __init__(self):
@@ -177,4 +161,8 @@ class BaseTabularPredictor(ABC, nn.Module):
     @abstractmethod
     def forward(self) -> None:
         """Full forward pass through autoencoder."""
+        
+    @abstractmethod
+    def scoring(self) -> None:
+        """Computes reconstruction error."""
         pass

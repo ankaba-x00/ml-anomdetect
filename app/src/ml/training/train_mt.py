@@ -1,135 +1,33 @@
 from dataclasses import asdict
-from pathlib import Path
-from typing import Optional, Any
 import numpy as np
 import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
+from typing import Any
 
-from app.src.ml.models.mte import MTEConfig, TrafficAttackPredictor
-
-
-#########################################
-##           TRAINING HELPERS          ##
-#########################################
-
-def _make_supervised_dataloader(
-    X_cont: np.ndarray,
-    X_cat: np.ndarray,
-    y_l3: np.ndarray,
-    y_l7: np.ndarray,
-    y_attack: np.ndarray,
-    batch_size: int,
-    shuffle: bool,
-) -> DataLoader:
-    Xc = torch.from_numpy(X_cont.astype(np.float32))
-    Xk = torch.from_numpy(X_cat.astype(np.int64))
-    y3 = torch.from_numpy(y_l3.astype(np.float32))
-    y7 = torch.from_numpy(y_l7.astype(np.float32))
-    ya = torch.from_numpy(y_attack.astype(np.int64))
-
-    ds = TensorDataset(Xc, Xk, y3, y7, ya)
-
-    return DataLoader(
-        ds,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        pin_memory=torch.cuda.is_available(),
-    )
+from app.src.ml.models.configs import MTAEConfig
+from app.src.ml.models.helpers import supervised_dataloader
+from app.src.ml.models.mtae import MTTabularAE
 
 
-# TODO: max_ratio needs benchmarking!
-def compute_attack_class_weights(
-    y: np.ndarray,
-    n_classes: int,
-    max_ratio: float = 20.0,
-    eps: float = 1e-6,
-) -> torch.Tensor:
-    """
-    Computes inverse-frequency class weights for CrossEntropyLoss.
-    weight_c = total_samples / (n_classes * count_c)
-    """
-    counts = np.bincount(y, minlength=n_classes).astype(np.float32)
-    counts = np.maximum(counts, eps)
-
-    weights = counts.sum() / (n_classes * counts)
-    # clamps extreme values
-    weights = np.clip(weights, 1.0 / max_ratio, max_ratio)
-    weights = weights / weights.mean()
-
-    return torch.tensor(weights, dtype=torch.float32)
-
-
-def focal_loss(
-    logits: torch.Tensor,
-    targets: torch.Tensor,
-    gamma: float = 2.0,
-    weight: Optional[torch.Tensor] = None,
-    reduction: str = "mean",
-) -> torch.Tensor:
-    """Multi-class focal loss."""
-    log_probs = F.log_softmax(logits, dim=-1)
-    probs = torch.exp(log_probs)
-
-    target_logp = log_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
-    target_p = probs.gather(1, targets.unsqueeze(1)).squeeze(1)
-
-    focal_factor = (1.0 - target_p) ** gamma
-    loss = -focal_factor * target_logp
-
-    if weight is not None:
-        class_weight = weight.gather(0, targets)
-        loss = loss * class_weight
-
-    if reduction == "mean":
-        return loss.mean()
-    elif reduction == "sum":
-        return loss.sum()
-    return loss
-
-
-def pinball_loss(
-    yhat: torch.Tensor,
-    y: torch.Tensor,
-    q: float,
-) -> torch.Tensor:
-    """Quantile loss for regression heads"""
-    e = y - yhat
-    return torch.mean(torch.maximum(q * e, (q - 1) * e))
-
-
-def quantile_loss(
-    preds: torch.Tensor, # (B, Q)
-    target: torch.Tensor, # (B,)
-    quantiles: list[float],
-) -> torch.Tensor:
-    """Returns mean pinball loss across quantiles."""
-    losses = []
-    for i, q in enumerate(quantiles):
-        losses.append(pinball_loss(preds[:, i], target, q))
-    return torch.stack(losses).mean()
-
-
-def train_multitask_model(
+def train_mt_autoencoder(
     train_cont: np.ndarray,
     train_cat: np.ndarray,
     train_l3: np.ndarray,
     train_l7: np.ndarray,
     train_attack: np.ndarray,
-    val_cont: Optional[np.ndarray],
-    val_cat: Optional[np.ndarray],
-    val_l3: Optional[np.ndarray],
-    val_l7: Optional[np.ndarray],
-    val_attack: Optional[np.ndarray],
-    config: MTEConfig,
+    val_cont: np.ndarray | None,
+    val_cat: np.ndarray | None,
+    val_l3: np.ndarray | None,
+    val_l7: np.ndarray | None,
+    val_attack: np.ndarray | None,
+    config: MTAEConfig,
     loss_weights: dict[str, float],
-) -> tuple[TrafficAttackPredictor, dict[str, Any]]:
+) -> tuple[MTTabularAE, dict[str, Any]]:
     """
-    Train multi-task traffic predictor on split dataset with early stopping.
+    Train multi-task autoencoder with cont and cat features on split dataset with early stopping OR full dataset with no early stopping.
     
     Returns
     -------
-    model : TrafficAttackPredictor
+    model : MTTabularAE
     history : dict
     """
 
@@ -138,104 +36,176 @@ def train_multitask_model(
     # -------------------------
     # DataLoaders
     # -------------------------
-    train_loader = _make_supervised_dataloader(
+    train_loader = supervised_dataloader(
         train_cont, 
         train_cat,
         train_l3, 
         train_l7, 
         train_attack,
         config.batch_size,
-        shuffle=True,
+        shuffle=True
     )
 
     val_loader = None
     if val_cont is not None:
-        val_loader = _make_supervised_dataloader(
+        val_loader = supervised_dataloader(
             val_cont, 
             val_cat,
             val_l3, 
             val_l7, 
             val_attack,
             config.batch_size,
-            shuffle=False,
+            shuffle=False
         )
 
     # -------------------------
-    # Class weights
+    # Build model and set configs
     # -------------------------
-    attack_class_weights = compute_attack_class_weights(
-        train_attack,
-        config.n_attack_types,
-    )
+    model = MTTabularAE(config).to(device)
 
     if config.warmup_epochs > 0:
         print(
-            f"[INFO] Attack-only warmup enabled for "
+            f"[INFO] Recon-only warmup enabled for "
             f"{config.warmup_epochs} epochs"
         )
-
-    # -------------------------
-    # Build model
-    # -------------------------
-    model = TrafficAttackPredictor(config, attack_class_weights).to(device)
-
+    
+    train_at_counts = np.bincount(
+        train_attack, 
+        minlength=config.n_attack_types
+    ).tolist()
+    if val_cont is not None:
+        val_at_counts = np.bincount(
+            val_attack, 
+            minlength=config.n_attack_types
+        ).tolist()
+    else:
+        val_at_counts = None
+    attack_type_weights = model.compute_attack_type_weights(
+        train_attack,
+        config.n_attack_types,
+    )
+    
     # -------------------------
     # Optimizer
     # -------------------------
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=config.lr,
-        weight_decay=config.weight_decay,
-    )
+    if config.optimizer == "adam":
+        optimizer = torch.optim.Adam(
+            model.parameters(), 
+            lr=config.lr, 
+            weight_decay=config.weight_decay,
+            betas=(config.adam_beta1, config.adam_beta2),
+            eps=1e-8
+        )
+    elif config.optimizer == "adamw":
+        optimizer = torch.optim.AdamW(
+            model.parameters(), 
+            lr=config.lr, 
+            weight_decay=config.weight_decay,
+            betas=(config.adam_beta1, config.adam_beta2),
+            eps=1e-8
+        )
+    elif config.optimizer == "sgd":
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=config.lr,
+            momentum=config.sgd_momentum,
+            weight_decay=config.weight_decay
+        )
+    else:
+        raise ValueError(f"Unknown optimizer: {config.optimizer}")
 
     # -------------------------
     # LR Scheduler
     # -------------------------
-    scheduler = None
-    if config.use_lr_scheduler:
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    if config.lr_scheduler == "onecycle":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
-            mode="min",
-            factor=0.5,
-            patience=3,
+            max_lr=config.lr,
+            total_steps=config.num_epochs * len(train_loader),
+            pct_start=0.3,
+            anneal_strategy='cos',
+            cycle_momentum=True
+        )
+    elif config.lr_scheduler == "plateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 
+            mode='min',
+            factor=0.1,
+            patience=10,
             min_lr=1e-6,
         )
-    base_lr = config.lr
-    warmup_lr = config.lr * 0.3
+    elif config.lr_scheduler == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=config.num_epochs,
+            eta_min=1e-6
+        )
+    elif config.lr_scheduler == "step":
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=20,
+            gamma=0.1
+        )
+    else:
+        scheduler = None
 
     # -------------------------
-    # History
+    # Set history and param tracking
     # -------------------------
     history = {
         "train_loss": [],
+        "train_recon": [],
         "train_l3": [],
         "train_l7": [],
-        "train_attack": [],
+        "train_at": [],
+        "train_cont": [],
+        "train_cat": [],
+        "val_recon": [],
         "val_loss": [] if val_loader else None,
         "val_l3": [] if val_loader else None,
         "val_l7": [] if val_loader else None,
-        "val_attack": [] if val_loader else None,
+        "val_at": [] if val_loader else None,
+        "val_cont": [],
+        "val_cat": [],
         "learning_rates": [],
         "best_epoch": 0,
         "config": asdict(config),
         "loss_weights": loss_weights,
-        "attack_class_weights": []
+        "attack_type_weights": [],
+        "train_at_counts": train_at_counts
     }
+    if val_cont is not None:
+        history["val_at_counts"] = val_at_counts
 
     best_metric = float("inf")
     best_state = None
     no_improve = 0
-    reset_after_warmup = False
+    in_warmup = False
+    in_stepup = False
 
-    lambda_l3 = loss_weights.get("l3", 1.0)
-    lambda_l7 = loss_weights.get("l7", 1.0)
-    lambda_att = loss_weights.get("attack", 3.0)
-
-    print("Training multi-task model with:")
-    print(f"  L3 weight: {lambda_l3}")
-    print(f"  L7 weight: {lambda_l7}")
-    print(f"  Attack weight: {lambda_att}")
-    print(f"  Device: {device}")
+    # -------------------------
+    # Print config summary
+    # -------------------------
+    print(f"[INFO] Training autoencoder with:")
+    print(f"\tCont features        {config.num_cont}")
+    print(f"\tCat features         {len(config.cat_dims)}")
+    print(f"\tTransformation Cont  {'RobustScaler'}")
+    print(f"\t               Cat   {'Embedding layers' if config.use_embedding else 'One-Hot encoding'}")
+    print(f"\tBatch size           {config.batch_size}")
+    print(f"\tHidden dimensions    {config.hidden_dims}")
+    print(f"\tLatent dimension     {config.latent_dim}")
+    print(f"\tActivation encoder   {config.activation_en}")
+    print(f"\tActivation decoder   {config.activation_de}")
+    print(f"\tOptimizer            {config.optimizer}")
+    print(f"\tLR scheduler         {config.lr_scheduler}")
+    print(f"\tNoise injection      {'enabled' if config.allow_noise_injection else 'disabled'}")
+    print(f"\tNum of warmup epochs {config.warmup_epochs}")
+    print(f"\tAlpha max            {config.alpha}")
+    print(f"\tLoss weights Cont    {loss_weights['cont_w']:.5f}")
+    print(f"\t             Cat     {loss_weights['cat_w']:.5f}")
+    print(f"\t             L3      {loss_weights['l3_w']:.5f}")
+    print(f"\t             L7      {loss_weights['l7_w']:.5f}")
+    print(f"\t             At      {loss_weights['at_w']:.5f}")
 
     # -------------------------
     # Training
@@ -244,81 +214,67 @@ def train_multitask_model(
         model.train()
 
         # -------------------------
-        # Attack-only warmup setup
+        # Warmup setup
         # -------------------------
         in_warmup = epoch < config.warmup_epochs
-
         if in_warmup:
             # freeze regression heads
-            for p in model.l3_head.parameters():
+            for p in model.D.l3_head.parameters():
                 p.requires_grad = False
-            for p in model.l7_head.parameters():
+            for p in model.D.l7_head.parameters():
+                p.requires_grad = False
+            for p in model.D.at_head.parameters():
                 p.requires_grad = False
             # adjust lr to avoid overfitting
             for g in optimizer.param_groups:
-                g["lr"] = warmup_lr
+                    g["lr"] = config.lr * float((epoch+1) / config.warmup_epochs)
         else:
             # unfreeze after warmup
-            for p in model.l3_head.parameters():
+            for p in model.D.l3_head.parameters():
                 p.requires_grad = True
-            for p in model.l7_head.parameters():
+            for p in model.D.l7_head.parameters():
                 p.requires_grad = True
-            # use base lr
+            for p in model.D.at_head.parameters():
+                p.requires_grad = True
+            # adjust lr
             for g in optimizer.param_groups:
-                g["lr"] = base_lr
+                g["lr"] = config.lr
+        in_stepup = config.warmup_epochs <= epoch < config.stepup_epochs + config.warmup_epochs 
+        model.set_alpha(epoch, in_warmup, in_stepup)
         
         # -------------------------
         # Setup training
         # -------------------------
+        tl, tr, tc, tk, tl3, tl7, tatt, tn = 0, 0, 0, 0, 0, 0, 0, 0
 
-        tl, tl3, tl7, tatt = 0.0, 0.0, 0.0, 0.0
-        n = 0
-
-        for Xc, Xk, y3, y7, ya in train_loader:
-            Xc, Xk = Xc.to(device), Xk.to(device)
-            y3, y7, ya = y3.to(device), y7.to(device), ya.to(device)
+        for bXc, bXk, by3, by7, bya in train_loader:
+            bXc, bXk = bXc.to(device), bXk.to(device)
+            by3, by7, bya = by3.to(device), by7.to(device), bya.to(device)
 
             optimizer.zero_grad(set_to_none=True)
 
-            out = model(Xc, Xk)
-
-            loss_l3 = quantile_loss(
-                out["l3_q"],
-                y3,
-                model.config.quantiles,
-            )
-
-            loss_l7 = quantile_loss(
-                out["l7_q"],
-                y7,
-                model.config.quantiles,
-            )
-            if config.use_focal_loss and not in_warmup:
-                loss_att = focal_loss(
-                out["attack_logits"],
-                ya,
-                config.focal_gamma,
-                model.attack_class_weights,
-            )
-            else:
-                loss_att = F.cross_entropy(
-                    out["attack_logits"], 
-                    ya,
-                    model.attack_class_weights
+            cont_recon, cat_logits, l3_pred, l7_pred, at_logits = model(bXc, bXk)
+            cont_loss, cat_loss, recon_score, l3_loss, l7_loss, at_loss, total_loss = model.scoring(
+                    bXc, 
+                    bXk, 
+                    by3,
+                    by7,
+                    bya,
+                    cont_recon,
+                    cat_logits,
+                    l3_pred,
+                    l7_pred,
+                    at_logits,
+                    loss_weights,
+                    attack_type_weights,
+                    in_warmup
                 )
 
-            if in_warmup:
-                total_loss = lambda_att * loss_att
-            else:
-                total_loss = (
-                    lambda_l3 * loss_l3 +
-                    lambda_l7 * loss_l7 +
-                    lambda_att * loss_att
-                )
-
+            # Backward pass
             total_loss.backward()
 
-            if config.gradient_clip:
+            # Gradient clipping
+            if config.gradient_clip is not None and config.gradient_clip > 0:
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), 
                     config.gradient_clip
@@ -326,26 +282,40 @@ def train_multitask_model(
 
             optimizer.step()
 
-            bs = Xc.size(0)
+            if scheduler is not None and config.lr_scheduler == "onecycle":
+                scheduler.step()
+
+            # Accumulate metrics
+            bs = bXc.size(0)
             tl += total_loss.item() * bs
-            tl3 += loss_l3.item() * bs
-            tl7 += loss_l7.item() * bs
-            tatt += loss_att.item() * bs
-            n += bs
+            tr += recon_score.sum().item()
+            tl3 += l3_loss.sum().item()
+            tl7 += l7_loss.sum().item()
+            tatt += at_loss.sum().item()
+            tc += cont_loss.sum().item()
+            tk += cat_loss.sum().item()
+            tn += bs
         
-        avg_train_loss = tl / n
-        avg_train_l3 = tl3 / n
-        avg_train_l7 = tl7 / n
-        avg_train_att = tatt / n
+        # Calculate epoch averages
+        avg_tl = tl / max(1, tn)
+        avg_train_recon = tr / max(1, tn)
+        avg_tl3 = tl3 / max(1, tn)
+        avg_tl7 = tl7 / max(1, tn)
+        avg_tatt = tatt / max(1, tn)
+        avg_tc = tc / max(1, tn)
+        avg_tk = tk / max(1, tn)
         
-        history["train_loss"].append(avg_train_loss)
-        history["train_l3"].append(avg_train_l3)
-        history["train_l7"].append(avg_train_l7)
-        history["train_attack"].append(avg_train_att)
-        history["attack_class_weights"] = (
-            attack_class_weights.cpu().tolist()
-            if attack_class_weights is not None
-            else None
+        history["train_loss"].append(avg_tl)
+        history["train_recon"].append(avg_train_recon)
+        history["train_l3"].append(avg_tl3)
+        history["train_l7"].append(avg_tl7)
+        history["train_at"].append(avg_tatt)
+        history["train_cont"].append(avg_tc)
+        history["train_cat"].append(avg_tk)
+        history["attack_type_weights"] = (
+            attack_type_weights.cpu().tolist()
+            if attack_type_weights is not None
+            else []
         )
 
         # -------------------------
@@ -353,86 +323,70 @@ def train_multitask_model(
         # -------------------------
         if val_loader:
             model.eval()
-            vl, vl3, vl7, vatt = 0.0, 0.0, 0.0, 0.0
+            vl, vr, vc, vk, vl3, vl7, vatt = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
             vn = 0
 
             with torch.no_grad():
-                for Xc, Xk, y3, y7, ya in val_loader:
-                    Xc, Xk = Xc.to(device), Xk.to(device)
-                    y3, y7, ya = y3.to(device), y7.to(device), ya.to(device)
+                for bXc, bXk, by3, by7, bya in val_loader:
+                    bXc, bXk = bXc.to(device), bXk.to(device)
+                    by3, by7, bya = by3.to(device), by7.to(device), bya.to(device)
 
-                    out = model(Xc, Xk)
-
-                    loss_l3 = quantile_loss(
-                        out["l3_q"],
-                        y3,
-                        model.config.quantiles,
-                    )
-
-                    loss_l7 = quantile_loss(
-                        out["l7_q"],
-                        y7,
-                        model.config.quantiles,
-                    )
-                    if config.use_focal_loss  and not in_warmup:
-                        loss_att = focal_loss(
-                        out["attack_logits"],
-                        ya,
-                        config.focal_gamma,
-                        model.attack_class_weights,
-                    )
-                    else:
-                        loss_att = F.cross_entropy(
-                            out["attack_logits"], 
-                            ya,
-                            model.attack_class_weights
-                        )
-                    
-                    if in_warmup:
-                        total_loss = lambda_att * loss_att
-                    else:
-                        total_loss = (
-                            lambda_l3 * loss_l3 +
-                            lambda_l7 * loss_l7 +
-                            lambda_att * loss_att
+                    cont_recon, cat_logits, l3_pred, l7_pred, at_logits = model(bXc, bXk)
+                    cont_loss, cat_loss, recon_score, l3_loss, l7_loss, at_loss, total_loss = model.scoring(
+                            bXc, 
+                            bXk, 
+                            by3,
+                            by7,
+                            bya,
+                            cont_recon,
+                            cat_logits,
+                            l3_pred,
+                            l7_pred,
+                            at_logits,
+                            loss_weights,
+                            attack_type_weights,
+                            in_warmup
                         )
 
-                    bs = Xc.size(0)
+                    bs = bXc.size(0)
                     vl += total_loss.item() * bs
-                    vl3 += loss_l3.item() * bs
-                    vl7 += loss_l7.item() * bs
-                    vatt += loss_att.item() * bs
+                    vr += recon_score.sum().item()
+                    vl3 += l3_loss.sum().item()
+                    vl7 += l7_loss.sum().item()
+                    vatt += at_loss.sum().item()
+                    vc += cont_loss.sum().item()
+                    vk += cat_loss.sum().item()
                     vn += bs
+                
+            # Calculate validation averages
+            avg_vl = vl / max(1, vn)
+            avg_vr = vr / max(1, vn)
+            avg_vl3 = vl3 / max(1, vn)
+            avg_vl7 = vl7 / max(1, vn)
+            avg_vatt = vatt / max(1, vn)
+            avg_vc = vc / max(1, vn)
+            avg_vk = vk / max(1, vn)
+                
+            history["val_loss"].append(avg_vl)
+            history["val_recon"].append(avg_vr)
+            history["val_l3"].append(avg_vl3)
+            history["val_l7"].append(avg_vl7)
+            history["val_at"].append(avg_vatt)
+            history["val_cont"].append(avg_vc)
+            history["val_cat"].append(avg_vk)
 
-            avg_val = vl / vn
-            if in_warmup:
-                history["val_loss"].append(None)
-                history["val_l3"].append(None)
-                history["val_l7"].append(None)
-                history["val_attack"].append(None)
-                continue
-            else:
-                history["val_loss"].append(avg_val)
-                history["val_l3"].append(vl3 / vn)
-                history["val_l7"].append(vl7 / vn)
-                history["val_attack"].append(vatt / vn)
-
-            if not in_warmup:
-                scheduler.step(avg_val)
-
-            if epoch == config.warmup_epochs and not reset_after_warmup:
-                best_metric = float("inf")
-                best_state = None
-                no_improve = 0
-                reset_after_warmup = True
-                print(f"[INFO] Warmup finished at epoch {epoch}. Resetting early stopping baseline.")
-
+            if scheduler is not None:
+                if config.lr_scheduler == "plateau":
+                    scheduler.step(avg_tl)
+                elif config.lr_scheduler in ["cosine", "step"]:
+                    scheduler.step()
+            
             # -----------------------------
             # Early stopping
             # -----------------------------
-            if epoch >= config.warmup_epochs:
-                if avg_val < best_metric - 1e-9:
-                    best_metric = avg_val
+            if not in_warmup and not in_stepup:
+                if avg_vl < best_metric - 1e-9:
+                    best_metric = avg_vl
                     best_state = model.state_dict().copy()
                     history["best_epoch"] = epoch + 1
                     no_improve = 0
@@ -441,116 +395,75 @@ def train_multitask_model(
                     if no_improve >= config.patience:
                         print(f"Early stopping at epoch {epoch+1}")
                         break
-
-            mode = "ATTACK-WARMUP" if in_warmup else "MULTI-TASK"
+            
+            # -----------------------------
+            # Print summary
+            # -----------------------------
+            # mode = "WARMUP" if in_warmup else "FULL"
+            if in_warmup:
+                mode = "WARMUP"
+            elif in_stepup:
+                mode = "STEPUP"
+            else:
+                mode = "FULL"
             print(
-                f"Epoch {epoch+1:3d}/{config.num_epochs} | "
-                f"Mode {mode:<12} | "
-                f"Train {history['train_loss'][-1]:.4f} | "
-                f"Val {avg_val:.4f} | "
-                f"LR {optimizer.param_groups[0]['lr']:.2e}"
+                f"Epoch {epoch+1:2d}/{config.num_epochs} - "
+                f"Mode {mode:<3} | "
+                f"TRAIN: {avg_tl:.4f} "
+                f"(rc: {avg_train_recon:.4f}, l3: {avg_tl3:.4f}, l7: {avg_tl7:.4f}, la: {avg_tatt:.4f}) | "
+                f"VAL {avg_vl:.4f} "
+                f"(rc: {avg_vr:.4f}, l3: {avg_vl3:.4f}, l7: {avg_vl7:.4f}, at: {avg_vatt:.4f}) | "
+                f"LR {optimizer.param_groups[0]['lr']:.2e}, ɑ {model.current_alpha:.1f}"
             )
         
         # -----------------------------
         # Full training / No Validation
         # -----------------------------
         else:
-            if not in_warmup:
-                scheduler.step(avg_train_loss)
-
-            if epoch == config.warmup_epochs and not reset_after_warmup:
-                best_metric = float("inf")
-                best_state = None
+            # -----------------------------
+            # Track best loss
+            # -----------------------------
+            if avg_tl < best_metric - 1e-9:
+                best_metric = avg_tl
+                best_state = model.state_dict().copy()
+                history["best_epoch"] = epoch + 1
                 no_improve = 0
-                reset_after_warmup = True
-                print(f"[INFO] Warmup finished at epoch {epoch}. Resetting early stopping baseline.")
+            else:
+                no_improve += 1
+                if no_improve >= config.patience:
+                    print(f"Early stopping at epoch {epoch+1}")
+                    break
 
             # -----------------------------
-            # Early stopping
+            # Print summary
             # -----------------------------
-            if epoch >= config.warmup_epochs:
-                if avg_train_loss < best_metric - 1e-9:
-                    best_metric = avg_train_loss
-                    best_state = model.state_dict().copy()
-                    history["best_epoch"] = epoch + 1
-                    no_improve = 0
-                else:
-                    no_improve += 1
-                    if no_improve >= config.patience:
-                        print(f"Early stopping at epoch {epoch+1}")
-                        break
-
-            mode = "ATTACK-WARMUP" if in_warmup else "MULTI-TASK"
+            mode = "WARMUP" if in_warmup else "FULL"
             print(
-                f"Epoch {epoch+1:3d}/{config.num_epochs} | "
-                f"Mode {mode:<12} | "
-                f"Loss {avg_train_loss:.4f} | "
-                f"(loss_l3: {avg_train_l3:.6f}, loss_l7: {avg_train_l7:.6f}, loss_att: {avg_train_att:.6f}) | "
-                f"LR {optimizer.param_groups[0]['lr']:.2e}"
+                f"Epoch {epoch+1:2d}/{config.num_epochs} - "
+                f"Mode {mode:<3} | "
+                f"TRAIN: {avg_tl:.4f} | "
+                f"(rc: {avg_train_recon:.4f}, l3: {avg_tl3:.4f}, l7: {avg_tl7:.4f}, at: {avg_tatt:.4f}) | "
+                f"LR {optimizer.param_groups[0]['lr']:.2e}, ɑ {model.current_alpha:.1f}"
             )
 
         history["learning_rates"].append(optimizer.param_groups[0]["lr"])
 
+        # -----------------------------
+        # Print gradient norm
+        # -----------------------------
+        if (epoch + 1) % 10 == 0:
+            total_norm = 0.0
+            for p in model.parameters():
+                if p.grad is not None:
+                    total_norm += p.grad.detach().pow(2).sum().item()
+            total_norm = total_norm ** 0.5
+            print(f"  Gradient norm: {total_norm:.4f}")
+
     # -----------------------------
     # Restore best model
     # -----------------------------
-    if best_state:
+    if best_state is not None:
         model.load_state_dict(best_state)
         print(f"Restored best model from epoch {history['best_epoch']}")
 
     return model.eval(), history
-
-
-#########################################
-##         SAVE / LOAD HELPERS         ##
-#########################################
-
-def save_multitask_model(
-    model: TrafficAttackPredictor,
-    config: MTEConfig,
-    cat_dims: dict,
-    num_cont: int,
-    path: Path,
-    additional_info: Optional[dict] = None
-) -> None:
-    """Save model weights + config to a single .pt file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    payload = {
-        "state_dict": model.state_dict(),
-        "config": asdict(config),
-        "cat_dims": cat_dims,
-        "num_cont": num_cont,
-        "additional_info": additional_info or {},
-    }
-    torch.save(payload, path)
-
-    print(f"[OK] Saved multi-task predictor to {path}")
-
-
-def load_multitask_model(
-    path: Path,
-    device: Optional[str] = "cpu"
-) -> tuple[TrafficAttackPredictor, MTEConfig, int, dict]:
-    """Load model + config from a .pt file."""
-    payload = torch.load(path, map_location=device, weights_only=True)
-
-    num_cont = payload["num_cont"]
-    cat_dims = payload["cat_dims"]
-
-    attack_class_weights = None
-    if "additional_info" in payload:
-        weights = payload["additional_info"].get("attack_class_weights")
-        if weights is not None:
-            attack_class_weights = torch.tensor(weights, dtype=torch.float32)
-    cfg = MTEConfig(**payload["config"])
-    model = TrafficAttackPredictor(cfg, attack_class_weights)
-
-    model.load_state_dict(payload["state_dict"])
-    target_device = torch.device(cfg.device)
-    model = model.to(target_device)
-    
-    print(f"[INFO] Loaded multi-task predictor from {path}")
-    print(f"[INFO] Model moved to device: {target_device}")
-    
-    return model.eval(), cfg, num_cont, cat_dims

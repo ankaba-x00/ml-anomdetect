@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 import pandas as pd
-import numpy as np
+
 
 # TODO: test on the Canadian netflow dataset for 4,6 especially
 
@@ -17,7 +17,6 @@ class AttackThresholds:
     TCP_DOMINANT: float
     ICMP_DOMINANT: float
     GRE_DOMINANT: float
-
 
 ATTACK_LABELS = [
     "normal",
@@ -39,7 +38,6 @@ def _safe_q(series: pd.Series, q: float, default: float = 0.0) -> float:
     s = series.dropna()
     return float(s.quantile(q)) if len(s) > 0 else default
 
-
 def compute_attack_thresholds(df: pd.DataFrame) -> AttackThresholds:
     """Computes thresholds dynamically for each data matrix."""
     return AttackThresholds(
@@ -54,7 +52,6 @@ def compute_attack_thresholds(df: pd.DataFrame) -> AttackThresholds:
         ICMP_DOMINANT=_safe_q(df.get("icmp_frac", pd.Series([0.0])), 0.95),
         GRE_DOMINANT=min(_safe_q(df.get("gre_frac", pd.Series([0.0])), 0.95), 0.1)
     )
-
 
 def score_attack_types(
     row: pd.Series,
@@ -216,7 +213,6 @@ def score_attack_types(
         return scores
     return ATTACK_TO_ID[best_label]
 
-
 def temporal_attack_labeling(
     semantic_labels: pd.Series,
     semantic_scores: pd.DataFrame,
@@ -262,8 +258,6 @@ def temporal_attack_labeling(
         sizes = mask.groupby(groups).transform("size")
 
         final.loc[(mask) & (sizes < min_len)] = ATTACK_TO_ID["normal"]
-
-    
 
     # 3. multi-vector promotion if window is classified TCP or HTTP and window shows strong activity in other layer
     for i in range(1, len(final) - 1):

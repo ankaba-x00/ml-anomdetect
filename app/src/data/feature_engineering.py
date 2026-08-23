@@ -20,10 +20,6 @@ from app.src.data.attack_labelling import (
 )
 
 
-########################################################
-##                      PARAMS                        ##
-########################################################
-
 def load_countries_from_config(models_path: Path) -> list[str]:
     with open(models_path, "r") as f:
         data = yaml.safe_load(f)
@@ -36,11 +32,6 @@ FEATURE_DIR = PROJECT_ROOT / "datasets" / "featured"
 
 COUNTRIES = load_countries_from_config(FILE_DIR.parent / "config" / "models.yml")
 
-
-########################################################
-##            LOADING + NORMALIZATION HELPERS         ##
-########################################################
-
 @lru_cache(None)
 def _load_df(key: str) -> pd.DataFrame:
     """Load processed pkl as df, convert timestamps once and cache copy."""
@@ -51,7 +42,6 @@ def _load_df(key: str) -> pd.DataFrame:
         df["dates"] = pd.to_datetime(df["dates"], errors="coerce")
     return df
 
-
 def _load_time_series(key: str, country: str, rename: str) -> pd.Series:
     """Load any timeseries and returns hourly series indexed by timestamp."""
     df = _load_df(key)
@@ -61,11 +51,6 @@ def _load_time_series(key: str, country: str, rename: str) -> pd.Series:
     s = df.set_index("timestamps")["values"].astype("float64")
     s.name = rename
     return s
-
-
-########################################################
-## BITRATE + DURATION AVG HELPERS (weighted averages) ##
-########################################################
 
 def _load_weighted_dist(
     key: str, 
@@ -98,11 +83,6 @@ def _load_weighted_dist(
     weighted = np.nan_to_num(weighted, nan=0.0)
 
     return pd.Series(weighted, index=df_p.index, name=rename).astype("float64")
-
-
-########################################################
-##           PROTOCOL FRACTIONS + ENTROPY             ##
-########################################################
 
 def _load_protocol_features(key: str, country: str) -> pd.DataFrame:
     df = _load_df(key)
@@ -142,13 +122,208 @@ def _load_protocol_features(key: str, country: str) -> pd.DataFrame:
         "protocol_entropy": entropy
     }, index=df_p.index).astype("float64")
 
+def _conf_todf(data: dict, key: str, rename: str) -> pd.DataFrame:
+    """Converts raw data to internal pd.DataFrame format consistent with model train/val/tune/test nomenclature."""
+    values = list(data[key]["values"])
+    ts = pd.to_datetime(data["timestamps"], errors="coerce")
+    TS_RANGE = 96
+    
+    if len(ts) == len(values):
+        pass
+    elif len(ts) > len(values):
+        diff = len(ts) - len(values)
+        values = values + [0.0] * diff
+    elif len(ts) < len(values):
+        print(f"[WARN] Not enough ts data fetched for {key}.")
+        start = pd.to_datetime(ts[0]).floor("D")
+        ts = pd.date_range(start, periods=TS_RANGE, freq="15min")
+        if len(values) < TS_RANGE:
+            values = values + [0.0] * (TS_RANGE - len(values))
+        else:
+            values = values[:TS_RANGE]
+    else:
+        raise ValueError(f"[ERROR] No data fetched for {key}. Aborting now.")
+    
+    return pd.DataFrame(
+            data={rename: values}, 
+            index=ts
+        ).astype("float64")
 
-########################################################
-##       MAIN COUNTRY MERGED DATAFRAME BUILDER        ##
-########################################################
+def _conv_weighted_todf(
+    data: dict, 
+    key: str, 
+    rename: str, 
+    mids: dict
+) -> pd.Series:
+    """
+    Converts raw data which are value distributions to internal pd.DataFrame 
+    format which are weighted averages per timestamp consistent with model 
+    train/val/tune/test nomenclature.
+    """
+    ts = pd.to_datetime(data.get("timestamps", []), errors="coerce")
+    
+    cols = [c for c in mids.keys() if c in data[key]]
+    if len(ts) == 0 or not cols:
+        raise ValueError(f"[ERROR] No data fetched for {key}. Aborting now.")
+    
+    X = np.column_stack([
+        np.asarray(data[key][c], dtype=float)
+        for c in cols
+    ])
+    W = np.asarray([mids[c] for c in cols], dtype=float)
+    den = X.sum(axis=1)
+    den = np.where(den <= 0, np.nan, den)
+    weighted = (X * W).sum(axis=1) / den
+    weighted = np.nan_to_num(weighted, nan=0.0)
+
+    return pd.Series(weighted, index=ts, name=rename, dtype="float64")
+
+def _conv_fract_todf(data: dict, key: str) -> pd.DataFrame:
+    """
+    Converts raw data which are protocol bucket data to internal pd.DataFrame 
+    format which are fractional shares and Shannon entropy per timestamp 
+    consistent with model train/val/tune/test nomenclature.
+    """
+    ts = pd.to_datetime(data["timestamps"], errors="coerce")
+    df = pd.DataFrame({
+        "udp":  np.array(data[key].get("UDP",  []),  dtype=float),
+        "tcp":  np.array(data[key].get("TCP",  []),  dtype=float),
+        "icmp": np.array(data[key].get("ICMP", []), dtype=float),
+        "gre":  np.array(data[key].get("GRE",  []),  dtype=float),
+    }, index=ts).astype("float64")
+
+    # Total traffic per timestamp and fractions
+    pcols = ["udp", "tcp", "icmp", "gre"]
+    df["total"] = df[pcols].sum(axis=1).replace(0, 1e-6)
+    for c in pcols:
+        df[f"{c}_frac"] = df[c] / df["total"]
+
+    # Shannon entropy
+    P = df[[f"{c}_frac" for c in pcols]].to_numpy()
+    P = np.clip(P, 1e-12, 1)
+    P = P / P.sum(axis=1, keepdims=True)
+    entropy = -(P * np.log2(P)).sum(axis=1)
+
+    return pd.DataFrame({
+        "udp_frac": df["udp_frac"],
+        "tcp_frac": df["tcp_frac"],
+        "icmp_frac": df["icmp_frac"],
+        "gre_frac": df["gre_frac"],
+        "protocol_entropy": entropy,
+    }, index=ts).astype("float64")
+
+def _load_base(
+    country: str, 
+    from_storage: bool = True, 
+    data: dict | None = None
+):
+    if from_storage:
+        s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")
+        s_l3t = _load_time_series("l3_target_time", country, "l3_target")
+        s_l7 = _load_time_series("l7_time", country, "l7_traffic")
+
+        s_http = _load_time_series("httpreq_time", country, "http")
+        s_http_auto = _load_time_series("httpreq_automated_time", country, "http_auto")
+        s_http_human = _load_time_series("httpreq_human_time", country, "http_human")
+
+        s_netflow = _load_time_series("traffic_time", country, "netflow")
+
+        s_bots = _load_time_series("bots_time", country, "bots_total")
+        s_ai = _load_time_series("aibots_crawlers_time", country, "ai_bots")
+
+        # weighted bitrate avg
+        bitrate_mids = {
+            "UNDER_500_MBPS": 250,
+            "_500_MBPS_TO_1_GBPS": 750,
+            "_1_GBPS_TO_10_GBPS": 5500,
+            "_10_GBPS_TO_100_GBPS": 55000,
+            "OVER_100_GBPS": 100000
+        }
+        s_l3_bitrate = _load_weighted_dist(
+            "l3_origin_bitrate_time", 
+            country, 
+            "l3_bitrate_avg", 
+            bitrate_mids
+        )
+
+        # weighted duration avg
+        dur_mids = {
+            "UNDER_10_MINS": 5,
+            "_10_MINS_TO_20_MINS": 15,
+            "_20_MINS_TO_40_MINS": 30,
+            "_40_MINS_TO_1_HOUR": 50,
+            "_1_HOUR_TO_3_HOURS": 120,
+            "OVER_3_HOURS": 300
+        }
+        s_l3_duration = _load_weighted_dist(
+            "l3_origin_duration_time", 
+            country, 
+            "l3_duration_avg", 
+            dur_mids
+        )
+
+        # protocol + entropy
+        s_protocol = _load_protocol_features("l3_origin_protocol_time", country)
+    else: 
+        s_l3o =  _conf_todf(data, "l3attack_origin_time", "l3_origin")
+        s_l3t = _conf_todf(data, "l3attack_target_time", "l3_target") 
+        s_l7 = _conf_todf(data, "l7attack_time", "l7_traffic")
+        s_http = _conf_todf(data, "httpreq_time", "http")
+        s_http_auto = _conf_todf(data, "httpreq_automated_time", "http_auto")
+        s_http_human = _conf_todf(data, "httpreq_human_time", "http_human")
+        s_netflow = _conf_todf(data, "traffic_time", "netflow")
+        s_bots = _conf_todf(data, "bots_time", "bots_total")
+        s_ai = _conf_todf(data, "aibots_crawlers_time", "ai_bots")
+
+        bitrate_mids = {
+            "UNDER_500_MBPS": 250,
+            "_500_MBPS_TO_1_GBPS": 750,
+            "_1_GBPS_TO_10_GBPS": 5500,
+            "_10_GBPS_TO_100_GBPS": 55000,
+            "OVER_100_GBPS": 100000
+        }
+        s_l3_bitrate = _conv_weighted_todf(
+            data, 
+            "l3attack_origin_bitrate_time", 
+            "l3_bitrate_avg", 
+            bitrate_mids
+        )
+        dur_mids = {
+            "UNDER_10_MINS": 5,
+            "_10_MINS_TO_20_MINS": 15,
+            "_20_MINS_TO_40_MINS": 30,
+            "_40_MINS_TO_1_HOUR": 50,
+            "_1_HOUR_TO_3_HOURS": 120,
+            "OVER_3_HOURS": 300
+        }
+        s_l3_duration = _conv_weighted_todf(
+            data, 
+            "l3attack_origin_duration_time", 
+            "l3_duration_avg", 
+            dur_mids
+        )
+        
+        s_protocol = _conv_fract_todf(data, "l3attack_origin_protocol_time")
+    
+    return {
+        "s_l3o": s_l3o,
+        "s_l3t": s_l3t,
+        "s_l7": s_l7,
+        "s_http": s_http,
+        "s_http_auto": s_http_auto,
+        "s_http_human": s_http_human,
+        "s_netflow": s_netflow,
+        "s_bots": s_bots,
+        "s_ai": s_ai,
+        "s_l3_bitrate": s_l3_bitrate,
+        "s_l3_duration": s_l3_duration,
+        "s_protocol": s_protocol
+    }
 
 def build_country_dataframe(
     country: str, 
+    from_storage: bool = True,
+    data: dict | None = None,
     attack_label: bool = False,
     debug: bool = False
 ) -> pd.DataFrame:
@@ -158,64 +333,19 @@ def build_country_dataframe(
     # ------------------------------------
     # 1. load all base series
     # ------------------------------------
-    s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")
-    s_l3t = _load_time_series("l3_target_time", country, "l3_target")
-    s_l7 = _load_time_series("l7_time", country, "l7_traffic")
-
-    s_http = _load_time_series("httpreq_time", country, "http")
-    s_http_auto = _load_time_series("httpreq_automated_time", country, "http_auto")
-    s_http_human = _load_time_series("httpreq_human_time", country, "http_human")
-
-    s_netflow = _load_time_series("traffic_time", country, "netflow")
-
-    s_bots = _load_time_series("bots_time", country, "bots_total")
-    s_ai = _load_time_series("aibots_crawlers_time", country, "ai_bots")
-
-    # weighted bitrate avg
-    bitrate_mids = {
-        "UNDER_500_MBPS": 250,
-        "_500_MBPS_TO_1_GBPS": 750,
-        "_1_GBPS_TO_10_GBPS": 5500,
-        "_10_GBPS_TO_100_GBPS": 55000,
-        "OVER_100_GBPS": 100000
-    }
-    s_l3_bitrate = _load_weighted_dist(
-        "l3_origin_bitrate_time", 
-        country, 
-        "l3_bitrate_avg", 
-        bitrate_mids
-    )
-
-    # weighted duration avg
-    dur_mids = {
-        "UNDER_10_MINS": 5,
-        "_10_MINS_TO_20_MINS": 15,
-        "_20_MINS_TO_40_MINS": 30,
-        "_40_MINS_TO_1_HOUR": 50,
-        "_1_HOUR_TO_3_HOURS": 120,
-        "OVER_3_HOURS": 300
-    }
-    s_l3_duration = _load_weighted_dist(
-        "l3_origin_duration_time", 
-        country, 
-        "l3_duration_avg", 
-        dur_mids
-    )
-
-    # protocol + entropy
-    df_protocol = _load_protocol_features("l3_origin_protocol_time", country)
+    bundle = _load_base(country, from_storage, data)
 
     # ------------------------------------
     # 2. merge everything
     # ------------------------------------
     df = pd.concat([
-            s_l3o, s_l3t, s_l7,
-            s_http, s_http_auto, s_http_human,
-            s_netflow,
-            s_bots, s_ai,
-            s_l3_bitrate, s_l3_duration,
+            bundle["s_l3o"], bundle["s_l3t"], bundle["s_l7"],
+            bundle["s_http"], bundle["s_http_auto"], bundle["s_http_human"],
+            bundle["s_netflow"],
+            bundle["s_bots"], bundle["s_ai"],
+            bundle["s_l3_bitrate"], bundle["s_l3_duration"],
         ], axis=1)
-    df = df.join(df_protocol, how="outer")
+    df = df.join(bundle["s_protocol"], how="outer")
     df = df.sort_index().interpolate().ffill().bfill()
 
     # ------------------------------------
@@ -316,11 +446,6 @@ def build_country_dataframe(
 
     return df
 
-
-########################################################
-##               COUNTRY MATRIX BUILDER               ##
-########################################################
-
 def build_feature_matrix(
     country: str, 
     df: Optional[pd.DataFrame] = None
@@ -340,7 +465,7 @@ def build_feature_matrix(
         Keys match X_cat.columns exactly and order defines embedding order.
     """
     if df is None:
-        df = build_country_dataframe(country, False).copy()
+        df = build_country_dataframe(country, attack_label=False).copy()
 
     # ------------------------------------
     # Separate categorical vs continuous
@@ -393,13 +518,12 @@ def build_feature_matrix(
 
     return df_cont, df_cat, num_cont, cat_dims
 
-
 def build_supervised_feature_matrix(
     country: str,
     df: Optional[pd.DataFrame] = None
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, int, dict]:
     """
-    Builds feature matrices for a given country needed for the multi-task predictor.
+    Builds feature matrices for a given country for multi-task prediction.
     Returns
     -------
     X_cont : pd.DataFrame
@@ -419,11 +543,11 @@ def build_supervised_feature_matrix(
         Keys match X_cat.columns exactly and order defines embedding order.
     """
     if df is None:
-        df = build_country_dataframe(country, True).copy()
+        df = build_country_dataframe(country, attack_label=True).copy()
+    
     # ------------------------------------
     # Separate categorical vs continuous
     # ------------------------------------
-
     continuous_traffic_cols = [
         'http', 'http_auto', 'http_human', 'netflow', 'bots_total', 'ai_bots',
         'ratio_auto_human', 'ratio_bots_http', 'ratio_ai_bots_bots', 
@@ -480,11 +604,6 @@ def build_supervised_feature_matrix(
 
     return df_cont, df_cat, y_l3, y_l7, y_type, num_cont, cat_dims
 
-
-########################################################
-##               COUNTRY MATRIX BUILDER               ##
-########################################################
-
 def load_feature_matrix(
     country: str, 
     load_path: Path = FEATURE_DIR
@@ -513,7 +632,6 @@ def load_feature_matrix(
     print(f"[OK] Feature matrix for {country} loaded!")
 
     return df_cont, df_cat, num_cont, cat_dims
-
 
 def load_supervised_feature_matrix(
     country: str, 

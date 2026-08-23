@@ -4,22 +4,17 @@ __pycache__/
 
 .env
 .venv/
-release_bundles/*
+release_bundles
 requirements.txt
 
-app/datasets/raw/*
-app/datasets/processed/* 
-app/datasets/featured/*
-app/datasets/scalers/*
+app/datasets/raw
+app/datasets/processed 
+app/datasets/featured
+app/datasets/scalers
 
-results/exploration/y2022-2023
-results/exploration/y2023-2024
-results/ae_ml/*
-results/mt_ml/*
-results/featured/*
-results/labelled/*
+results
 
-app/deployment/models/*
+app/deployment/models
 
 stdout_*
 .vscode

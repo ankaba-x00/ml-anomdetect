@@ -1,40 +1,13 @@
-import torch
-import numpy as np
 from dataclasses import asdict
-from pathlib import Path
+import numpy as np
+import torch
 from typing import Any
-from torch.utils.data import DataLoader, TensorDataset
 
-from app.src.ml.models.ae import AEConfig, TabularAE
-from app.src.ml.models.vae import VAEConfig, TabularVAE
+from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.configs import AEConfig, VAEConfig
+from app.src.ml.models.helpers import unsupervised_dataloader
+from app.src.ml.models.vae import TabularVAE
 
-
-#########################################
-##           TRAINING HELPERS          ##
-#########################################
-
-def _make_dataloader(
-    X_f: np.ndarray, 
-    X_i: np.ndarray,
-    batch_size: int,
-    shuffle: bool,
-) -> DataLoader:
-    """
-    Build DataLoader with
-       X_f : FloatType (float32) features
-       X_i : IntegerType (int64) features 
-    """
-    Xc_f = torch.from_numpy(X_f.astype(np.float32))
-    Xk_i = torch.from_numpy(X_i.astype(np.int64))
-
-    Tds = TensorDataset(Xc_f, Xk_i)
-
-    return DataLoader(
-        Tds, 
-        batch_size=batch_size, 
-        shuffle=shuffle,
-        pin_memory=True if torch.cuda.is_available() else False
-    )
 
 def train_autoencoder(
     train_cont: np.ndarray,
@@ -42,10 +15,10 @@ def train_autoencoder(
     val_cont: np.ndarray | None,
     val_cat: np.ndarray | None,
     config: AEConfig | VAEConfig,
-    loss_weights: dict[str, float] | None = None,
+    loss_weights: dict[str, float],
 ) -> tuple[TabularAE | TabularVAE, dict[str, Any]]:
     """
-    Train autoencoder with cont + cat input features on split dataset with early stopping and val metrics OR full dataset with no early stopping.
+    Train autoencoder with cont and cat features on split dataset with early stopping OR full dataset with no early stopping.
    
     Returns
     -------
@@ -53,41 +26,38 @@ def train_autoencoder(
     history : dict
     """
 
-    if loss_weights is None:
-        loss_weights = {"cont_w": float(1/config.num_cont), "cat_w": float(1/len(config.cat_dims.keys()))}
-    
     device = torch.device(config.device)
 
     # -------------------------
     # DataLoaders
     # -------------------------
-    train_loader = _make_dataloader(
+    train_loader = unsupervised_dataloader(
         train_cont, 
         train_cat, 
         config.batch_size, 
-        True, 
+        shuffle=True
     ) 
-    val_loader = (
-        _make_dataloader(
+
+    val_loader = None
+    if val_cont is not None:
+        val_loader = unsupervised_dataloader(
             val_cont, 
             val_cat, 
             config.batch_size, 
-            False)
-        if val_cont is not None and val_cat is not None
-        else None        
-    ) 
+            shuffle=False
+        )  
 
     # -------------------------
-    # Model configs
+    # Build model and set configs
     # -------------------------
     if isinstance(config, AEConfig):
         model = TabularAE(config=config).to(device)
-        metric1_name, metric2_name = "cont_loss", "cat_loss"
-        metric1_short, metric2_short = "Cont", "Cat"
+        m1_name, m2_name = "Cont", "Cat"
+        m1_key, m2_key = "cont_loss", "cat_loss"
     elif isinstance(config, VAEConfig):
         model = TabularVAE(config=config).to(device)
-        metric1_name, metric2_name = "recon_loss", "kl_loss"
-        metric1_short, metric2_short = "Recon", "KL"
+        m1_name, m2_name = "Recon", "KL"
+        m1_key, m2_key = "recon_loss", "kl_loss"
     else: 
         raise ValueError(f"[ERROR] Unsupported model config type; exprected AEConfig or VAEConfig.")
 
@@ -162,15 +132,19 @@ def train_autoencoder(
         scheduler = None
     
     # -------------------------
-    # History tracking
+    # Set history and param tracking
     # -------------------------
     history = {
         "train_loss": [],
-        f"train_{metric1_name}": [],
-        f"train_{metric2_name}": [],
+        f"train_{m1_key}": [],
+        f"train_{m2_key}": [],
+        f"train_recon_cont": [],
+        f"train_recon_cat": [],
         "val_loss": [] if val_loader else None,
-        f"val_{metric1_name}": [] if val_loader else None,
-        f"val_{metric2_name}": [] if val_loader else None,
+        f"val_{m1_key}": [] if val_loader else None,
+        f"val_{m2_key}": [] if val_loader else None,
+        f"val_recon_cont": [],
+        f"val_recon_cat": [],
         "warmup": [],
         "learning_rates": [],
         "best_epoch": 0,
@@ -181,12 +155,18 @@ def train_autoencoder(
     best_metric = float("inf")
     best_state = None
     no_improve = 0
+    in_warmup = False
+    annealing = False
     
+    # -------------------------
+    # Print config summary
+    # -------------------------
     print(f"[INFO] Training autoencoder with:")
     print(f"\tCont features        {config.num_cont}")
     print(f"\tCat features         {len(config.cat_dims)}")
     print(f"\tTransformation Cont  {'RobustScaler'}")
-    print(f"\t               Cat   {'Embedding layers' if config.use_embedding else 'One-Hot encoding'}")
+    print(f"\t               Cat   {'Embedding' if config.use_embedding else 'One-Hot encoding'}")
+    print(f"\tBatch size           {config.batch_size}")
     print(f"\tHidden dimensions    {config.hidden_dims}")
     print(f"\tLatent dimension     {config.latent_dim}")
     print(f"\tActivation encoder   {config.activation_en}")
@@ -194,12 +174,11 @@ def train_autoencoder(
     print(f"\tOptimizer            {config.optimizer}")
     print(f"\tLR scheduler         {config.lr_scheduler}")
     print(f"\tNoise injection      {'enabled' if config.allow_noise_injection else 'disabled'}")
-    print(f"\tNum of epochs        {config.num_epochs}")
-    if isinstance(config, VAEConfig) and config.use_beta_annealing:
-        print(f"\tBeta annealing       {config.beta_schedule} | {config.beta}")
-    else:
+    if isinstance(config, VAEConfig):
+        print(f"\tBeta annealing       {f'{config.beta_schedule} | {config.beta:.5f}' if config.use_beta_annealing else 'disabled'}")
+        print(f"\tKL clipping          {f'enabled | {config.kl_clamp:.5f}' if config.use_kl_clipping else 'disabled'}")
+    elif isinstance(config, AEConfig):
         print(f"\tNum of warmup epochs {config.warmup_epochs}")
-    print(f"\tDevice               {device}")
     print(f"\tLoss weights Cont    {loss_weights['cont_w']:.5f}")
     print(f"\t             Cat     {loss_weights['cat_w']:.5f}")
 
@@ -212,7 +191,7 @@ def train_autoencoder(
         # -------------------------
         # Warmup setup
         # -------------------------
-        if isinstance(model, TabularAE):
+        if isinstance(config, AEConfig):
             in_warmup = epoch < config.warmup_epochs
             if in_warmup:
                 # freeze cont heads
@@ -220,62 +199,57 @@ def train_autoencoder(
                     p.requires_grad = False
                 # adjust lr to avoid overfitting
                 for g in optimizer.param_groups:
-                    g["lr"] = config.lr * float((epoch+1) / config.warmup_epochs)
-                # disable beta annealing
-                if isinstance(config, VAEConfig):
-                    config.use_beta_annealing = False
+                    g["lr"] = config.lr * float((epoch+1) / config.warmup_epochs)   
             else:
-                # unfreeze cont heads
+                # unfreeze after warmup
                 for p in model.D.cont_recon_head.parameters():
                     p.requires_grad = True
-                # adjust lr to avoid overfitting
+                # adjust lr
                 for g in optimizer.param_groups:
                     g["lr"] = config.lr
-                # enable beta annealing
-                if isinstance(config, VAEConfig):
-                    config.use_beta_annealing = True
         else:
-            in_warmup = False
             if config.use_beta_annealing:
+                annealing = True
                 model.set_beta_annealing(epoch=epoch)
+            if model.current_beta >= config.beta:
+                annealing = False
 
         # -------------------------
         # Setup training
         # -------------------------
-        epoch_train_loss = 0.0
-        epoch_train_metric1 = 0.0
-        epoch_train_metric2 = 0.0
-        n_train_batches = 0
+        tl, tm1, tm2, tn = 0, 0, 0, 0
+        if isinstance(model, TabularVAE):
+            tc, tk = 0, 0
         
-        for batch_Xc, batch_Xk in train_loader:
-            batch_Xc = batch_Xc.to(device, non_blocking=True)
-            batch_Xk = batch_Xk.to(device, non_blocking=True)
+        for bXc, bXk in train_loader:
+            bXc = bXc.to(device)
+            bXk = bXk.to(device)
 
             optimizer.zero_grad(set_to_none=True)
 
             if isinstance(config, AEConfig):
-                cont_recon, cat_logits = model(batch_Xc, batch_Xk)
+                cont_recon, cat_logits = model(bXc, bXk)
                 cont_loss, cat_loss, total_loss = model.scoring(
-                    batch_Xc, 
-                    batch_Xk, 
+                    bXc, 
+                    bXk, 
                     cont_recon,
                     cat_logits,
                     loss_weights,
                     in_warmup
                 )
-                metric1, metric2 = cont_loss, cat_loss
+                m1_loss, m2_loss = cont_loss, cat_loss
             elif isinstance(config, VAEConfig):
-                cont_recon, cat_logits, mu, logvar = model(batch_Xc, batch_Xk)
-                recon_loss, kl_loss, total_loss = model.scoring(
-                    batch_Xc, 
-                    batch_Xk,
+                cont_recon, cat_logits, mu, logvar = model(bXc, bXk)
+                cont_loss, cat_loss, recon_loss, kl_loss, total_loss = model.scoring(
+                    bXc, 
+                    bXk,
                     cont_recon,
                     cat_logits,
                     mu,
                     logvar,
                     loss_weights,
                 )
-                metric1, metric2 = recon_loss, kl_loss
+                m1_loss, m2_loss = recon_loss, kl_loss
 
             # Backward pass
             total_loss.backward()
@@ -293,20 +267,29 @@ def train_autoencoder(
                 scheduler.step()
             
             # Accumulate metrics
-            batch_size = batch_Xc.size(0)
-            epoch_train_loss += total_loss.item() * batch_size
-            epoch_train_metric1 += metric1.sum().item()
-            epoch_train_metric2 += metric2.sum().item()
-            n_train_batches += batch_size
+            bs = bXc.size(0)
+            tl += total_loss.item() * bs
+            tm1 += m1_loss.sum().item()
+            tm2 += m2_loss.sum().item()
+            if isinstance(model, TabularVAE):
+                tc += cont_loss.sum().item()
+                tk += cat_loss.sum().item()
+            tn += bs
 
         # Calculate epoch averages
-        avg_train_loss = epoch_train_loss / max(n_train_batches, 1)
-        avg_train_metric1 = epoch_train_metric1 / max(n_train_batches, 1)
-        avg_train_metric2 = epoch_train_metric2 / max(n_train_batches, 1)
+        avg_tl = tl / max(tn, 1)
+        avg_tm1 = tm1 / max(tn, 1)
+        avg_tm2 = tm2 / max(tn, 1)
+        if isinstance(model, TabularVAE):
+            avg_tc = tc / max(tn, 1)
+            avg_tk = tk / max(tn, 1)
         
-        history["train_loss"].append(avg_train_loss)
-        history[f"train_{metric1_name}"].append(avg_train_metric1)
-        history[f"train_{metric2_name}"].append(avg_train_metric2)
+        history["train_loss"].append(avg_tl)
+        history[f"train_{m1_key}"].append(avg_tm1)
+        history[f"train_{m2_key}"].append(avg_tm2)
+        if isinstance(model, TabularVAE):
+            history["train_recon_cont"].append(avg_tc)
+            history["train_recon_cat"].append(avg_tk)
         history["warmup"].append(in_warmup),
 
         # -----------------------------
@@ -314,65 +297,118 @@ def train_autoencoder(
         # -----------------------------
         if val_loader:
             model.eval()
-            epoch_val_loss = 0.0
-            epoch_val_metric1 = 0.0
-            epoch_val_metric2 = 0.0
-            n_val_batches = 0
+            vl, vm1, vm2, vn = 0, 0, 0, 0
+            if isinstance(model, TabularVAE):
+                vc, vk = 0, 0
 
             with torch.no_grad():
-                for batch_Xc, batch_Xk in val_loader:
-                    batch_Xc = batch_Xc.to(device, non_blocking=True)
-                    batch_Xk = batch_Xk.to(device, non_blocking=True)
+                for bXc, bXk in val_loader:
+                    bXc = bXc.to(device, non_blocking=True)
+                    bXk = bXk.to(device, non_blocking=True)
 
                     if isinstance(config, AEConfig):
-                        cont_recon, cat_logits = model(batch_Xc, batch_Xk)
+                        cont_recon, cat_logits = model(bXc, bXk)
                         cont_loss, cat_loss, total_loss = model.scoring(
-                            batch_Xc, 
-                            batch_Xk,
+                            bXc, 
+                            bXk,
                             cont_recon,
                             cat_logits,
                             loss_weights,
                         )
-                        metric1, metric2 = cont_loss, cat_loss 
+                        m1_loss, m2_loss = cont_loss, cat_loss 
                     elif isinstance(config, VAEConfig):
-                        cont_recon, cat_logits, mu, logvar = model(batch_Xc, batch_Xk)
-                        recon_loss, kl_loss, total_loss = model.scoring(
-                            batch_Xc, 
-                            batch_Xk,
+                        cont_recon, cat_logits, mu, logvar = model(bXc, bXk)
+                        cont_loss, cat_loss, recon_loss, kl_loss, total_loss = model.scoring(
+                            bXc, 
+                            bXk,
                             cont_recon,
                             cat_logits,
                             mu,
                             logvar,
                             loss_weights,
                         )
-                        metric1, metric2  = recon_loss, kl_loss
+                        m1_loss, m2_loss  = recon_loss, kl_loss
 
                     # Accumulate
-                    batch_size = batch_Xc.size(0)
-                    epoch_val_loss += total_loss.item() * batch_size
-                    epoch_val_metric1 += metric1.sum().item()
-                    epoch_val_metric2 += metric2.sum().item()
-                    n_val_batches += batch_size
+                    bs = bXc.size(0)
+                    vl += total_loss.item() * bs
+                    vm1 += m1_loss.sum().item()
+                    vm2 += m2_loss.sum().item()
+                    if isinstance(model, TabularVAE):
+                        vc += cont_loss.sum().item()
+                        vk += cat_loss.sum().item()
+                    vn += bs
 
             # Calculate validation averages
-            avg_val_loss = epoch_val_loss / max(n_val_batches, 1)
-            avg_val_metric1 = epoch_val_metric1 / max(n_val_batches, 1)
-            avg_val_metric2 = epoch_val_metric2 / max(n_val_batches, 1)
+            avg_vl = vl / max(vn, 1)
+            avg_vm1 = vm1 / max(vn, 1)
+            avg_vm2 = vm2 / max(vn, 1)
+            if isinstance(model, TabularVAE):
+                avg_vc = vc / max(vn, 1)
+                avg_vk = vk / max(vn, 1)
             
-            history["val_loss"].append(avg_val_loss)
-            history[f"val_{metric1_name}"].append(avg_val_metric1)
-            history[f"val_{metric2_name}"].append(avg_val_metric2)
+            history["val_loss"].append(avg_vl)
+            history[f"val_{m1_key}"].append(avg_vm1)
+            history[f"val_{m2_key}"].append(avg_vm2)
+            if isinstance(model, TabularVAE):
+                history["val_recon_cont"].append(avg_vc)
+                history["val_recon_cat"].append(avg_vk)
 
             if scheduler is not None:
                 if config.lr_scheduler == "plateau":
-                    scheduler.step(avg_train_loss)
+                    scheduler.step(avg_tl)
                 elif config.lr_scheduler in ["cosine", "step"]:
                     scheduler.step()
+            
             # -----------------------------
             # Early stopping
             # -----------------------------
-            if avg_val_loss < best_metric - 1e-9:
-                best_metric = avg_val_loss
+            if not in_warmup or annealing:
+                if avg_vl < best_metric - 1e-9:
+                    best_metric = avg_vl
+                    best_state = model.state_dict().copy()
+                    history["best_epoch"] = epoch + 1
+                    no_improve = 0
+                else:
+                    no_improve += 1
+                    if no_improve >= config.patience:
+                        print(f"Early stopping at epoch {epoch+1}")
+                        break
+
+            # -----------------------------
+            # Print summary
+            # -----------------------------
+            if isinstance(model, TabularAE):
+                mode = "WARMUP" if in_warmup else "FULL"
+                print(f"Epoch {epoch+1:2d}/{config.num_epochs} - "
+                    f"Mode {mode:<3} | "
+                    f"TRAIN: {avg_tl:.4f} "
+                    f"({m1_name}: {avg_tm1:.4f}, {m2_name}: {avg_tm2:.4f}) |  "
+                    f"VAL: {avg_vl:.4f} "
+                    f"({m1_name}: {avg_vm1:.4f}, {m2_name}: {avg_vm2:.4f}) |  "
+                    f"LR: {optimizer.param_groups[0]['lr']:.5f}")
+            else:
+                eff_kl_train = config.beta*avg_tm2
+                eff_kl_val = config.beta*avg_vm2
+                print(f"E {epoch+1:1d}/{config.num_epochs} - "
+                    f"TRAIN: {avg_tl:.4f} "
+                    f"({m1_name}: {avg_tm1:.4f}, β·{m2_name}: {eff_kl_train:.4f}={eff_kl_train*100/avg_tm1:.2f}%, "
+                    f"cont: {avg_tc:.3f}, cat: {avg_tk:.3f}) | "
+                    f"VAL: {avg_vl:.4f} "
+                    f"({m1_name}: {avg_vm1:.4f}, β·{m2_name}: {eff_kl_val:.4f}={eff_kl_val*100/avg_vm1:.2f}%, "
+                    f"cont: {avg_tc:.3f}, cat: {avg_tk:.3f}) | "
+                    f"LR: {optimizer.param_groups[0]['lr']:.5f}, "
+                    f"β: {model.current_beta:.4f}")
+            
+        # -----------------------------
+        # Full training / No Validation
+        # -----------------------------
+        else:
+            # -----------------------------
+            # Track best loss
+            # -----------------------------
+            if avg_tl < best_metric - 1e-9:
+                best_metric = avg_tl
                 best_state = model.state_dict().copy()
                 history["best_epoch"] = epoch + 1
                 no_improve = 0
@@ -382,44 +418,35 @@ def train_autoencoder(
                     print(f"Early stopping at epoch {epoch+1}")
                     break
 
-            mode = "WARMUP" if in_warmup else "FULL"
-            print(f"Epoch {epoch + 1:2d}/{config.num_epochs}: "
-                  f"Mode {mode:<6} | "
-                  f"Train loss: {avg_train_loss:.6f} "
-                  f"({metric1_short}: {avg_train_metric1:.6f}, {metric2_short}: {avg_train_metric2:.6f}) | "
-                  f"Val loss: {avg_val_loss:.6f} "
-                  f"({metric1_short}: {avg_val_metric1:.6f}, {metric2_short}: {avg_val_metric2:.6f}) | "
-                  f"LR: {optimizer.param_groups[0]['lr']:.2e}")
-            
-        # -----------------------------
-        # Full training / No Validation
-        # -----------------------------
-        else:
             # -----------------------------
-            # Track best loss
+            # Print summary
             # -----------------------------
-            if avg_train_loss < best_metric - 1e-9:
-                best_metric = avg_train_loss
-                best_state = model.state_dict().copy()
-                history["best_epoch"] = epoch + 1
+            if isinstance(model, TabularAE):
+                mode = "WARMUP" if in_warmup else "FULL"
+                print(f"Epoch {epoch+1:2d}/{config.num_epochs} - "
+                    f"Mode {mode:<3} | "
+                    f"TRAIN: {avg_tl:.4f} "
+                    f"({m1_name}: {avg_tm1:.4f}, {m2_name}: {avg_tm2:.4f}) |  "
+                    f"LR: {optimizer.param_groups[0]['lr']:.5f}")
+            else:
+                eff_kl_train = config.beta*avg_tm2
+                print(f"Epoch {epoch+1:1d}/{config.num_epochs} - "
+                    f"TRAIN: {avg_tl:.4f} "
+                    f"({m1_name}: {avg_tm1:.4f}, β·{m2_name}: {eff_kl_train:.4f}={eff_kl_train*100/avg_tm1:.2f}%, "
+                    f"cont: {avg_tc:.3f}, cat: {avg_tk:.3f}) | "
+                    f"LR: {optimizer.param_groups[0]['lr']:.5f}, "
+                    f"β: {model.current_beta:.4f}")
 
-            mode = "WARMUP" if in_warmup else "FULL"
-            print(f"Epoch {epoch + 1:2d}/{config.num_epochs}: "
-                    f"Mode {mode:<6} | "
-                    f"Loss: {avg_train_loss:.6f} "
-                    f"({metric1_short}: {avg_train_metric1:.6f}, {metric2_short}: {avg_train_metric2:.6f}) | "
-                    f"LR: {optimizer.param_groups[0]['lr']:.2e}")
+        history["learning_rates"].append(optimizer.param_groups[0]['lr'])
 
-        # Track learning rate
-        current_lr = optimizer.param_groups[0]['lr']
-        history["learning_rates"].append(current_lr)
-
-        # print extra gradient norms every 10 epochs
+        # -----------------------------
+        # Print gradient norm
+        # -----------------------------
         if (epoch + 1) % 10 == 0:
             total_norm = 0.0
             for p in model.parameters():
                 if p.grad is not None:
-                    total_norm += p.grad.detach().data.pow(2).sum().item()
+                    total_norm += p.grad.detach().pow(2).sum().item()
             total_norm = total_norm ** 0.5
             print(f"  Gradient norm: {total_norm:.4f}")
 
@@ -432,63 +459,8 @@ def train_autoencoder(
     
     if isinstance(model, TabularVAE):
         del history["warmup"]
-    
-    return model.eval(), history
-
-
-#########################################
-##         SAVE / LOAD HELPERS         ##
-#########################################
-
-def save_autoencoder(
-    model: TabularAE | TabularVAE,
-    config: AEConfig | VAEConfig,
-    cat_dims: dict[str, int],
-    num_cont: int,
-    path: Path,
-    additional_info: dict[str, Any] | None = None
-) -> None:
-    """Save model weights + config to a single .pt file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    payload = {
-        "state_dict": model.state_dict(),
-        "config": asdict(config),
-        "cat_dims": cat_dims,
-        "num_cont": num_cont,
-        "model_class": model.__class__.__name__,
-        "additional_info": additional_info or {},
-    }
-    torch.save(payload, path)
-
-    print(f"[OK] Saved autoencoder to {path}")
-
-
-def load_autoencoder(
-    path: Path,
-    device: str = "cpu"
-) -> tuple[TabularAE | TabularVAE, AEConfig | VAEConfig, int, dict[str, int]]:
-    """Load model + config from a .pt file."""
-    payload = torch.load(path, map_location=device, weights_only=True)
-
-    num_cont = payload["num_cont"]
-    cat_dims = payload["cat_dims"]
-
-    ae_class = payload["model_class"]
-    if ae_class == "TabularAE":
-        cfg = AEConfig(**payload["config"])
-        model = TabularAE(config=cfg)
-    elif ae_class == "TabularVAE":
-        cfg = VAEConfig(**payload["config"])
-        model = TabularVAE(config=cfg)
     else:
-        raise ValueError(f"Unknown model_class: {ae_class}")
-    
-    model.load_state_dict(payload["state_dict"])
-    target_device = torch.device(cfg.device)
-    model = model.to(target_device)
-    
-    print(f"[INFO] Loaded autoencoder from {path}")
-    print(f"[INFO] Model moved to device: {target_device}")
-    
-    return model.eval(), cfg, num_cont, cat_dims
+        for key in ["train_recon_cont", "train_recon_cat", "val_recon_cont", "val_recon_cat"]:
+            del history[key],
+
+    return model.eval(), history

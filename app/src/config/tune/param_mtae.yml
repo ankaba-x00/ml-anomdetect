@@ -1,0 +1,91 @@
+description: > 
+  Config parameters for tuning MTAE autoencoder. 
+    static : holds fixed parameters not included in search space
+    tune: holds search space parameters
+  
+  Format: 
+    static: key/value pairs
+    tune:
+      int/float: dict with start/end keys
+        adam_beta1, adam_beta2, cat_w, depth, dropout, focal_gamma, lambda_at, lambda_l3, lambda_l7, lr, sgd_momentum, noise_gauss_std, noise_mask_prob, weight_decay
+      categorical: list
+        activation_en, activation_de, activation_de_cls, base_dim, batch_size, gradient_clip, latent_dim, lr_scheduler, optimizer 
+
+static:
+  use_embedding: True
+  embedding_dim: null
+  optimizer: "adam"
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  sgd_momentum: 0.0
+  lr_scheduler: none
+  allow_noise_injection: True
+  patience: 8
+  temperature: 1.0
+  quantiles: [0.1, 0.25, 0.5, 0.75, 0.9]
+  focal_gamma: 2.0
+  num_epochs: 60
+  warmup_epochs: 3
+  stepup_epochs: 3
+  alpha: 1.0
+  device: "cpu"
+tune:
+  depth:
+    start: 2
+    end: 3
+  base_dim:
+    - 128 
+    - 256
+    - 512
+  latent_dim:
+    - 32
+    - 64
+  activation_en:
+    - "relu"
+    - "leaky_relu"
+  activation_de:
+    - "leaky_relu"
+    - "tanh"
+    - "sigmoid"
+  activation_de_cls:
+    - "leaky_relu"
+    - "tanh"
+    - "sigmoid"
+  dropout:
+    start: 0.0
+    end: 0.2
+  lr:
+    start: 1.0e-5
+    end: 1.0e-3
+  weight_decay:
+    start: 1.0e-6
+    end: 1.0e-4
+  gradient_clip:
+    - 0.5
+    - 1.0
+    - 2.0
+  batch_size:
+    - 128
+    - 256
+    - 512
+  noise_gauss_std:
+    start: 0.1
+    end: 0.3
+  noise_mask_prob:
+    start: 0.05
+    end: 0.1
+  cont_w:
+    start: 0.1
+    end: 0.5
+  cat_w:
+    start: 0.1
+    end: 0.5
+  lambda_l3:
+    start: 0.1
+    end: 0.5
+  lambda_l7:
+    start: 0.1
+    end: 0.5
+  lambda_at:
+    start: 0.5
+    end: 1.0

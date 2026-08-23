@@ -3,11 +3,11 @@
 Fetches raw datasets from Cloudflare.
 - outputs json files
 
-Outputs:
+Output:
     raw files : app/datasets/raw/<dataset>.json
 
 Usage: 
-    python -m app.src.data.fetch
+    python -m app.src.data.fetch [-S <date_str>] [-E <date_str>] [-A] [-T] [-N] [-hr] [-hrt] [-hra] [-t] [-tt] [-at] [-bt] [-iqt] [-a] [-l3or] [-l3ta] [-l3ort] [-l3tat] [-l7or] [-l7ta] [l7t] 
 """
 
 import requests, json, os
@@ -19,28 +19,14 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-#########################################
-##                CONFIG               ##
-#########################################
-
 env_path = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(env_path)
 API_TOKEN = os.getenv("API_TOKEN")
 if not API_TOKEN:
     raise EnvironmentError("[ERROR] API_TOKEN not found in environment (.env)")
 
-
-#########################################
-##              DATE RANGE             ##
-#########################################
-
 DATE_FROM = datetime(2024, 11, 15, tzinfo=timezone.utc)
 DATE_TO   = datetime(2025, 11, 14, tzinfo=timezone.utc)
-
-
-#########################################
-##                PARAMS               ##
-#########################################
 
 ISO_3166_alpha2 = [
     "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", 
@@ -66,10 +52,6 @@ ISO_3166_alpha2 = [
     "VN", "VU", "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW"] # added Kosovo = XK for CF
 
 
-#########################################
-##                HELPER               ##
-#########################################
-
 def _get_output_path(title: str) -> Path:
     pull_date = datetime.now(timezone.utc).strftime("%m-%d-%Y")
     project_root = Path(__file__).resolve().parents[2]
@@ -77,14 +59,12 @@ def _get_output_path(title: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir / f"{title}_pull-{pull_date}.json"
 
-
 def _headers() -> dict[str, str]:
     global API_TOKEN
     return {
         "Authorization": f"Bearer {API_TOKEN}",
         "accept": "application/json",
     }
-
 
 def _requests_session() -> requests.Session:
     session = requests.Session()
@@ -97,14 +77,8 @@ def _requests_session() -> requests.Session:
     session.mount("https://", HTTPAdapter(max_retries=retries))
     return session
 
-
 def _print_range() -> None:
     print(f"[INFO] Data will be fetched \n\t FROM incl. {DATE_FROM.strftime('%m/%d/%Y')} \n\t TO incl. {DATE_TO.strftime('%m/%d/%Y')}\n")
-
-
-#########################################
-##               FETCHER               ##
-#########################################
 
 def pull_notime_data(TITLE, URL, BASE_PARAMS) -> None:
     """
@@ -161,7 +135,6 @@ def pull_notime_data(TITLE, URL, BASE_PARAMS) -> None:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
     print(f"[DONE] Saved {len(results)} days to {output_path}")
-
 
 def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2) -> None:
     """
@@ -238,7 +211,6 @@ def pull_notime_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha
         json.dump(results_all, f, indent=2, ensure_ascii=False)
 
     print(f"[DONE] Saved worldwide + {len(COUNTRIES)} countries to {output_path}")
-
 
 def pull_time_datapercountry(TITLE, URL, BASE_PARAMS, COUNTRIES=ISO_3166_alpha2) -> None:
     """
@@ -465,7 +437,7 @@ if __name__ == "__main__":
             DATE_FROM = start_dt
             DATE_TO = end_dt
     except Exception:
-        print(f"Date format not accepted: {start} - {end}.")
+        print(f"Date format not accepted: {start} - {end}")
         print("Required format: MM/DD/YYYY")
         sys.exit(1)
     
