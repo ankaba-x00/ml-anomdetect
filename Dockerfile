@@ -10,13 +10,11 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml .
+RUN pip install --no-cache-dir .[dev]
 
-# Copy EVERYTHING the API needs
 COPY . .
 
-# Ensure Python can import the `app` package
 ENV PYTHONPATH="/app"
 
 EXPOSE 7134

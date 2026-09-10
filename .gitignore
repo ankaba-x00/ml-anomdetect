@@ -4,18 +4,18 @@ __pycache__/
 
 .env
 .venv/
+.vscode
+.devcontainer
+.mypy_cache
+
+stdout_*
+
 release_bundles
-requirements.txt
 
 app/datasets/raw
 app/datasets/processed 
 app/datasets/featured
 app/datasets/scalers
-
+app/deployment/models
 results
 
-app/deployment/models
-
-stdout_*
-.vscode
-.devcontainer
