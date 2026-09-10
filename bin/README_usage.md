@@ -32,7 +32,7 @@ This package has multiple sequential stages
     source .venv/bin/activate
     ```
 4. Install requirements
-    <br>`pip install -r requirements.txt`
+    <br>`pip install --no-cache-dir`
 5. (Optionally) Install Docker to run the GUI for model use (see https://www.docker.com/get-started/)
 6. Make sure that all automatisation scripts are executables
     <br>```( cd scripts && find . -maxdepth 1 -type f ! -name "README.md" -exec chmod +x {} \; )```
@@ -83,9 +83,9 @@ This package has multiple sequential stages
 
    5.2. Multiple pulls per dataset file
         1. EXAMPLE1: If you downloaded all datasets and have 3 pulls per dataset file, you need to check the pull directions. If the first downloaded file is fetching data before the second, the pulls are consecutively, ergo merge direction = 0
-        <br>`python -m app.src.data.merge_preprocess -N 3 0 all`
+        <br>`python -m app.src.data.merge_preprocess -N 3 all 0`
         2. EXAMPLE2: If the first downloaded file is fetching data after the second, the pulls are non-consecutively, ergo merge direction = 1
-        <br>`python -m app.src.data.merge_preprocess -N 3 1 all`</br>
+        <br>`python -m app.src.data.merge_preprocess -N 3 all 1`</br>
         3. ADVICE: If you have multiple datasets you need to preprocess, remove individual fetch keys from the file ./app/src/data/merge_preprocess directly to automate the process for your dataset bundle
 
    5.3. You can run an automated analysis on your raw datasets via
