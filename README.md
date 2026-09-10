@@ -1,30 +1,41 @@
-# Network Traffic Anomaly Detection System
-## Deep Autoencoders for Real-Time Detection of Global Network Threats
+# Anomaly Detection Module
+## Autoencoders for real-time detection of global network threats
 
-A production-grade anomaly detection system that identifies abnormal network traffic patterns across 250 countries, powered by PyTorch, fully custom hybrid autoencoders, and optuna-optimized training pipelines.
-The system consumes Cloudflare Radar API telemetry (L3/L7 traffic, bot activity, attack indicators) to detect anomalies such as DDoS attacks, outages, routing irregularities, and botnet behavior in real-time. Provides both:
+A production-grade anomaly detection module that identifies abnormal network traffic patterns across 250 countries, powered by PyTorch, fully custom hybrid autoencoders, trained on 3-year country-specific traffic data (seasonality-aware), with automated Optuna tuning pipeline and modular package structure. The system consumes Cloudflare Radar API telemetry (L3/L7 traffic, bot activity, attack indicators etc.) to detect anomalies such as DDoS attacks, outages, routing irregularities, and botnet behavior in real-time. Provides both:
 - CLI inference pipeline
-- FastAPI-powered web GUI
+- FastAPI-powered GUI web dashboard
 
 ## Key features
 #### Modeling
-- Country-specific autoencoders trained on 3-year traffic data (seasonality-aware)
+- 3 different autoencoders for both unsupervised and supervised learning
+    - Denoising autoencoder with symmetrical encoder and decoder for anomaly detection
+    - Variational autoencoder with reparametrized latent space for anomaly detection
+    - Multi-task autoencoder with asymmetrical encoder and decoder with sepearte regression and classification heads for anomaly detection and prediction of L3/l7 intensities and attack type
 - Hybrid architecture with
-    - learned embeddings for categorical time features
-    - separate reconstruction heads for continuous & categorical features
-    - weighted hybrid loss (MSE + CE)
-- Denoising autoencoder with optional residual connections for improved gradient flow and training stability
-- Automated hyperparameter search with Optuna (Hyperband / Median / SHA)
-- Temperature scaling & threshold calibration using MAD / p99 / p99.5 methods for optimal anomaly sensitivity
-#### Engineering
-- <100ms real-time inference (GPU/CPU) with CLI and web GUI interfaces
-- containerization with Docker
-- CI/CD-ready project structure with modular pipelines
-- Monitoring-ready with analysis notebooks & structured result folders
+    - customizable encoder and decoder structure
+    - learned embeddings or encoding for categorical time features
+    - separate reconstruction heads for continuous and categorical features
+    - weighted hybrid loss (huber loss or MSE + CE) for reconstruction, incl. KL-divergence for variational models, focal and quantile loss for multi-task model 
+    - optional noise injection with residual connections for improved gradient flow and training stability
+    - different warmup routines for improved latent regularization 
+- Automated hyperparameter tuning with Optuna
+- Temperature scaling and threshold calibration for optimal anomaly sensitivity
+- A custom labelling schema for supervised attack type classification to differentiate 8 traffic patterns
 
-## Model Details
-1. Hybrid loss function with individual weights:<br>
-    `total_loss = (cont_weight * MSE(continuous_recon, original) + cat_weight * CE(categorical_logits, original))`
+#### Engineering
+- <100ms Real-time inference (GPU/CPU) with CLI and web GUI interfaces
+- Containerization with Docker
+- CI/CD-ready project structure with modular pipelines
+- Monitoring-ready with analysis pipelines & structured result folders
+
+## Model details
+1. Hybrid loss functions with individual weights:<br>
+    - Reconstruction:<br>
+    `total_loss = (𝝺_cont * HUBER(cont_recon, original) + 𝝺_cat * CE(cat_logits, original))`
+    - Variational reconstruction:<br>
+    `total_loss = (𝝺_cont * HUBER(cont_recon, original) + 𝝺_cat * CE(cat_logits, original)) + β D_KL(mu, logvar)`
+    - MT Prediction:<br>
+    `total_loss = (𝝺_cont * HUBER(cont_recon, original) + 𝝺_cat * CE(cat_logits, original)) + 𝛼 * [𝝺_l3 * QUANT_LOSS_l3(l3_pred, original) + 𝝺_l7 * QUANT_LOSS_l7(l7_pred, original) + 𝝺_at * FOCAL_LOSS(at_logits, original)]`
 2. Feature engineering:
     - Continuous: traffic volumes, attack rates, bot intensity, rolling stats
     - Categorical: weekday, month, daytype, daytime segment, seasonal index
@@ -39,7 +50,7 @@ The system consumes Cloudflare Radar API telemetry (L3/L7 traffic, bot activity,
     | Training time      | 1-2 h    | Per country with 3 years of data, GPU accelaration not counted |
     | Model size         | <1 MB    | Suitable for edge or serverless deployment                     |
 
-## Data Pipeline
+## Data pipeline
 ```
 Cloudflare Radar API  → Feature Engineering → Country-Specific Models → Anomaly Detection
           ↓                     ↓                      ↓                    ↓                
@@ -48,7 +59,7 @@ Cloudflare Radar API  → Feature Engineering → Country-Specific Models → An
    Bot/Crawler Data        Seasonality
    Time-Series              Embedding
 ```
-## Technical Stack
+## Technical stack
 |<div align="center">**Component**</div>|<div align="center">**Technology**</div>|<div align="center">**Purpose**</div>|
 |-----------------|-------------------------|--------------------------------------|
 | ML Framework	  |   PyTorch 2.4	        | Autoencoder models, GPU acceleration |
@@ -60,12 +71,11 @@ Cloudflare Radar API  → Feature Engineering → Country-Specific Models → An
 | Monitoring	  |   Custom dashboard	    | Analysis, diagnostics                |
 
 
-## Getting Started
+## Getting started
 
-This project includes a full end-to-end workflow for fetching datasets, training anomaly-detection models, tuning hyperparameters, testing, and running inference.  
+This project includes a full end-to-end workflow for fetching datasets, training models, tuning hyperparameters, testing, and running inference for anomaly detection.  
 For the complete step-by-step guide, please read the **Usage Guide**:
-<br> --> see ./scripts/README.md (**recommended**)
-
+<br> --> see ./bin/README_usage.md (**highly recommended**)
 Below is a minimal quick-start.
 
 ### 1. Installation
@@ -80,31 +90,34 @@ Below is a minimal quick-start.
     
 
 - Run following commands in $PROJECT_ROOT which is ./ml-anomdetect
-- Specify countries you want to build as models in: ./ml-anomdetect/app/src/models/models.yml
+- Specify countries you want to build as models in: ./ml-anomdetect/app/src/config/models.yml
 - Flag -h gives more information on usage, flags, print verbosity etc.
 - Example below is for AT model (use <all> for all countries specified in models.yml)
+
 ### 2. Data acquision and preprocessing
     
     python -m app.src.data.fetch
     python -m app.src.data.preprocess
     
-### 3. Model training, validation, tuning, testing
+### 3. Multi-task model training, validation, tuning, testing
     
-    python -m app.src.pipelines.build_features -B -S AT
-    python -m app.src.pipelines.train_model AT
-    python -m app.src.pipelines.validate_model AT
-    python -m app.src.pipelines.tune_model --trials 60 --pruner hyperband AT
-    python -m app.src.pipelines.test_model AT
+    python -m app.src.pipelines.build_features -B -S super AT
+    python -m app.src.pipelines.train_model config mtae AT
+    python -m app.src.pipelines.validate_model mtae AT
+    python -m app.src.pipelines.tune_model --ntrials 60 --pruner hyperband mtae AT
+    python -m app.src.pipelines.test_model mtae AT
     
 ### 4. Analysis training, validation, tuning, testing
     
-    python -m app.src.pipelines.analyze_training AT
-    python -m app.src.pipelines.analyze_tuning AT
-    python -m app.src.pipelines.analyze_testing AT
+    python -m app.src.pipelines.analyze_labels mtae AT
+    python -m app.src.pipelines.analyze_training mtae AT
+    python -m app.src.pipelines.analyze_tuning mtae AT
+    python -m app.src.pipelines.analyze_testing mtae AT
     
-### 5. Run Inference
+### 5. Run inference
+    python -m app.src.pipelines.train_model -F config mtae AT
     # CLI 
-    python -m app.deployment.pipeline -d 12/04/2025 AT
+    python -m app.deployment.run_inference -d 01/01/2026 AT
     # GUI 
     docker-compose up --build
 
@@ -115,16 +128,17 @@ app/
 ├── datasets/         # Raw, processed, feature-engineered dataset stages
 ├── deployment/       # Production models & inference as CLI
 ├── src/
+│   ├── config/       # Set countries, model configuration & tuning search space
 │   ├── data/         # Data ingestion & preprocessing
-│   ├── exploration/  # EDA, diagnostics, visualizations
-│   ├── ml/           # All DL modules incl. models, training, tuning, analysis
-│   └── pipelines/    # Training, validation, tuning & testing workflows
+│   ├── exploration/  # Data EDA, diagnostics & visualizations
+│   ├── ml/           # All DL helper incl. models, training, tuning, & analysis 
+│   └── pipelines/    # Training, validation, tuning, testing & analysis workflows
 └── tests/            # PyTest-based unit tests
-results/              # Trained models, histories, scalers, visual outputs
-scripts/              # Automation & maintenance tasks
+results/              # All workflow artifacts incl. models, scalars, summaries & plots
+bin/                  # Automation & maintenance tasks
 ```
 
-## This Project Demonstrates
+## This project demonstrates
 - Full-stack ML engineering: from API ingestion -> modeling -> deployment
 - Deep Learning knowledge: custom autoencoder architectures
 - MLOps workflow design: reproducible pipelines, tuning, calibration

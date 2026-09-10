@@ -13,7 +13,7 @@
 This package has multiple sequential stages
 1. You need to fetch datasets and preprocess data
 2. You need to build and train models
-3. You need to tune models
+3. You need to tune, validate and test models
 4. You can use models now to make predictions
 
 ## Step-by-step Instructions
@@ -42,7 +42,7 @@ This package has multiple sequential stages
 1. Get access to Cloudflare API by creating a token (see https://developers.cloudflare.com/api/)
 2. Store your token in .env file in $PROJECT_ROOT which is inside ml-anomdetect folder 
     <br>`echo "API_TOKEN=YOUR_TOKEN_COPY" > .env`
-3. Open ./scripts/run_fetch.sh and edit fetch configuration parameters to your liking.
+3. Open ./bin/run_fetch.sh and edit fetch configuration parameters to your liking.
 
    3.1. EXAMPLE1: To run anomaly predictions with 1 year of training data, you only need timeseries data, ergo changing the following parameters is enough
     ```
@@ -65,12 +65,12 @@ This package has multiple sequential stages
     FETCH_TRAFFIC=true
     ```
 
-   3.4. ADVICE: For multi-year ranges, consider splitting the fetch into several chunks. You can merge them afterward. To avoid CloudFlare API rate limit, it is highly recommended to start these multi-pull fetches sequentially on different days. 
+   3.4. ADVICE: For multi-year ranges, consider splitting the fetch into several chunks. You can merge them afterwards. To avoid CloudFlare API rate limit, it is highly recommended to start these multi-pull fetches sequentially on different days. 
 
    3.5. WARNING: Each fetch produces a raw dataset file timestamped by the day of the fetch. Running multiple fetches on the same date will overwrite the previous file unless you modify the naming convention in app/src/data/fetch.py. 
 
 5. Run run_fetch.sh via
-    <br>`./scripts/run_fetch.sh`
+    <br>`./bin/run_fetch.sh`
 
 6. Preprocess data depending on your usage
 
@@ -93,21 +93,23 @@ This package has multiple sequential stages
 
 ### Build and Train Models
 
-1. Specify all countries you want to build as models in ./app/src/models/models.yml by adding their respective 2-letter country codes. For a list of 2-letter country codes, see regions dictionary in ./app/src/exploration/core/params.py
-2. Open ./scripts/run_train.sh and edit training and validation configuration parameters to your liking.
+1. Specify all countries you want to build as models in ./app/src/config/models.yml by adding their respective 2-letter country codes. For a list of 2-letter country codes, see regions dictionary in ./app/src/exploration/core/params.py
+2. Open ./bin/run_train.sh and edit training and validation configuration parameters to your liking.
 3. Run run_train.sh to train models as specified
-    <br>`./scripts/run_train.sh`
+    <br>`./bin/run_train.sh`
 4. CAREFUL: run_train.sh is an automatisation script that executes 3 steps: training, validation and analysis of training. See file for individual run commands. 
 
 ### Tune Models
-1. Open ./scripts/run_tune.sh and edit tuning and testing configuration parameters to your liking.
-2. Run run_tune.sh to tune and test models as specified
-    <br>`./scripts/run_tune.sh`
+1. Choose hyperparamter search space in app/src/config/tune/<MODEL>.yml. Please read the **Tuning Usage Guide**:
+<br> --> see ./app/src/config/tune/README_tune.md (**recommended**)
+2. Open ./bin/run_tune.sh and edit tuning and testing configuration parameters to your liking.
+3. Run run_tune.sh to tune and test models as specified
+    <br>`./bin/run_tune.sh`
 4. CAREFUL: run_tune.sh is an automatisation script that executes 4 steps: tuning, testing and analysis of both steps. See file for individual run commands.
 
 ### Use Models
 #### CLI
-1. Open ./scripts/run_inference.sh and edit inference configuration parameters to your liking.
+1. Open ./bin/run_inference.sh and edit inference configuration parameters to your liking.
 2. WARNING: Before running inference, you must train final production models using the full dataset (no train/val split). To prepare these models for the first time, specify the following configuration 
     ```
     TARGET="all"
@@ -119,14 +121,14 @@ This package has multiple sequential stages
 3. WARNING: TRAINING=true must be used only once to generate production-grade models. For all subsequent inference runs, set
    <br>`TRAINING=false # !! very important`
 5. Run run_inference.sh to either prepare models for inference or perform inference as specified
-    <br>`./scripts/run_inference.sh`
+    <br>`./bin/run_inference.sh`
 
 #### GUI
 1. WARNING: To run inference in GUI, make sure all models are prepared for inference (see CLI section above)
 2. Build Docker images and start all services via
     <br>`docker-compose up --build `
 3. Open the web application at
-   <br>`http://0.0.0.0:8000/` 
+   <br>`http://0.0.0.0:7134/` 
 
 ## Troubleshooting
 
@@ -138,7 +140,7 @@ b. If you executed the file from $PROJECT_ROOT and still get a FileNotFound Erro
 
 ### 2. CloudFlare Fetch incomplete but no error during fetch.
 
-Sometime CloudFlare does not return any values for a given location while also not throwing an error. In this case, you might get timestamps only and the values list in the json is empty. The fetch will not break if the API operation continues as normal. In this event, you will later get an error while building the feature matrix that looks like this (example shows missing values for a country in l3attack_origin_protocol)
+Sometime CloudFlare does not return any values for a given location while also not throwing an error. In this case, you might get timestamps only and the values list in the json is empty. The fetch will not break if the API operation continues as normal. If this occurs, you will later get an error while building the feature matrix that looks like this (example shows missing values for a country in l3attack_origin_protocol):
 
     X_cont_df, X_cat_df, num_cont, cat_dims, = build_feature_matrix(country)
     KeyError: "None of [Index(['udp', 'tcp', 'icmp', 'gre'], dtype='object', name='metric')] are in the [columns]"
@@ -156,9 +158,8 @@ c. If you confirmed availability, fetch again, e.g. for the above error example
 d. If you confirmed unavailability, you cannot build the country model with the current setup. In this case, you can choose a different country or modify the feature matrix build to exclude this dataset. For the latter, you need to modify the feature matrix build:
 - open ./app/src/data/feature_engineering.py
 - find the unavailable dataset in build_country_dataframe() under section "1. load all datasets", e.g. 
-            <br>`s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")`
+    <br>`s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")`
 - search for all variable instances of this dataset and remove variable where it is used, e.g.
-            <br>`s_l3o`
+    <br>`s_l3o`
 - search for all name instances of the dataset and remove where it is used, e.g.
-            <br>`"l3_origin"`
-- do the same in app/deployment/features.py for fetching live data during inference; naming convention is the same.
+    <br>`"l3_origin"`
