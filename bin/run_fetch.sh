@@ -51,7 +51,7 @@ FETCH_L7_TIME=false
 ARGS=""
 
 # Dates
-ARGS+=" -S \"$START_DATE\""
+ARGS+="-S \"$START_DATE\""
 ARGS+=" -E \"$END_DATE\""
 
 # Global groups
