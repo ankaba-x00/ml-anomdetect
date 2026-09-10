@@ -1,4 +1,4 @@
-import yaml, pickle
+import yaml, numpy.core, pickle, sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -18,6 +18,9 @@ from app.src.data.attack_labelling import (
     score_attack_types, 
     ATTACK_TO_ID
 )
+
+sys.modules['numpy._core'] = numpy.core
+sys.modules['numpy._core.numeric'] = numpy.core.numeric
 
 
 def load_countries_from_config(models_path: Path) -> list[str]:
