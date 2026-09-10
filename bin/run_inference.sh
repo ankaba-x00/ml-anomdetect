@@ -5,13 +5,16 @@
 ##################################
 
 ### INFERENCE ARGUMENTS ###
-# Target country (or "all") as specified in app/src/models/models.yml
 TARGET="AT"
-MODEL="ae"  # ae | vae
+# TARGET specifies country for which you want to use country-specific model for inference
+MODEL="ae"  # ae | vae | mtae
+# MODEL specifies autoencoder type
 PREDICTION_DATE="11/15/2025"  # format MM/DD/YYYY
-TRAINING=false
+# DATE specifies date for which you want to make a prediction for
+PREPARE_BUNDLE=false
+# PREPARE_BUNDLE specifies whether you want to prepare inference package which is necessary before the first inference run
 
-### TRAINING ARGUMENTS ###
+### PREPARATION ARGUMENTS ###
 THRESHOLD_METHOD="p99"  # p99 | p995 | mad
 CAL_WINDOW=30 
 PLOT_LATENT=true 
@@ -20,14 +23,14 @@ PLOT_LATENT=true
 # BUILD ARGUMENT LIST - DO NOT EDIT #
 #####################################
 
-### TRAINING ARGUMENTS (FULL MODE) ###
-ARGS_TRAIN=""
-ARGS_TRAIN+=" --full" 
-ARGS_TRAIN+=" -M $THRESHOLD_METHOD"
-ARGS_TRAIN+=" -CW $CAL_WINDOW"
-$PLOT_LATENT && ARGS_TRAIN+=" -L"
-ARGS_TRAIN+=" $MODEL"
-ARGS_TRAIN+=" $TARGET"
+### PREPARATION ARGUMENTS (FULL MODE) ###
+ARGS_PREP=""
+ARGS_PREP+=" --full" 
+ARGS_PREP+=" -M $THRESHOLD_METHOD"
+ARGS_PREP+=" -CW $CAL_WINDOW"
+$PLOT_LATENT && ARGS_PREP+=" -L"
+ARGS_PREP+=" $MODEL"
+ARGS_PREP+=" $TARGET"
 
 
 ### INFERENCE ARGUMENTS ###
@@ -40,11 +43,11 @@ ARGS_INFER+=" $TARGET"
 # EXECUTION  - DO NOT EDIT #
 ############################
 
-if [ "$TRAINING" = true ]; then
+if [ "$PREPARE_BUNDLE" = true ]; then
     echo "===================================="
     echo "[TRAIN] Executing:"
-    echo "python -m app.src.pipelines.ae.train_model $ARGS_TRAIN"
-    eval python -m app.src.pipelines.ae.train_model $ARGS_TRAIN
+    echo "python -m app.src.pipelines.train_model $ARGS_PREP"
+    eval python -m app.src.pipelines.train_model $ARGS_PREP
     echo "[TRAIN] Completed!"
     echo
 else
