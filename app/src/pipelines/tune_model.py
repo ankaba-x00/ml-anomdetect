@@ -48,6 +48,7 @@ from app.src.ml.training.train_ae import train_autoencoder
 from app.src.ml.training.train_mt import train_mt_autoencoder
 from app.src.ml.tuning.tune import objective
 from app.src.ml.tuning.io_utils import TrialSummaryWriter
+from app.src.utils import timeit
 
 warnings.filterwarnings("ignore")
 
@@ -58,6 +59,7 @@ OUT_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+@timeit
 def tune_model(
     ae_type: Literal["ae", "vae", "mtae"],
     country: str, 

@@ -45,6 +45,7 @@ from app.src.ml.models.helpers import load_autoencoder, save_autoencoder
 from app.src.ml.training.calibrate import calibrate_threshold
 from app.src.ml.training.train_ae import train_autoencoder
 from app.src.ml.training.train_mt import train_mt_autoencoder
+from app.src.utils import timeit
 
 
 FILE_DIR = Path(__file__).resolve().parent
@@ -55,6 +56,7 @@ OUT_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
 FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "models"
 
 
+@timeit
 def train_model(
     ae_type: Literal["ae", "vae", "mtae"],
     country: str, 

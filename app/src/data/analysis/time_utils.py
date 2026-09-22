@@ -1,24 +1,8 @@
-from typing import Any, cast, Callable, TypeVar, ParamSpec, overload
-import functools
+from typing import Any, cast, overload
 import pandas as pd
-import time
 
-P = ParamSpec("P")
-R = TypeVar("R")
+
 TimeLike = str | pd.Series | pd.Timestamp
-
-
-def timeit(func: Callable[P, R]) -> Callable[P, R]:
-    @functools.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        """Decorator to time method execution length in seconds."""
-
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        end = time.perf_counter()
-        print(f"[TIMEIT] {func.__name__} executed in {end - start:.4f}s")
-        return result
-    return wrapper
 
 @overload
 def conv_iso_to_utc(time: str | pd.Timestamp) -> pd.Timestamp:
@@ -87,7 +71,7 @@ def conv_local_to_iso(
     return utc_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def conv_iso_to_local_with_daytype(
-    time: pd.Series | TimeLike, 
+    time: TimeLike, 
     country: str, 
     tz: dict
 ) -> dict[str, Any]:
@@ -122,7 +106,7 @@ def conv_iso_to_local_with_daytype(
         raise ValueError("[ERROR] Conversion failed for local with daytype")
 
 def conv_iso_to_local_with_daytimes(
-    time: pd.Series | TimeLike, 
+    time: TimeLike, 
     country: str, 
     tz: dict  
 ) -> dict[str, Any]:

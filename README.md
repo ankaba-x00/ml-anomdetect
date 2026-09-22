@@ -133,7 +133,8 @@ app/
 │   ├── config/       # Set countries, model configuration & tuning search space
 │   ├── data/         # Data helpers for ingestion, processing & analysis
 │   ├── ml/           # ML helper incl. models, training, tuning, & analysis 
-│   └── pipelines/    # Fetch, build, train, validate, tune, test & analyze workflows
+│   ├── pipelines/    # Fetch, build, train, validate, tune, test & analyze workflows
+|   └── utils         # Development utilities
 └── tests/            # PyTest-based unit tests
 results/              # Workflow artifacts incl. models, scalars, summaries & plots
 bin/                  # Automation & maintenance tasks
