@@ -14,7 +14,10 @@ class YMLReaderError(Exception):
 
 class YMLReader:
     """
-    Reads hyperparameter search space from YAML tuning configuration, passes tuning parameters to objective function as trial suggestion variables and generates final config object for trial run.
+    Hyperparameter search space reader.
+    Reads search space from YAML tuning configuration, passes tuning parameters
+    to objective function as trial suggestion variables and generates final 
+    config object for trial run.
     """
 
     def __init__(
@@ -30,7 +33,10 @@ class YMLReader:
         num_cont: int, 
         cat_dims: dict[str, int]
     ) -> AEConfig | VAEConfig | MTAEConfig:
-        "Generates config object for Obtuna objective."
+        """
+        Loads tuning configuration for Obtuna objective and returns config 
+        object.
+        """
         params = self.extract_params()
 
         search_space = {}
@@ -47,7 +53,6 @@ class YMLReader:
 
     def extract_params(self) -> dict[str, Any]:
         """Loads tuning configuration from YML file."""
-
         param_file = Path(__file__).resolve().parents[3] / "config" / "tune" / f"param_{self.ae_type}.yml"
         if not param_file.exists():
             raise YMLReaderError(f"[ERROR] YML tuning configuration not found: {param_file}")
@@ -68,7 +73,7 @@ class YMLReader:
         key: str, 
         value: dict[str, int | float] | list[int | float | str] 
     ) -> int | float | str | Any:
-        "Adds search space parameters to objective function."
+        """Adds search space parameters to objective function."""
         if self.trial is None:
             raise YMLReaderError(f"[ERROR] YML objective is not initialized")
         
@@ -96,8 +101,7 @@ class YMLReader:
         num_cont: int, 
         cat_dims: dict[str, int],
     ) -> AEConfig | VAEConfig | MTAEConfig:
-        "Adds config parameters to config object."
-
+        """Adds config parameters to config object."""
         config_map: dict[str, type[AEConfig | VAEConfig | MTAEConfig]] = {
             "ae": AEConfig,
             "vae": VAEConfig,
@@ -118,7 +122,10 @@ class YMLReader:
         cfg: AEConfig | VAEConfig | MTAEConfig, 
         params: set[str]
     ) -> None:
-        "Prints missing config parameters not incl. in the YML tuning configuration with respective default values used in the trial."
+        """
+        Prints missing config parameters not incl. in the YML tuning
+        configuration with respective default values used in the trial.
+        """
         defaults = cfg.get_kwargs() ^ params
         if defaults:
             print("[YML] Config parameters missing in YML file, using defaults for:")
@@ -128,7 +135,8 @@ class YMLReader:
 
 class TrialSummaryWriter:
     """
-    Saves trial summary incl. hyperparameter search space from YAML tuning configuration, trial configuration and outcome.
+    Saves trial summary incl. hyperparameter search space from YAML tuning 
+    configuration, trial configuration and outcome.
     """
 
     def __init__(
@@ -148,8 +156,7 @@ class TrialSummaryWriter:
         self.best_result = best_result
 
     def write(self, summary_path: Path) -> None:
-        "Writes trial summary."
-
+        """Writes trial summary."""
         trial_info = self._trial_writeout()
         search_info = self._search_writeout()
         output = trial_info | search_info
@@ -162,7 +169,7 @@ class TrialSummaryWriter:
             writer.writerow(output)
     
     def _trial_writeout(self) -> dict[str, int | float | str]:
-        "Assembles trial information for trial summary."
+        """Assembles trial information for trial summary."""
         return {
             "phase": self.retune_no,
             "sampler": self.sampler,
@@ -173,7 +180,7 @@ class TrialSummaryWriter:
         
 
     def _search_writeout(self) -> OrderedDict[str, str]:
-        "Assembles and prettifies search space parameters for trial summary."
+        """Assembles and prettifies search space parameters for trial summary."""
         params = YMLReader(self.ae_type, None).extract_params()
         clean_params = {}
 

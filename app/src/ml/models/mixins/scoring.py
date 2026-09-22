@@ -6,7 +6,8 @@ from .metrics import huber_loss, cross_entropy, quantile_loss, focal_loss
 
 class TabularReconScoringMixin:
     """
-    Stateless Helper Mixin providing functionality for computing reconstruction errors for hybrid features.
+    Stateless Helper Mixin providing functionality for computing reconstruction
+    errors for hybrid features.
     """
     
     @staticmethod
@@ -20,9 +21,9 @@ class TabularReconScoringMixin:
         in_warmup: bool = False
     ) -> tuple[torch.Tensor, ...]:
         """
-        Computes Huber loss for cont features, CE for cat features and normalized weighted per-sample loss.
+        Computes Huber loss for cont features, CE for cat features and 
+        normalized weighted per-sample loss.
         """
-
         # Cont Huber loss per-sample and feature-averaged
         cont_loss = huber_loss(cont_recon, x_cont).mean(dim=1)
 
@@ -62,9 +63,11 @@ class TabularKLScoringMixin:
         free_bits: float = 0.001
     ) -> torch.Tensor:
         """
-        Computes per-sample KL divergence as a loss term to measure how much the learned latent distribution differs from a standard normal distribution. Effectively, this term acts as a regularizer keeping the latent space smooth and continuous.
+        Computes per-sample KL divergence as a loss term to measure how much 
+        the learned latent distribution differs from a standard normal 
+        distribution. Effectively, this term acts as a regularizer keeping the 
+        latent space smooth and continuous.
         """
-        
         logvar = torch.clamp(logvar, min=-logvar_clamp, max=logvar_clamp)
         var = torch.exp(logvar)
         kl = -0.5 * (1 + logvar - mu.pow(2) - var)
@@ -77,7 +80,8 @@ class TabularKLScoringMixin:
 
 class TabularMTScoringMixin:
     """
-    Stateless Helper Mixin providing functionality for computing focal and quantile loss for hybrid task scoring.
+    Stateless Helper Mixin providing functionality for computing focal and 
+    quantile loss for hybrid task scoring.
     """
 
     @staticmethod
@@ -93,6 +97,11 @@ class TabularMTScoringMixin:
         loss_weights: dict[str, float],
         attack_type_weights: torch.Tensor
     ) -> tuple[torch.Tensor, ...]:
+        """
+        Computes quantile loss contribution for regression heads and focal loss
+        contribution of classification head, as well as normalized weighted 
+        total loss.
+        """
         loss_l3 = quantile_loss(
             l3_pred,
             y3,

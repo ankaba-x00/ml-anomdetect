@@ -14,7 +14,14 @@ def _fetch_timedata(
     date_from: datetime, 
     date_to: datetime
 ) -> dict[str, list[str]]:
-    """Fetches timeseries data in memory."""
+    """
+    Fetches timeseries data in memory.
+    
+    ASSUMES
+    =======
+        - date_from: incl. start e.g. (2024-11-15); sets time to 00:00Z 
+        - date_to: incl. end e.g. (2024-12-15); sets time to 00:00Z next day
+    """
     DATE_MIN, DATE_MAX = date_from, date_to.replace(hour=23, minute=45)
 
     session = _requests_session()
@@ -60,11 +67,8 @@ def run_fetch(
     date_to: datetime
 ) -> RegionTimeseriesFetchResult:
     """
-    Fetches timeseries datasets from Cloudflare API in memory for specified country in 15-min buckets.
-
-    Assumes:
-    - date_from : incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
-    - date_to : incl. end e.g. (2024-12-15); automatically sets time to 23:45
+    Fetches timeseries datasets from Cloudflare API in memory for specified 
+    country in 15-min buckets.
     """
     print(f"[INFO] Fetching data for {country}...")
     

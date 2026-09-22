@@ -39,6 +39,9 @@ ISO_3166_alpha2 = [
 
 
 def _get_output_path(title: str) -> Path:
+    """
+    Generates output directory enabling multi-pull fetches with no data loss.
+    """
     pull_date = datetime.now(timezone.utc).strftime("%m-%d-%Y")
     project_root = Path(__file__).resolve().parents[3]
     output_dir = project_root / "datasets" / "raw"
@@ -46,6 +49,7 @@ def _get_output_path(title: str) -> Path:
     return output_dir / f"{title}_pull-{pull_date}.json"
 
 def _headers() -> dict[str, str]:
+    """Output header dictionary."""
     global API_TOKEN
     return {
         "Authorization": f"Bearer {API_TOKEN}",
@@ -53,6 +57,7 @@ def _headers() -> dict[str, str]:
     }
 
 def _requests_session() -> requests.Session:
+    """Creates session with retry."""
     session = requests.Session()
     retries = Retry(
         total=5,
@@ -64,7 +69,12 @@ def _requests_session() -> requests.Session:
     return session
 
 def _print_range(dates: tuple[datetime, ...]) -> None:
-    print(f"[INFO] Data will be fetched \n\t FROM incl. {dates[0].strftime('%m/%d/%Y')} \n\t TO incl. {dates[1].strftime('%m/%d/%Y')}\n")
+    """Prints date range of fetch in stdout."""
+    print(
+        f"[INFO] Data will be fetched" \
+        "\n\t FROM incl. {dates[0].strftime('%m/%d/%Y')}" \
+        "\n\t TO incl. {dates[1].strftime('%m/%d/%Y')}\n"
+    )
 
 def pull_notime_data(
     TITLE: str, 
@@ -73,12 +83,14 @@ def pull_notime_data(
     dates: tuple[datetime, ...]
 ) -> None:
     """
-    Fetches dataseries with no specific location from Cloudflare API in 1-day buckets (ergo worldwide and no timeseries).
-    ASSUMES:
-        - dates[0]: incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
-        - dates[1]: incl. end e.g. (2024-12-15); automatically sets time to 00:00Z next day
-    """
+    Fetches dataseries with no specific location from Cloudflare API in 1-day 
+    buckets (ergo worldwide and no timeseries).
 
+    ASSUMES
+    =======
+        - dates[0]: incl. start e.g. (2024-11-15); sets time to 00:00Z 
+        - dates[1]: incl. end e.g. (2024-12-15); sets time to 00:00Z next day
+    """
     _print_range(dates)
     DATE_MIN, DATE_MAX = dates[0], dates[1] + timedelta(days=1)
     
@@ -135,12 +147,14 @@ def pull_notime_datapercountry(
     COUNTRIES: list[str] = ISO_3166_alpha2
 ) -> None:
     """
-    Fetches dataseries for worldwide and per country from Cloudflare API in 1-day buckets (no timeseries).
-    ASSUMES:
-        - dates[0]: incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
-        - dates[1]: incl. end e.g. (2024-12-15); automatically sets time to 00:00Z next day
-    """
+    Fetches dataseries for worldwide and per country from Cloudflare API in 
+    1-day buckets (no timeseries).
 
+    ASSUMES
+    =======
+        - dates[0]: incl. start e.g. (2024-11-15); sets time to 00:00Z 
+        - dates[1]: incl. end e.g. (2024-12-15); sets time to 00:00Z next day
+    """
     _print_range(dates)
     DATE_MIN, DATE_MAX = dates[0], dates[1] + timedelta(days=1)
     
@@ -220,12 +234,14 @@ def pull_time_datapercountry(
     COUNTRIES: list[str] = ISO_3166_alpha2
 ) -> None:
     """
-    Fetches timeseries data for worldwide and per country from Cloudflare API in 15-min buckets.
-    ASSUMES:
-        - dates[0]: incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
-        - dates[1]: incl. end e.g. (2024-12-15); automatically sets time to 23:45
-    """
+    Fetches timeseries data for worldwide and per country from Cloudflare API 
+    in 15-min buckets.
 
+    ASSUMES
+    =======
+        - dates[0]: incl. start e.g. (2024-11-15); sets time to 00:00Z 
+        - dates[1]: incl. end e.g. (2024-12-15); sets time to 00:00Z next day
+    """
     _print_range(dates)
     DATE_MIN, DATE_MAX = dates[0], dates[1].replace(hour=23, minute=45)
 

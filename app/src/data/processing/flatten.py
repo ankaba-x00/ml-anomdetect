@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Flattens nesting level of pkl files for specified key after fetching and preprocessing.
+Flattens nesting level of pkl files for specified key after fetching and 
+preprocessing.
 
 Usage:
     python -m app.src.data.processing.flatten [-k] [-o <FILE_NAME>] <all|FILE_KEY>
@@ -19,6 +20,7 @@ PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 
 
 def check_dsfiles_exist(file: str, folder: Path) -> Path:
+    """Checks whether dataset file exists before proceeding."""
     file_path = folder / file
     if not file_path.is_file():
         raise FileNotFoundError(f"[ERROR] FileNotFound: {file}")
@@ -27,11 +29,10 @@ def check_dsfiles_exist(file: str, folder: Path) -> Path:
 def conv_maxlayer_3(data: dict) -> pd.DataFrame:
     """
     Vectorized flattening of 3-layered data dictionary into dataframe. 
-        Outer layer: regions -> regions
-        Middle layer: dates -> dates
-        Inner layer: timestamps, ..., values -> timestamps, metric, values
+        Outer layer: regions
+        Middle layer: dates
+        Inner layer: timestamps, metric, values, ...
     """
-
     records = []
     for region, region_data in data.items():
         for date, details in region_data.items():
@@ -76,10 +77,9 @@ def conv_maxlayer_3(data: dict) -> pd.DataFrame:
 def conv_maxlayer_2(data: dict) -> pd.DataFrame:
     """
     Vectorized flattening of 2-layered data dictionary into dataframe. 
-        Outer layer: dates -> dates
-        Inner layer: countries, values, types, ... -> countries, values, types, ...
+        Outer layer: dates
+        Inner layer: countries, values, types, ...
     """
-
     records = []
     for date, details in data.items():
         df = pd.DataFrame(details)
@@ -89,6 +89,7 @@ def conv_maxlayer_2(data: dict) -> pd.DataFrame:
     return pd.concat(records, ignore_index=True)
 
 def _detect_nesting_level(data: dict) -> int:
+    """Detects required nesting layer number for flattening dataset."""
     if not data:
         return 1
     
@@ -105,6 +106,7 @@ def _detect_nesting_level(data: dict) -> int:
         return 1
 
 def _load_dsfile(key: str, folder: Path) -> dict:
+    """Loads dataset file after sanity check."""
     path = check_dsfiles_exist(f"{key}.pkl", folder)
     with open(path, "rb") as f:
         data: dict = pickle.load(f)
@@ -115,6 +117,7 @@ def conv_pkltodf(
     folder: Path, 
     data: dict | None = None
 ) -> pd.DataFrame:
+    """Converts data dictionary or pkl file to internal dataframe."""
     if data is None:
         data = _load_dsfile(key, folder)
 
@@ -127,6 +130,7 @@ def conv_pkltodf(
         raise ValueError("[ERROR] Data dict layering not valid. Aborting dataframe conversion!")
 
 def flatten_single(key: str, file_name: str, data: dict | None = None) -> None:
+    """Runs pipeline for flattening single dataset."""
     if DSFILE_MAP[key][0]:
         print(f"[INFO] Processing {key}...")
     
@@ -139,6 +143,7 @@ def flatten_single(key: str, file_name: str, data: dict | None = None) -> None:
         print(f"[OK] {key} successfully flattened")
 
 def flatten_all(file_name: str) -> None:
+    """Runs pipeline for flattening all datasets."""
     for key in DSFILE_MAP.keys():
         if DSFILE_MAP[key][0]:
             flatten_single(key, file_name)

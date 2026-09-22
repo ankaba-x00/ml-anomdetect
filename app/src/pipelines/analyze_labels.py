@@ -66,9 +66,11 @@ LABEL_META = {
 
 
 def _check_interim_exists(f_path: Path) -> bool:
+    """Checks if temporary feature matrix exists as parquet file."""
     return f_path.is_file()
 
 def _gen_interim_matrix(country: str, f_path: Path) -> None:
+    """Generates temporary feature matrix and saves as parquet file."""
     if not _check_interim_exists(f_path):
         df = build_country_dataframe(
             country, 
@@ -80,7 +82,8 @@ def _gen_interim_matrix(country: str, f_path: Path) -> None:
 
 def num_analysis(country: str, df: pd.DataFrame) -> None:
     """
-    Performs numerical analysis of attack label heuristics and distribution.
+    Runs numerical analysis pipeline for attack label schema to determine label 
+    heuristics and distribution.
     Answers:
       A) Are distributions plausible?
       B) Are labels temporally coherent?
@@ -230,7 +233,7 @@ def num_analysis(country: str, df: pd.DataFrame) -> None:
     print("(3) normal → attack frequent = thresholds too loose")
 
 def vis_analysis(country: str, df: pd.DataFrame, show_plots: bool) -> None:
-    "Generates visual analysis plots of attack label scheme."
+    "Runs visual analysis pipeline for attack label schema."
     print(f"==============================")
     print(f"    VIS {country} ANALYSIS    ")
     print(f"==============================")
@@ -287,8 +290,7 @@ def analyze_labels(
     dist: bool,
     show_plots: bool
 ) -> None:
-    """Runs full analysis pipeline of attack labelling 
-    schema."""
+    """Runs attack label analysis pipeline for selected country."""
     print(f"[INFO] Analyzing {country}...")
 
     f_path = FEATURE_DIR / f"_interim_{country}_superM.parquet"
@@ -311,6 +313,7 @@ def analyze_all(
     dist: bool,
     show_plots: bool
 ) -> None:
+    """Runs attack label analysis pipeline for all pre-defined countries."""
     for c in COUNTRIES:
         try:
             analyze_labels(

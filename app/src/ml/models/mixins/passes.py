@@ -12,7 +12,8 @@ SharedEncoderConfigT = TypeVar("SharedEncoderConfigT", bound="SharedEncoderConfi
 
 class TabularEncodePassingMixin(TabularFeatureEncodeMixin, Generic[SharedEncoderConfigT]):
     """
-    Stateless Helper Mixin providing functionality for passing data through encoder.
+    Stateless Helper Mixin providing functionality for passing data through 
+    encoder.
     """
 
     E: "SharedEncoder"
@@ -23,8 +24,10 @@ class TabularEncodePassingMixin(TabularFeatureEncodeMixin, Generic[SharedEncoder
         x_cont: torch.Tensor,
         x_cat: torch.Tensor
     ) -> torch.Tensor:
-        """Preprocesses and passes input through encoder and returns latent variables."""
-
+        """
+        Preprocesses and passes input through encoder and returns latent 
+        variables.
+        """
         embeddings = self.E.embeddings if self.config.use_embedding else None
         x = self.prepare_input(
             x_cont, 
@@ -46,7 +49,8 @@ SharedVEncoderConfigT = TypeVar("SharedVEncoderConfigT", bound="SharedVEncoderCo
 
 class TabularVEncodePassMixin(TabularFeatureEncodeMixin, Generic[SharedVEncoderConfigT]):
     """
-    Stateless Helper Mixin providing functionality for passing data through decoder.
+    Stateless Helper Mixin providing functionality for passing data through 
+    decoder.
     """
     
     E: "SharedVEncoder"
@@ -59,7 +63,6 @@ class TabularVEncodePassMixin(TabularFeatureEncodeMixin, Generic[SharedVEncoderC
         all_vars: bool = False
     ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Passes input through encoder and returns latent variables."""
-        
         embeddings = self.E.embeddings if self.config.use_embedding else None
         x = self.prepare_input(
             x_cont, 
@@ -81,7 +84,9 @@ class TabularVEncodePassMixin(TabularFeatureEncodeMixin, Generic[SharedVEncoderC
         x: torch.Tensor
     ) -> tuple[torch.Tensor, ...]:
         """
-        Parametrizes latent distribution determistically. Input data is mapped to the variational distribution and mean (mu) and log-variance (logvar) returned.
+        Parametrizes latent distribution determistically. Input data is mapped
+        to the variational distribution and mean (mu) and log-variance (logvar)
+        returned.
         """
         
         h = x
@@ -99,9 +104,9 @@ class TabularVEncodePassMixin(TabularFeatureEncodeMixin, Generic[SharedVEncoderC
         logvar: torch.Tensor
     ) -> torch.Tensor:
         """
-        Reparametrizes to stochastically sample z from the distribution via z = mu + eps ⊙ std with eps ~ N(0, I).
+        Reparametrizes to stochastically sample z from the distribution via 
+        z = mu + eps ⊙ std with eps ~ N(0, I).
         """
-
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         
@@ -112,7 +117,8 @@ SharedDecoderConfigT = TypeVar("SharedDecoderConfigT", bound="SharedDecoderConfi
 
 class TabularDecodePassingMixin(Generic[SharedDecoderConfigT]):
     """
-    Stateless Helper Mixin providing functionality for passing data through decoder.
+    Stateless Helper Mixin providing functionality for passing data through 
+    decoder.
     """
 
     D: "SharedDecoder"
@@ -123,7 +129,6 @@ class TabularDecodePassingMixin(Generic[SharedDecoderConfigT]):
         z: torch.Tensor
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Decodes from latent space and applies temperature scaling."""
-        
         h = z
         for layer in self.D.decoder_layers:
             h = layer(h)
@@ -144,7 +149,8 @@ SharedMTDecoderConfigT = TypeVar("SharedMTDecoderConfigT", bound="SharedMTDecode
 
 class TabularMTDecodePassMixin(Generic[SharedMTDecoderConfigT]):
     """
-    Stateless Helper Mixin providing functionality for passing data through multi-task decoder.
+    Stateless Helper Mixin providing functionality for passing data through 
+    multi-task decoder.
     """
 
     D: "SharedMTDecoder"
@@ -155,7 +161,6 @@ class TabularMTDecodePassMixin(Generic[SharedMTDecoderConfigT]):
         z: torch.Tensor
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
         """Decodes from latent space and applies temperature scaling."""
-
         h = z
         for layer in self.D.decoder_layers:
             h = layer(h)
@@ -180,8 +185,7 @@ class TabularMTDecodePassMixin(Generic[SharedMTDecoderConfigT]):
         module: nn.Module,
         feat: torch.Tensor
     ) -> torch.Tensor:
-        """Enforces monotonicity along quantile axis to avoid quantile crossover."""
-        
+        """Enforces monotonicity along quantile axis to avoid quantile."""  
         head = module(feat)
         softplus = nn.Softplus()
 

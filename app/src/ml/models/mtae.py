@@ -10,9 +10,7 @@ from .mixins import TabularMTDecodePassMixin, TabularEncodePassingMixin, Tabular
 
 
 class MTDecoder(SharedMTDecoder[MTAEConfig]):
-    """
-    Decoder class for MTAE model.
-    """
+    """Decoder class for MTAE model."""
 
     def __init__(
         self,
@@ -24,7 +22,6 @@ class MTDecoder(SharedMTDecoder[MTAEConfig]):
     
     def make_recon_heads(self) -> None:
         """Adds final reconstruction heads of decoder."""
-
         dim = max(self.config.hidden_dims)
         
         self.cont_recon_head = nn.Linear(dim, self.config.num_cont)
@@ -45,7 +42,6 @@ class MTDecoder(SharedMTDecoder[MTAEConfig]):
     
     def init_recon_heads(self) -> None:
         """Initializes final reconstruction heads of decoder."""
-
         for module in self.cat_recon_heads.children():
             if isinstance(module, nn.Linear):
                 self.init_head(module, self.config.activation_de)
@@ -89,7 +85,6 @@ class MTTabularAE(TabularEncodePassingMixin[MTAEConfig], TabularMTDecodePassMixi
         x_cat: torch.Tensor    
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
         """Full forward pass through autoencoder."""
-
         if self.config.allow_noise_injection:
             Xc, Xk = self._noise_injection(
                 x_cont, 
@@ -122,8 +117,10 @@ class MTTabularAE(TabularEncodePassingMixin[MTAEConfig], TabularMTDecodePassMixi
         in_warmup: bool = False,
         reduction: str = "mean"
     ) -> tuple[torch.Tensor, ...] | torch.Tensor:
-        """Computes per-sample reconstruction error, quantile and focal loss and optionally reduces to average or sum."""
-        
+        """
+        Computes per-sample reconstruction error, quantile and focal loss and 
+        optionally reduces to average or sum.
+        """
         cont_loss, cat_loss, recon_score = self.recon_scoring(
             x_cont,
             x_cat,
@@ -169,7 +166,6 @@ class MTTabularAE(TabularEncodePassingMixin[MTAEConfig], TabularMTDecodePassMixi
         eps: float = 1.0
     ) -> torch.Tensor:
         """Computes inverse-frequency type weights for scoring attack types."""
-
         counts = np.bincount(ya, minlength=n_attack_types).astype(np.float32)
         counts = np.maximum(counts, eps)
 
@@ -185,8 +181,10 @@ class MTTabularAE(TabularEncodePassingMixin[MTAEConfig], TabularMTDecodePassMixi
         in_warmup: bool = False,
         in_stepup: bool = False,
     ) -> None:
-        """Alpha allows model to learn reconstructions before forcing latent regularization. Dynamically adjusts alpha for each epoch."""
-
+        """
+        Alpha allows model to learn reconstructions before forcing latent 
+        regularization. Dynamically adjusts alpha for each epoch.
+        """
         if self.config.stepup_epochs > 0:
             if in_warmup:
                 self.current_alpha = 0.0

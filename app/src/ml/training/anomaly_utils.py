@@ -16,8 +16,10 @@ def _threshold_mad(
     max_p: float = 99.9
 ) -> float:
     """
-    Computes normalized median absolute deviation threshold with enforced minimum threshold based on percentile. 
-    Scaling factor 
+    Computes normalized median absolute deviation threshold with enforced 
+    minimum threshold based on percentile. 
+    
+    Scaling factor k
         k = 3-3.5 : used for mododerately heavy-tailed dist
         k = 6-8 : used for rare anomaly detection
         k = >10 : conservative (almost nothing flagged)
@@ -60,7 +62,8 @@ def find_anomalies(
     Converts bool mask into list of anomalous sample intervals of format
     [(start, end), ...]; end is exclusive. 
 
-    Args:
+    Args
+    ====
         min_length : min anomaly sample length to be considered
         merge_gap : sample interval gap to merge 2 adjacent anomalies into one
     """

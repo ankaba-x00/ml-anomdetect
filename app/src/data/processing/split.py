@@ -9,7 +9,8 @@ def timeseries_seq_split(
     val_ratio: float = 0.10,
 ) -> tuple[list[npt.NDArray], list[npt.NDArray], list[npt.NDArray]]:
     """
-    Splits timeseries chronologically depending on ratios provided in order of train, val and test set.
+    Splits timeseries chronologically depending on ratios provided in order of 
+    train, val and test set.
         0 ---- train ----|-- val --|- test -
     """
     if not arrays:
@@ -36,11 +37,12 @@ def timeseries_cv_splits(
     test_ratio: float = 0.10,
 ) -> Iterator[list[list[npt.NDArray]]]:
     """
-    Split timeseries by rolling fixed-size train set slides forward. Cross-validation ensures that train set is always chronologically before val and test.
+    Split timeseries by rolling fixed-size train set slides forward. 
+    Cross-validation ensures that train set is always chronologically before 
+    val and test.
         0 ---- train ----|-- val --|- test -
                 shift →→→→→→→→→→→→→→→
     """
-
     if not arrays:
         raise ValueError("[ERROR] Timeseries split requires at least one array")
 

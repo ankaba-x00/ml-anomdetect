@@ -8,10 +8,7 @@ def mse_loss(
     target: torch.Tensor,
     reduction: str = "none"
 ) -> torch.Tensor:
-    """
-    Computes mean-squared loss.
-    """
-
+    """Computes mean-squared loss."""
     return F.mse_loss(pred, target, reduction=reduction)
 
 def huber_loss(
@@ -19,10 +16,7 @@ def huber_loss(
     target: torch.Tensor,
     reduction: str = "none"
 ) -> torch.Tensor:
-    """
-    Computes Huber loss.
-    """
-
+    """Computes Huber loss."""
     return F.huber_loss(pred, target, reduction=reduction)
 
 def pinball_loss(
@@ -30,9 +24,7 @@ def pinball_loss(
     target: torch.Tensor,
     q: float,
 ) -> torch.Tensor:
-    """
-    Computes average pinball loss for a given quantile.
-    """
+    """Computes average pinball loss for a given quantile."""
     e = target - pred
     return torch.maximum(q * e, (q - 1) * e)
 
@@ -42,10 +34,7 @@ def quantile_loss(
     quantiles: Sequence[float],
     reduction: str = "none"
 ) -> torch.Tensor:
-    """
-    Computes pinball loss over Q quantiles.
-    """
-
+    """Computes pinball loss over Q quantiles."""
     losses = []
     for i, q in enumerate(quantiles):
         losses.append(pinball_loss(pred[:,i], target, q))
@@ -61,10 +50,7 @@ def cross_entropy(
     target: torch.Tensor,
     reduction: str = "none"
 ) -> torch.Tensor:
-    """
-    Computes cross-entropy loss.
-    """
-
+    """Computes cross-entropy loss."""
     return F.cross_entropy(logits, target, reduction=reduction)
 
 def focal_loss(
@@ -74,10 +60,7 @@ def focal_loss(
     weights: torch.Tensor | None = None,
     reduction: str = "none"
 ) -> torch.Tensor:
-    """
-    Computes focal loss at given quantile.
-    """
-
+    """Computes focal loss at given quantile."""
     log_probs = F.log_softmax(logits, dim=-1)
     probs = torch.exp(log_probs)
 

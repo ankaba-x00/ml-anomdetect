@@ -29,6 +29,7 @@ PROJECT_ROOT = FILE_DIR.parents[2]
 FEATURE_DIR = PROJECT_ROOT / "datasets" / "featured"
 
 def load_countries_from_config(models_path: Path) -> list[str]:
+    """Loads user-defined models list for multi-country processing."""
     with open(models_path, "r") as f:
         countries: list[str] = yaml.safe_load(f)
     return countries
@@ -170,12 +171,14 @@ def build_feature_matrix(
 ) -> FeatureMatrix:
     """
     Build feature matrix for a given country.
+    
     Returns
-    -------
+    =======
     X_cont : pd.DataFrame
         Continuous features (float64)
     X_cat : pd.DataFrame
-        Categorical index features (int64 as required for embeddings in pytorch), columns in a FIXED order.
+        Categorical index features (int64 as required for embeddings in 
+        pytorch), columns in FIXED order.
     num_cont : int
         Number of continuous features.
     cat_dims : dict[str, int]
@@ -247,12 +250,14 @@ def build_supervised_feature_matrix(
 ) -> FeatureMatrix:
     """
     Builds feature matrices for a given country for multi-task prediction.
+
     Returns
-    -------
+    =======
     X_cont : pd.DataFrame
-        Continuous features (float64) with traffic data only, no attack information 
+        Continuous features (float64)
     X_cat : pd.DataFrame
-        Categorical index features (int64 as required for embeddings in pytorch), columns in a FIXED order with temporal data.
+        Categorical index features (int64 as required for embeddings in 
+        pytorch), columns in a FIXED order.
     y_l3 : pd.Series
         L3 attack intensity for regression
     y_l7 : pd.Series
@@ -339,6 +344,7 @@ def load_feature_matrix(
     country: str, 
     load_path: Path = FEATURE_DIR
 ) -> FeatureMatrix:
+    """Loads feature matrix for unsupervised learning from pkl file."""
     fpath = load_path / f"features_{country}.pkl"
     if not fpath.exists():
         raise FileNotFoundError(f"[ERROR] Feature matrix does not exist: {fpath}")
@@ -373,6 +379,7 @@ def load_supervised_feature_matrix(
     country: str, 
     load_path: Path = FEATURE_DIR
 ) -> FeatureMatrix:
+    """Loads feature matrix for supervised learning from pkl file."""
     fpath = load_path / f"super_features_{country}.pkl"
     if not fpath.exists():
         raise FileNotFoundError(f"[ERROR] Supervised feature matrix does not exist: {fpath}")

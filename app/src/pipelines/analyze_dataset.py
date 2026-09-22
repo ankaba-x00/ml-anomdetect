@@ -68,7 +68,7 @@ def gen_valdist(
     out_folder: Path, 
     show: bool
 ) -> None:
-    """Generates boxplots to display value distributions within the datasets. """
+    """Generates boxplots to display value distributions within datasets. """
     if typ == "traffic":
         name = "NetFlow traffic"
         shortname = "traffic"
@@ -136,7 +136,10 @@ def gen_actfluct(
     out_folder: Path, 
     show: bool
 ) -> None:
-    """Generates barplot and heatmap to display activity fluctuations within datasets."""
+    """
+    Generates barplot and heatmap to display activity fluctuations within 
+    datasets.
+    """
     if typ == "traffic":
         name = "traffic"
         color = "#5EA7E3"
@@ -198,7 +201,7 @@ def gen_anomheatmap(
     out_folder: Path, 
     show: bool
 ) -> None:
-    """Generates heatmap to display anomalies that Cloudflare flagged."""
+    """Generates heatmap to display anomalies flagged by Clouudflare."""
     df = conv_pkltodf("anomalies", in_folder)
     heatmap_anomalies(
         df,
@@ -215,6 +218,7 @@ def _load_data_worldwide(
     folder: Path, 
     col: str = "worldwide"
 ) -> pd.DataFrame:
+    """Loads region-independent/worldwide datasets."""
     df = conv_pkltodf(file, folder)
     df = df[df["regions"] == col].copy()
     df["values"] = df["values"].astype(float)
@@ -222,6 +226,7 @@ def _load_data_worldwide(
     return df
 
 def _ask_for_k() -> int:
+    """Obtains cluster number via user input."""
     while True:
         user_in = input(">>> How many clusters do you choose? [int 2–15] ")
         try:
@@ -244,7 +249,10 @@ def _run_kmeans_analysis(
     interactive: bool = False,
     show: bool = False
 ) -> int:
-    """Runs clustering analysis, determins optimal k and produces PCA cluster plot."""
+    """
+    Runs clustering analysis, determins optimal k and generates PCA cluster 
+    plot.
+    """
     countries, X = preprocess_matrix(df)
     eval_df = evaluate_kmeans_over_k(X, k_min=k_min, k_max=k_max)
     lineplot_clustering_eval_curves(
@@ -287,7 +295,10 @@ def gen_attackprofile(
     interactive: bool,
     show: bool
 ) -> None:
-    """Generates attack profiles for selected countries incl. radarcharts, barplot and heatmap."""
+    """
+    Generates attack profiles for selected countries incl. radarcharts, barplot
+    and heatmap.
+    """
     for key in ["l3_origin", "l7_origin"]:
         if key == "l3_origin":
             col = "#01205f"
@@ -348,6 +359,7 @@ def analyze_dataset(
     out_folder: str,
     show_plots: bool
 ) -> None:
+    """Runs datasets analysis pipeline."""
     out_path = OUTDIR / out_folder
     out_path.mkdir(parents=True, exist_ok=True)
     print("[INFO] Artefacts saved to:", out_path)

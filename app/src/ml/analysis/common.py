@@ -29,7 +29,7 @@ custom_rc: dict[str, int | float | str] = {
 
 
 def apply_custom_theme() -> None:
-    """Apply consistent Matplotlib styling."""
+    """Applies consistent plot styling."""
     sns.set_theme(style="whitegrid", rc=custom_rc)
 
 def plot_latent_space(
@@ -43,7 +43,7 @@ def plot_latent_space(
     fname: str = "plot_latent_space.png",
     show: bool = False,
 ) -> None:
-    """Scatter plot showing latent space using PCA/t-SNE."""
+    """Generates scatter plot showing latent space using PCA/t-SNE."""
     apply_custom_theme()
     
     if len(X_cont) > max_samples:

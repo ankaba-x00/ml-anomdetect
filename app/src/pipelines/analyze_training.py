@@ -60,7 +60,7 @@ def analyze_training(
     method: str,
     show_plots: bool
 ) -> None:
-    """Runs full analysis pipeline for autoencoder after training and validation."""
+    """Runs training analysis pipeline for selected model and country."""
     print(f"[INFO] Analyzing {country}...")
    
     # --------------------
@@ -202,7 +202,11 @@ def analyze_all(
     ae_type: Literal["ae", "vae", "mtae"], 
     method: str,
     show_plots: bool
-) -> None:    
+) -> None:
+    """
+    Runs training analysis pipeline for selected model and all pre-defined 
+    countries.
+    """
     for c in COUNTRIES:
         try:
             analyze_training(

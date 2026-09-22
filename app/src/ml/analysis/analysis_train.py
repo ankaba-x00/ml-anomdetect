@@ -15,7 +15,10 @@ def plot_training_curves(
     show: bool = False,
     MT: bool = False
 ) -> None:
-    """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
+    """
+    Generates lineplots showing loss curve (train vs val) and learning rate 
+    schedule.
+    """
     apply_custom_theme()
 
     train_loss = np.array(history["train_loss"], dtype=np.float32)
@@ -95,7 +98,9 @@ def plot_detailed_loss_curves(
     fname: str = "detailed_loss_curves.png",
     show: bool = False,
 ) -> None:
-    """Plot separate loss curves for continuous and categorical components."""
+    """
+    Generates separate loss curves for continuous and categorical components.
+    """
     apply_custom_theme()
 
     cont_loss_name = "cont_loss" if ae_type == "ae" else "recon_loss"
@@ -170,7 +175,10 @@ def plot_detailed_mt_loss_curves(
     fname: str = "plot_detailed_mt_loss_curves.png",
     show: bool = False,
 ) -> None:
-    """Plot separate loss curves for L3 and l7 regression losses and attack classification loss."""
+    """
+    Generates separate loss curves for L3 and l7 regression losses and attack 
+    classification loss.
+    """
     apply_custom_theme()
 
     required = ["train_l3", "train_l7", "train_at"]

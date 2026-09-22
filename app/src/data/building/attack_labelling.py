@@ -56,9 +56,7 @@ def score_attack_types(
     row: pd.Series,
     thresholds: AttackThresholds
 ) -> dict[str, float]:
-    """
-    Stage A : Attack label derivation with scoring.
-    """
+    """Stage A : Attack label derivation with scoring."""
     # extract features
     udp = float(row.get("udp_frac", 0.0))
     tcp = float(row.get("tcp_frac", 0.0))
@@ -211,7 +209,8 @@ def temporal_attack_labeling(
     min_event_score: float = 0.45,
 ) -> pd.Series:
     """
-    Stage B : temporal validation of sematic attack labels; never re-classifies attack type.
+    Stage B : temporal validation of sematic attack labels; never 
+    re-classifies attack type.
     """
 
     final = semantic_labels.copy()

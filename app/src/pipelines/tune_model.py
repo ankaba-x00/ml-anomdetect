@@ -71,6 +71,7 @@ def tune_model(
     latent: bool,
     retune_no: int
 ) -> None:
+    """Runs tuning pipeline for selected model and country."""
     print(f"\n==============================")
     print(f"     TUNE {country} MODEL     ")
     print(f"==============================")
@@ -247,6 +248,9 @@ def tune_all(
     latent: bool,
     retune_no: int = 0
 ) -> None:
+    """
+    Runs tuning pipeline for selected model and all pre-defined countries.
+    """
     for c in COUNTRIES:
         try:
             tune_model(

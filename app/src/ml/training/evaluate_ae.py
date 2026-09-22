@@ -18,7 +18,6 @@ def reconstruction(
     device: str = "cpu"
 ) -> npt.NDArray[np.float32]:
     """Computes per-sample reconstruction error normalized by features."""
-
     model.eval()
 
     Xc = torch.from_numpy(X_cont).to(device)
@@ -64,8 +63,10 @@ def apply_model(
     merge_gap: int = 0,
     threshold: float | None = None
 ) -> EvaluationResult:
-    """Applies autoencoder and returns reconstruction errors, threshold, anomaly mask and anomaly intervals."""
-
+    """
+    Applies autoencoder and returns reconstruction errors, threshold, anomaly 
+    mask and anomaly intervals.
+    """
     scores = reconstruction(
         model,
         X_cont,

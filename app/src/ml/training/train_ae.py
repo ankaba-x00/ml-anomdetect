@@ -20,9 +20,9 @@ def train_autoencoder(
     loss_weights: dict[str, float],
 ) -> tuple[TabularAE | TabularVAE, TrainingTracker]:
     """
-    Train autoencoder with cont and cat features on split dataset with early stopping OR full dataset with no validation and early stopping.
+    Train autoencoder with cont and cat features on split dataset with early 
+    stopping OR full dataset with no validation and early stopping.
     """
-
     device = torch.device(config.device)
 
     # -------------------------

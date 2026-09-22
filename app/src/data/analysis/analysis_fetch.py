@@ -33,7 +33,7 @@ custom_rc = {
 }
 
 def apply_custom_theme() -> None:
-    """Apply consistent Seaborn + Matplotlib styling."""
+    """Applies consistent plot styling."""
     sns.set_theme(style="whitegrid", rc=custom_rc)
     sns.set_context("poster", rc=custom_rc)
 
@@ -50,7 +50,7 @@ def boxplot_valdist(
     fname: str = "boxplot_valdist.png",
     show: bool = False
 ) -> None:
-    """Boxplot showing value distribution by country."""
+    """Generates boxplot showing value distribution by country."""
     apply_custom_theme()
     
     country_medians = df.groupby(X)[Y].median().sort_values(ascending=False)
@@ -111,7 +111,9 @@ def boxplot_valdist_daytypes(
     fname: str = "boxplot_valdist_daytypes.png",
     show: bool = False
 ) -> None:
-    """Boxplot showing value distribution by country split into the following day types: 
+    """
+    Generates boxplot showing value distribution by country split into the 
+    following day types: 
         - weekdays: Mon-Fri
         - weekends: Sat-Sun
     """
@@ -185,7 +187,9 @@ def boxplot_valdist_daytimes(
     fname: str = "boxplot_valdist_daytimes.png",
     show: bool = False
 ) -> None:
-    """Boxplot showing value distribution by country split into the following local daytimes:
+    """
+    Generates boxplot showing value distribution by country split into the 
+    following local daytimes:
         - Deep night: 00-06
         - Morning: 06-09
         - Business hours: 09-17
@@ -261,9 +265,7 @@ def heatmap_activity_fluctuations(
     fname: str = "heatmap_activity_fluctuations.png",
     show: bool = False
 ) -> None:
-    """
-    Plot heatmap of median activity per country across daytimes.
-    """
+    """Generates heatmap of median activity per country across daytimes."""
     apply_custom_theme()
 
     heatmap_df = df.drop(columns=[c for c in drop_cols if c in df.columns])
@@ -310,7 +312,10 @@ def heatmap_anomalies(
     fname: str = "heatmap_anomalies.png",
     show: bool = False
 ) -> None:
-    """Heatmap with anomalies by location and date. Color coding differentiates between type (Location vs. AS) and duration."""
+    """
+    Generates heatmap with anomalies by location and date. Color coding 
+    differentiates between type (Location vs. AS) and duration.
+    """
     apply_custom_theme()
 
     for col in ["dates", "startDates", "endDates"]:
@@ -435,7 +440,9 @@ def heatmap_log10_attack_profile(
     fname: str = "heatmap_log10_attack_profile.png",
     show: bool = False
 ) -> None:
-    """Heatmap showing attack profiles for all countries in given time."""
+    """
+    Generates heatmap showing attack profiles for all countries in given time.
+    """
     apply_custom_theme()
 
     cols_converted = [conv_iso_to_utc(str(c)) for c in norm_matrix.columns]
@@ -493,7 +500,8 @@ def barplot_activity_fluctuations(
     show: bool = False
 ) -> None:
     """
-    Plot bar chart of top countries by daytime fluctuation metric (range/std/ratio).
+    Generates bar chart of top countries by daytime fluctuation metric 
+    (range/std/ratio).
     """
     apply_custom_theme()
 
@@ -537,7 +545,7 @@ def barplot_top_attackers(
     fname: str = "barplot_top_attackers.png",
     show: bool = False
 ) -> None:
-    """Plot barplot with top attack countries worldwide."""
+    """Generates barplot with top attack countries worldwide."""
     apply_custom_theme()
 
     df_totals = (
@@ -577,7 +585,7 @@ def lineplot_clustering_eval_curves(
     fname: str = "lineplot_clustering_eval_curves.png",
     show: bool = False
 ) -> None:
-    """Plot clustering eval curves to determine ideal k value."""
+    """Generates clustering eval curves to determine ideal k value."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(2, 2, figsize=(14, 10))
@@ -631,6 +639,7 @@ def pca_clusterplot(
     fname: str = "pca_clusterplot.png",
     show: bool = False
 ) -> None:
+    """Performs PCA and generats clustering scatter plot."""
     apply_custom_theme()
 
     pca = PCA(n_components=2)
@@ -661,6 +670,7 @@ def pca_clusterplot(
     plt.close()
 
 def _safe_normalize(arr: np.ndarray) -> np.ndarray:
+    """Normalizes arrays."""
     if arr.size == 0:
         return arr
     vmax = arr.max()
@@ -679,7 +689,8 @@ def radarchart_attack_fingerprint(
     show: bool = False
 ) -> None:
     """
-    Plot attack fingerprint for a given country based on L3 and L3 normalized share for the top_n attacking countries.
+    Generates attack fingerprint for a given country based on L3 and L3 
+    normalized share for the top_n attacking countries.
     """
     apply_custom_theme()
 

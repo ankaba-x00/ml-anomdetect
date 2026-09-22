@@ -29,8 +29,10 @@ def calibrate_threshold(
     cw: int = 30,
     tune_temperature: bool = True,
 ) -> CalibrationResult:
-    """Computes anomaly threshold with optional temperature scaling for specified calibration window and method."""
-
+    """
+    Computes anomaly threshold with optional temperature scaling for specified
+    calibration window and method.
+    """
     # ------------------------------------
     # Set up tracking
     # ------------------------------------

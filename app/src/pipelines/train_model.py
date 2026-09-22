@@ -68,6 +68,7 @@ def train_model(
     method: str, 
     cw: int
 ) -> None:
+    """Runs training pipeline for selected model and country."""
     print(f"\n==============================")
     print(f"     TRAIN {country} MODEL    " )
     print(f"==============================")
@@ -307,6 +308,9 @@ def train_all(
     method: str, 
     cw: int
 ) -> None:
+    """
+    Runs training pipeline for selected model and all pre-defined countries.
+    """
     for c in COUNTRIES:
         try:
             train_model(

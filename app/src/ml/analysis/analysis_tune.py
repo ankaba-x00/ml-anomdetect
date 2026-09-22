@@ -27,8 +27,10 @@ def save_optuna_plots(
     html_out: bool = True, 
     png_out: bool = False
 ) -> None:
-    "Saves Optuna-provided plots as png if kaleido is installed and/or html with no add package requirements."
-
+    """
+    Generates Optuna-provided plots as png if kaleido is installed and/or html 
+    with no add package requirements.
+    """
     figs = {
         "optimization_history": plot_optimization_history(study),
         "param_importance": plot_param_importances(study),
@@ -55,7 +57,10 @@ def plot_correlation_heatmap(
     fname: str = "plot_correlation_heatmap.png",
     show: bool = False
 ) -> None:
-    """Generates heatmaps to show correlation between hyperparameters and val loss."""
+    """
+    Generates heatmaps to show correlation between hyperparameters and val 
+    loss.
+    """
     apply_custom_theme()
 
     plt.figure(figsize=(12, 10))
@@ -76,7 +81,10 @@ def plot_loss_curves_all_trials(
     fname: str = "plot_loss_curves_all_trials.png", 
     show: bool = False
 ) -> None:
-    """Generates lineplot train/val loss curves for each finished trial. Skipped if not saved during tuning."""
+    """
+    Generates lineplot train/val loss curves for each finished trial. Skipped 
+    if not saved during tuning.
+    """
     apply_custom_theme()
 
     plt.figure(figsize=(20, 12))
@@ -124,7 +132,7 @@ def plot_best_trial_learning_curve(
     fname: str = "plot_best_trial_learning_curve.png",
     show: bool = False
 ) -> None:
-    """Lineplot train/val learning curves of best trial."""
+    """Generates lineplot train/val learning curves of best trial."""
     apply_custom_theme()
 
     train_loss = np.array(best_history["train_loss"], dtype=np.float32)
@@ -180,7 +188,10 @@ def plot_3d_scatter(
     fname: str = "plot_3d_scatter.png",
     show: bool = False
 ) -> None:
-    """Scatter plot 3D (dropout, lr, val_loss) of hyperparameter landscape with annotated marking of best trial in red."""
+    """
+    Generates scatter plot 3D (dropout, lr, val_loss) of hyperparameter 
+    landscape with annotated marking of best trial in red.
+    """
     apply_custom_theme()
 
     required_cols = {"dropout", "lr", "value"}
@@ -246,7 +257,10 @@ def plot_loss_component_analysis(
     fname: str = "loss_component_analysis.png",
     show: bool = False
 ) -> None:
-    """Scatter plots showing how continuous vs categorical losses contribute to total loss."""
+    """
+    Generates scatter plots showing how continuous vs categorical losses 
+    contribute to total loss.
+    """
     apply_custom_theme()
     
     m1_key = "cont_loss" if ae_type == "ae" else "recon_loss"
@@ -343,7 +357,7 @@ def plot_multi_loss_overview(
     fname: str = "plot_multi_loss_overview.png",
     show: bool = False
 ) -> None:
-    """Barplot comparing best val losses across countries."""
+    """Generates arplot comparing best val losses across countries."""
     apply_custom_theme()
 
     if not best_losses:
@@ -383,7 +397,10 @@ def plot_multi_weights_overview(
     fname: str = "plot_multi_weights_overview.png",
     show: bool = False,
 ) -> None:
-    """Bar and scatter plots comparing loss weights and their ratio across countries."""
+    """
+    Generates bar and scatter plots comparing loss weights and their ratio 
+    across countries.
+    """
     apply_custom_theme()
     
     if not best_weights:
@@ -443,7 +460,10 @@ def plot_multi_weight_loss_correlation(
     fname: str = "plot_multi_weight_loss_correlation.png",
     show: bool = False,
 ) -> None:
-    """Scatter plots showing relationship between loss weights and validation performance."""
+    """
+    Generates scatter plots showing relationship between loss weights and 
+    validation performance.
+    """
     apply_custom_theme()
 
     merged = {}
@@ -522,7 +542,10 @@ def plot_mt_loss_component_analysis(
     fname: str = "plot_mt_loss_component_analysis.png",
     show: bool = False
 ) -> None:
-    """Scatter plots showing how MT loss components contribute to total loss."""
+    """
+    Generates scatter plots showing how MT loss components contribute to 
+    total loss.
+    """
     apply_custom_theme()
     
     reg_losses: list[float] = []
@@ -639,7 +662,7 @@ def plot_attack_type_weights(
     fname: str = "plot_attack_type_weights.png",
     show: bool = False,
 ) -> None:
-    """Bar plot of attack type weights for given country."""
+    """Generates bar plot of attack type weights for given country."""
     apply_custom_theme()
 
     if type_names is None:
@@ -669,7 +692,7 @@ def plot_attack_type_balance(
     fname: str = "plot_attack_type_balance.png",
     show: bool = False,
 ) -> None:
-    """Bar plots of type weights and counts for given country."""
+    """Generates bar plots of type weights and counts for given country."""
     apply_custom_theme()
 
     types = type_names #[f"type_{i}" for i in range(len(attack_type_weights))]
@@ -707,7 +730,10 @@ def plot_multi_mt_weights_overview(
     fname: str = "plot_multi_mt_weights_overview.png",
     show: bool = False,
 ) -> None:
-    """Bar and scatter plots comparing loss weights (regression vs classification) and their ratio across countries."""
+    """
+    Generates bar and scatter plots comparing loss weights (regression vs 
+    classification) and their ratio across countries.
+    """
     apply_custom_theme()
     
     if not best_weights:
@@ -777,7 +803,10 @@ def plot_multi_mt_weight_loss_correlation(
     fname: str = "plot_multi_mt_weight_loss_correlation.png",
     show: bool = False,
 ) -> None:
-    """Scatter plots showing relationship between MT loss weights and validation performance."""
+    """
+    Generates scatter plots showing relationship between MT loss weights and 
+    validation performance.
+    """
     apply_custom_theme()
 
     merged = {}
@@ -869,7 +898,7 @@ def plot_multi_attack_type_weights(
     fname: str = "plot_multi_attack_type_weights.png",
     show: bool = False,
 ) -> None:
-    """Heatmap of attack type weights across countries."""
+    """Generates heatmap of attack type weights across countries."""
     apply_custom_theme()
 
     df = pd.DataFrame.from_dict(

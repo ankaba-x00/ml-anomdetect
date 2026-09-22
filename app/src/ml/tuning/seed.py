@@ -4,7 +4,6 @@ import torch
 
 def set_global_seeds(seed: int = 42) -> None:
     """Sets seed for Optuna objective to ensures reproducibility between trials."""
-
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

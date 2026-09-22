@@ -17,6 +17,7 @@ def plot_l3_l7_scatter_by_attack(
     fname: str = "plot_attack_timeseries.png",
     show: bool = False,
 ) -> None:
+    """Generates scatter plot of L3 and L7 with attack type color coding."""
     apply_custom_theme()
 
     colors = ["white", "orange", "red", "magenta", "blue", "green", "cyan", "brown"]
@@ -57,7 +58,7 @@ def plot_timeseries_with_attack_labels(
     fname: str = "plot_attack_timeseries.png",
     show: bool = False,
 ) -> None:
-    """Lineplot error over time with optional threshold line."""
+    """Generates lineplot of error over time with optional threshold line."""
     apply_custom_theme()
 
     colors = ["white", "orange", "red", "magenta", "blue", "green", "cyan", "brown"]
@@ -98,7 +99,10 @@ def plot_timeseries_with_attack_labels(
     plt.close(fig)
 
 def print_labeldist(country: str, df: pd.DataFrame) -> None:
-    """Prints label distribution for different train-val-test split ratios."""
+    """
+    Prints label distribution for different train-val-test split ratios in 
+    stdout.
+    """
     fmatrix = build_supervised_feature_matrix(country, df)
     if fmatrix.y_at is not None:
         ya = fmatrix.y_at.to_numpy(dtype=np.int64)

@@ -20,7 +20,7 @@ def plot_error_histogram(
     fname: str = "plot_error_histogram.png",
     show: bool = False,
 ) -> None:
-    """Histogram of log errors with percentile lines."""
+    """Generates histogram of log errors with percentile lines."""
     apply_custom_theme()
 
     scores = df["scores"].to_numpy(dtype=np.float32)
@@ -54,7 +54,7 @@ def plot_error_timeseries(
     fname: str = "plot_error_timeseries.png",
     show: bool = False,
 ) -> None:
-    """Lineplot error over time with optional threshold line."""
+    """Generates lineplot error over time with optional threshold line."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(12, 4))
@@ -78,7 +78,10 @@ def summarize_validation(
     folder: Path = Path.cwd(),
     fname: str = "summarize_validation.png",
 ) -> None:
-    """Summary statistics for reconstruction error distribution as json."""
+    """
+    Generates summary statistics for reconstruction error distribution
+    as json file.
+    """
     scores = df["scores"].to_numpy(dtype=np.float32)
 
     summary: dict[str, Any] = {
@@ -103,7 +106,7 @@ def summarize_mt_validation(
     folder: Path = Path.cwd(),
     fname: str = "summarize_mt_validation.png",
 ) -> None:
-    """Summary statistics for MT validation output as json."""
+    """Generates summary statistics for MT validation output as json file."""
     summary: dict[str, Any] = {"country": country}
 
     # -------------------------------
@@ -208,7 +211,7 @@ def plot_regression_scatter(
     fname: str = "plot_regression_scatter.png",
     show: bool = False,
 ) -> None:
-    """Scatter plot of true vs predicted regression target."""
+    """Generates scatter plot of true vs predicted regression target."""
     apply_custom_theme()
 
     if len(y_true) > max_points:
@@ -242,7 +245,7 @@ def plot_attack_confusion_matrix(
     fname: str = "plot_attack_confusion_matrix.png",
     show: bool = False,
 ) -> None:
-    """Confusion matrix for attack classification head."""
+    """Generates confusion matrix for attack classification head."""
     required = ["at_pred", "at_true"]
     if not all(k in df for k in required):
         print(f"[INFO] Confusion matrix components not available for {country}")
@@ -310,7 +313,7 @@ def plot_attack_confidence_hist(
     fname: str = "plot_attack_confidence_hist.png",
     show: bool = False,
 ) -> None:
-    """Histogram of max softmax confidence for attack predictions."""
+    """Generates histogram of max softmax confidence for attack predictions."""
     required = ["at_conf", "at_true"]
     if not all(k in df for k in required):
         print(f"[INFO] Confidence histogram components not available for {country}")
@@ -361,7 +364,7 @@ def plot_anomaly_timeseries(
     show_attack_conf: bool = True,
 ) -> None:
     """
-    Plot MT anomaly score over time with:
+    Plot multi-task anomaly score over time with:
       - threshold
       - flagged anomaly regions
       - optional regression component overlays

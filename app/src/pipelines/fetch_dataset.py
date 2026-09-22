@@ -19,6 +19,7 @@ from app.src.data.fetching.fetch import (
 )
 
 def fetch_dataset(args: argparse.Namespace) -> None:
+    """Runs fetch dataset pipeline for selected dataset types."""
     start, end = args.start, args.end 
     try:
         start_dt = datetime.strptime(start, "%m/%d/%Y").replace(tzinfo=timezone.utc)

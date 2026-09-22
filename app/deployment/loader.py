@@ -38,7 +38,7 @@ def load_inference_bundle(
     ae_type: Literal["ae", "vae", "mtae"], 
     country: str
 ) -> InferenceBundle:
-    """Loads inference bundle incl. model bundle, scaler and threshold.."""
+    """Loads inference bundle incl. model bundle, scaler and threshold."""
     print(f"[INFO] Loading inference bundle for {country}...")
 
     model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"

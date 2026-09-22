@@ -12,8 +12,10 @@ def build_features(
     newdata: RegionTimeseriesFetchResult, 
     supervised: bool = False
 ) -> FeatureMatrix:
-    """Fetches and processes raw dataset and returns feature matrix ready for inference."""
-    
+    """
+    Fetches and processes raw dataset and returns feature matrix ready for 
+    inference.
+    """
     if supervised:
         raw_df = build_country_dataframe(
             country, 

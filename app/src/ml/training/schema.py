@@ -49,7 +49,7 @@ class TrainingTracker:
 @dataclass(slots=True)
 class ScoresStats:
     """
-    Represents an object storing scoring statistics.
+    Represents an object storing scoring statistics. 
     Allows dynamic attribute generation.
     """
 
@@ -82,7 +82,8 @@ class ScoresStats:
 @dataclass(slots=True)
 class TuneTemperatureResult:
     """
-    Represents a result object for tuning inference temperature for a given temperature.
+    Represents a result object for tuning inference temperature for a given 
+    temperature.
     """
 
     scores_mean: float
@@ -99,7 +100,8 @@ class TuneTemperatureResult:
 @dataclass(slots=True)
 class CalibrationResult:
     """
-    Represents a result object for calibrating inference temperature and threshold.
+    Represents a result object for calibrating inference temperature and 
+    threshold.
     Allows dynamic attribute generation.
     """
 
@@ -145,6 +147,11 @@ class CalibrationResult:
 
 @dataclass(slots=True)
 class MTPredictionResult:
+    """
+    Represents a result object for predictions of multi-task model.
+    Allows dynamic attribute generation.
+    """
+
     scores: npt.NDArray[np.float32]
     l3_pred: dict[str, npt.NDArray[np.float32]] | None = None
     l7_pred: dict[str, npt.NDArray[np.float32]] | None = None

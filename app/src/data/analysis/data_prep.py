@@ -21,7 +21,6 @@ def add_local_daytypes(
     tzmap: dict
 ) -> pd.DataFrame:
     """Adds columns for local time, weekday and daytype classification."""
-
     df = df.copy()
 
     df["dates"] = conv_iso_to_utc(df["dates"])
@@ -39,8 +38,10 @@ def add_local_daytimes(
     df: pd.DataFrame, 
     tzmap: dict
 ) -> pd.DataFrame:
-    """Adds local time, local hour, and daytime classification per country's timezone."""
-
+    """
+    Adds local time, local hour, and daytime classification per country's 
+    timezone.
+    """
     df = df.copy()
     df["timestamps"] = conv_iso_to_utc(df["timestamps"])
 
@@ -62,16 +63,9 @@ def add_fluctuation_metrics(
     type_col: str = "daytime"
 ) -> pd.DataFrame:
     """
-    Compute per-country median activity across daytimes and fluctuation metrics.
-
-    Returns
-    =======
-        DataFrame with additional columns for each daytime:
-        - range: max - min
-        - std: standard deviation
-        - ratio: max / min
+    Compute per-country median activity across daytimes and fluctuation 
+    metrics.
     """
-
     country_daytime_medians = (
         df.groupby([group_col, type_col])[value_col]
         .median()
@@ -90,9 +84,9 @@ def add_fluctuation_metrics(
 
 def normalize_per_date(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Converts df columns [countries, dates, values] to pivot table normalized per date (all country shares sum up to 1 per day)
+    Converts df columns [countries, dates, values] to pivot table normalized 
+    per date (all country shares sum up to 1 per day).
     """
-
     pivot = df.pivot(index="countries", columns="dates", values="values").fillna(0.0)
     norm = pivot.copy()
     for d in pivot.columns:
@@ -105,6 +99,7 @@ def normalize_per_date(df: pd.DataFrame) -> pd.DataFrame:
     return norm
 
 def aggregate_directional(df: pd.DataFrame) -> pd.Series:
+    """Sums up value column."""
     return df.groupby("countries")["values"].sum()
 
 def preprocess_matrix(
@@ -112,11 +107,9 @@ def preprocess_matrix(
     min_activity: float = 1e-6
 ) -> tuple[list[str], np.ndarray]:
     """
-    Standardizes the input country × date matrix.
-    Removes countries with extremely low activity.
+    Standardizes input country × date matrix and removes countries with 
+    extremely low activity.
     """
-
-    # Drop all-zero rows
     activity = df.sum(axis=1)
     keep = activity[activity > min_activity].index
     mat2 = df.loc[keep].copy()
@@ -138,7 +131,6 @@ def evaluate_kmeans_over_k(
         - Davies–Bouldin
     for k = k_min … k_max.
     """
-    
     results : dict[str, list[int | float]] = {
         "k": [],
         "SSE": [],
@@ -167,6 +159,7 @@ def evaluate_kmeans_over_k(
     return pd.DataFrame(results)
 
 def fit_final_kmeans(X: np.ndarray | pd.DataFrame, k: int) -> npt.NDArray:
+    """Performs KMeans clustering."""
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
     labels: npt.NDArray = km.fit_predict(X)
     return labels

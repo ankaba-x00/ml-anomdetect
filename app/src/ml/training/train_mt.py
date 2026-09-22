@@ -25,9 +25,9 @@ def train_mt_autoencoder(
     loss_weights: dict[str, float],
 ) -> tuple[MTTabularAE, TrainingTracker]:
     """
-    Train  multi-task autoencoder with cont and cat features on split dataset with early stopping OR full dataset with no validation and early stopping.
+    Train  multi-task autoencoder with cont and cat features on split dataset
+    with early stopping OR full dataset with no validation and early stopping.
     """
-
     device = torch.device(config.device)
 
     # -------------------------

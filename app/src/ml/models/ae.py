@@ -7,9 +7,7 @@ from .mixins import TabularDecodePassingMixin, TabularEncodePassingMixin, Tabula
 
 
 class Encoder(SharedEncoder[AEConfig | MTAEConfig], TabularLayerInitMixin):
-    """
-    Encoder class for AE model.
-    """
+    """Encoder class for AE model."""
 
     def __init__(
         self,
@@ -21,19 +19,15 @@ class Encoder(SharedEncoder[AEConfig | MTAEConfig], TabularLayerInitMixin):
     
     def make_comp_heads(self) -> None:
         """Adds final compression heads of encoder."""
-
         self.comp_head = nn.Linear(min(self.config.hidden_dims), self.config.latent_dim)
     
     def init_comp_heads(self) -> None:
         """Initializes final compression heads of encoder."""
-
         self.init_head(self.comp_head, self.config.activation_en)
 
 
 class Decoder(SharedDecoder[AEConfig | VAEConfig], TabularLayerInitMixin):
-    """
-    Decoder class for AE model.
-    """
+    """Decoder class for AE model."""
 
     def __init__(
         self,
@@ -45,7 +39,6 @@ class Decoder(SharedDecoder[AEConfig | VAEConfig], TabularLayerInitMixin):
     
     def make_recon_heads(self) -> None:
         """Adds final reconstruction heads of decoder."""
-
         dim = max(self.config.hidden_dims)
         
         self.cont_recon_head = nn.Linear(dim, self.config.num_cont)
@@ -56,7 +49,6 @@ class Decoder(SharedDecoder[AEConfig | VAEConfig], TabularLayerInitMixin):
     
     def init_recon_heads(self) -> None:
         """Initializes final reconstruction heads of decoder."""
-
         self.init_head(self.cont_recon_head, self.config.activation_de)
 
         for module in self.cat_recon_heads.children():
@@ -90,7 +82,6 @@ class TabularAE(TabularEncodePassingMixin[AEConfig], TabularDecodePassingMixin[A
         x_cat: torch.Tensor 
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Full forward pass through autoencoder."""
-
         if self.config.allow_noise_injection:
             Xc, Xk = self._noise_injection(
                 x_cont, 
@@ -116,8 +107,10 @@ class TabularAE(TabularEncodePassingMixin[AEConfig], TabularDecodePassingMixin[A
         in_warmup: bool = False,
         reduction: str = "mean"
     ) -> tuple[torch.Tensor, ...] | torch.Tensor:
-        """Computes normalized weighted per-sample score and optionally reduces to average or sum."""
-
+        """
+        Computes normalized weighted per-sample score and optionally reduces to
+        average or sum.
+        """
         cont_score, cat_score, per_sample_score = self.recon_scoring(
             x_cont,
             x_cat,

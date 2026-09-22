@@ -63,6 +63,7 @@ def _load_data(
     country: str, 
     method: str
 ) -> tuple[pd.DataFrame, float, pd.DataFrame, list[int]]:
+    """Loads data for testing pipeline."""
     err_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_scores_{method}.csv"
     thr_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_threshold_{method}.json"
     int_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_intervals_{method}.csv"
@@ -97,6 +98,10 @@ def analyze_raw(
     out_path: Path,
     show_plots: bool,
 ) -> None:
+    """
+    Runs testing analysis pipeline for selected model and country for comparing
+    predictions with raw signals.
+    """
     TESTED_DIR = PROJECT_ROOT / "results" / "ml" / "trained" / f"{ae_type.upper()}"
     scaler_path = TESTED_DIR / f"{country}_scaler.pkl"
 
@@ -160,7 +165,7 @@ def analyze_testing(
     show_plots: bool,
     plot_raw: bool
 ) -> None:
-    """Runs full analysis pipeline for autoencoder after testing."""
+    """Runs testing analysis pipeline for selected model and country."""
     print(f"[INFO] Analyzing {country} with {method}...")
 
     # --------------------
@@ -280,6 +285,10 @@ def analyze_all(
     show_plots: bool, 
     plot_raw: bool
 ) -> None:
+    """
+    Runs testing analysis pipeline for selected model and all pre-defined 
+    countries.
+    """
     for c in COUNTRIES:
         try:
             analyze_testing(ae_type, c, method, show_plots, plot_raw)

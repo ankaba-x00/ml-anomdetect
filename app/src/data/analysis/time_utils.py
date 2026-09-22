@@ -12,14 +12,18 @@ def conv_iso_to_utc(time: str | pd.Timestamp) -> pd.Timestamp:
 def conv_iso_to_utc(time: pd.Series) -> pd.Series:
     ...
 
-def conv_iso_to_utc(time: str | pd.Timestamp | pd.Series) -> pd.Timestamp | pd.Series:
-    """Converts ISO 8601 extended date-time format timestamp to UTC time format timestamp."""
-
+def conv_iso_to_utc(time: TimeLike) -> pd.Timestamp | pd.Series:
+    """
+    Converts ISO 8601 extended date-time format timestamp to UTC time format 
+    timestamp.
+    """
     return pd.to_datetime(time, utc=True)
 
 def conv_utc_to_iso(time: TimeLike) -> str | pd.Series:
-    """Converts UTC time format timestamp to ISO 8601 extended date-time format timestamp."""
-
+    """
+    Converts UTC time format timestamp to ISO 8601 extended date-time format 
+    timestamp.
+    """
     dt = pd.to_datetime(time, utc=True)
 
     if isinstance(dt, pd.Series):
@@ -32,8 +36,9 @@ def conv_iso_to_local(
     country: str, 
     tz: dict
 ) -> pd.Timestamp | pd.Series:
-    """Converts ISO 8601 extended date-time format timestamp into local timestamp."""
-
+    """
+    Converts ISO 8601 extended date-time format timestamp into local timestamp.
+    """
     utc_time = conv_iso_to_utc(time)
     zone = tz[country]["zone"]
 
@@ -48,8 +53,9 @@ def conv_local_to_iso(
     country: str, 
     tz: dict
 ) -> str | pd.Series:
-    """Converts local timestamp to ISO 8601 extended date-time format timestamp."""
-
+    """
+    Converts local timestamp to ISO 8601 extended date-time format timestamp.
+    """
     local_tz = tz[country]["zone"]
     dt = pd.to_datetime(time)
 
@@ -76,16 +82,9 @@ def conv_iso_to_local_with_daytype(
     tz: dict
 ) -> dict[str, Any]:
     """
-    Converts an ISO 8601 timestamp to the country's local time and returns weekday/weekend info.
-    Returns
-    =======
-        dict: {
-            "local_time": pandas.Timestamp (tz-aware),
-            "weekday": int (0=Monday, 6=Sunday),
-            "daytype": str ("weekday" or "weekend")
-        }
+    Converts an ISO 8601 timestamp to the country's local time and returns 
+    weekday/weekend info.
     """
-
     utc_time = conv_iso_to_utc(time)
 
     zone = tz[country]["zone"]
@@ -111,15 +110,9 @@ def conv_iso_to_local_with_daytimes(
     tz: dict  
 ) -> dict[str, Any]:
     """
-    Converts an ISO 8601 timestamp to the country's local time and classifies into a daytime bucket.
-    Returns
-    =======
-        dict or DataFrame:
-            local_time : pandas.Timestamp (tz-aware)
-            local_hour : int (0–23)
-            daytime : str ("Deep night", "Morning", "Business hours", "Evening", "Early night")
+    Converts an ISO 8601 timestamp to the country's local time and classifies 
+    into a daytime bucket.
     """
-
     utc_time = conv_iso_to_utc(time)
     zone = tz[country]["zone"]
 

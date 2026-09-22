@@ -20,6 +20,7 @@ def objective(
     vr: int,
     path: Path
 ) -> float:
+    """Runs Optuna trial."""
     print(f"\n[INFO] Setting up new trial")
     # -----------------------------
     # Prepare trial

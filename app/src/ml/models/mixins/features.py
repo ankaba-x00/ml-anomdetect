@@ -5,7 +5,8 @@ import torch.nn.functional as F
 
 class TabularFeatureEncodeMixin:
     """
-    Stateless Feature Mixin providing functionality preprosessing categorical features via encoding or embedding.
+    Stateless Feature Mixin providing functionality preprosessing categorical 
+    features via encoding or embedding.
     """
 
     def prepare_input(
@@ -16,6 +17,7 @@ class TabularFeatureEncodeMixin:
         cat_dims: dict[str, int],
         embeddings: nn.ModuleDict | None = None
     ) -> torch.Tensor:
+        """Prepares categorical input tensors via embedding or encoding."""
         if use_embedding and embeddings is not None:
             x_cat_e = TabularFeatureEncodeMixin._embed(
                 x_cat, 
@@ -35,8 +37,7 @@ class TabularFeatureEncodeMixin:
         cat_dims: dict[str, int], 
         embeddings: nn.ModuleDict
     ) -> torch.Tensor:
-        """Embed cat features using Embedding."""
-
+        """Embeds cat features using Embedding."""
         parts = []
         for i, name in enumerate(cat_dims.keys()):
             parts.append(embeddings[name](x_cat[:, i].long()))
@@ -48,8 +49,7 @@ class TabularFeatureEncodeMixin:
         x_cat: torch.Tensor, 
         cat_dims: dict[str, int]
     ) -> torch.Tensor:
-        """Encode cat features via OneHotEncoding."""
-        
+        """Encodes cat features via OneHotEncoding."""
         parts = []
         for i, card in enumerate(cat_dims.values()):
             parts.append(F.one_hot(x_cat[:, i].long(), num_classes=card).float())
@@ -59,7 +59,8 @@ class TabularFeatureEncodeMixin:
 
 class TabularFeatureForwardMixin:
     """
-    Stateless Helper Mixin providing functionality for noise injection in hybrid tabular autoencoders during forward pass.
+    Stateless Helper Mixin providing functionality for noise injection in 
+    hybrid tabular autoencoders during forward pass.
     """
 
     @staticmethod
@@ -69,8 +70,8 @@ class TabularFeatureForwardMixin:
         noise_gauss_std: float,
         noise_mask_prob: float
     ) -> tuple[torch.Tensor, ...]:
-        """Inject noise to continuous and categorical features enabling denoising autoencoder"""
-
+        """Injects noise to continuous and categorical features enabling 
+        denoising autoencoder."""
         # Cont: adds Gaussian noise
         if noise_gauss_std > 0:
             noise = torch.randn_like(x_cont) * noise_gauss_std

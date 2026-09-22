@@ -39,6 +39,7 @@ def process_dataset(
     save_pkl: bool, 
     h5_fname: str
 ) -> None:
+    """Runs process dataset pipeline for selected dataset type."""
     prefix = str(DSFILE_MAP[key][-1])
     n_pulls = get_npulls(prefix)
     data = None
@@ -68,6 +69,7 @@ def process_all(
     save_pkl: bool, 
     h5_fname: str
 ) -> None:
+    """Runs process dataset pipeline for all dataset types."""
     for key in DSFILE_MAP:
         process_dataset(key, save_pkl, h5_fname)
 

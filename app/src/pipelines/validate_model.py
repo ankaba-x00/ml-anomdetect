@@ -56,6 +56,7 @@ def validate_model(
     method: str, 
     latent: bool
 ) -> None:
+    """Runs validation pipeline for selected model and country."""
     print(f"\n==============================")
     print(f"    VALIDATE {country} MODEL  ")
     print(f"==============================")
@@ -265,6 +266,9 @@ def validate_all(
     method: str,
     latent: bool
 ) -> None:
+    """
+    Runs validation pipeline for selected model and all pre-defined countries.
+    """
     for c in COUNTRIES:
         try:
             validate_model(

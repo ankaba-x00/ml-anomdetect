@@ -5,8 +5,8 @@ import pandas as pd
 @dataclass(slots=True, frozen=True)
 class ProcessedRegionTimeseries:
     """
-    Immutable container storing preprocessed timeseries data for a single country.
-    Used as input object for feature engineering phase.
+    Immutable container storing preprocessed timeseries data for a single 
+    country. Used as input object for feature engineering phase.
     """
 
     l3o: pd.DataFrame

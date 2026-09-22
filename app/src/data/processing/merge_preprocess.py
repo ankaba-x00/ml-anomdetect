@@ -25,6 +25,7 @@ RAW_DIR = PROJECT_ROOT / "datasets" / "raw"
 
 
 def check_ts_order(l1: list, l2: list) -> None:
+    """Checks timestamp order to verify merge direction."""
     ts1 = l1[-1]["fetch"]["value"]["result"]["main"]["timestamps"][-1]
     ts2 = l2[0]["fetch"]["value"]["result"]["main"]["timestamps"][0]
     if ts1 >= ts2:
@@ -33,6 +34,7 @@ def check_ts_order(l1: list, l2: list) -> None:
         )
 
 def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
+    """Retrieves two dataset fetches from internal file naming convention."""
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not matches:
         raise FileNotFoundError(f"[Error] No files found starting with: {prefix}")
@@ -40,11 +42,13 @@ def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
     return matches[i], matches[j]
 
 def _read_file(file: Path) -> dict:
+    """Reads dataset json file."""
     with open(file,'r') as f:
         data: dict = json.load(f)
     return data
 
 def _merge_dicts(d1: dict, d2: dict) -> dict:
+    """Generates merged dataset dictionary from two datasets."""
     merged = {}
     for region in d1.keys():
         if region not in d2.keys():
@@ -66,6 +70,7 @@ def merge_pulls(
     n_pulls: int, 
     prefix: str
 ) -> dict:
+    """Calls merger for specified number of fetch rounds (n_pulls)."""
     for n in range(1, n_pulls):
         merged: dict = run_merger(
             prefix=prefix,
@@ -82,6 +87,7 @@ def run_merger(
         n: int, 
         d: dict | None = None
     ) -> dict:
+    """Performs merger of two subsequent fetch pulls."""
     if n == 1:
         if merge_dir:
             p1, p2 = _find_latest_pulls(prefix, n-1, n)
@@ -102,6 +108,7 @@ def run_merger(
         return _merge_dicts(d1, d)
 
 def save_merged_data(data: dict, key: str) -> None:
+    """Saves merged dataset as json file."""
     outfile = RAW_DIR / f"{key}_merged.json"
     with open(outfile, "w") as f:
         json.dump(data, f, indent=2)
@@ -111,6 +118,7 @@ def preprocess_merged_data(
     data: dict, 
     key: str,
 ) -> None:
+    """Preprocesses merged dataset."""
     conv_data = read_json_time_csplit(data, key)
 
     if conv_data:
@@ -123,6 +131,7 @@ def merge_single(
     n_pulls: int, 
     save_only: bool, 
 ) -> None:
+    """Runs pipeline for merging and preprocessing single dataset."""
     print(f"[INFO] Merging {key}...")
 
     prefix = str(DSFILE_MAP[key][-1])
@@ -143,6 +152,7 @@ def merge_all(
     n_pulls: int,
     save_only: bool
 ) -> None:
+    """Runs pipeline for merging and preprocessing all datasets."""
     for key, value in DSFILE_MAP.items():
         if value[0]:
             merge_single(key, n_pulls, save_only)

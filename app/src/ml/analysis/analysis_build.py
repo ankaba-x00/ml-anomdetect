@@ -14,7 +14,10 @@ def plot_log_candidates(
     fname: str = "plot_log_candidates.png", 
     show: bool = False,
 ) -> None:
-    """Histograms of value distribution for raw signals and log-transformed signals."""
+    """
+    Generates histograms of value distribution for raw signals and 
+    log-transformed signals.
+    """
     apply_custom_theme()
 
     try:

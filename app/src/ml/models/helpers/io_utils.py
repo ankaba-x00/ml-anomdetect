@@ -17,7 +17,10 @@ def save_autoencoder(
     path: Path,
     metadata: dict[str, Any] | None = None
 ) -> None:
-    "Stores model, config, cat_dims, num_cont, model_class and metadata in pt-file."
+    """
+    Stores model, config, cat_dims, num_cont, model_class and metadata in
+    pt file.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
 
     config_payload = config.to_dict()
@@ -39,8 +42,10 @@ def load_autoencoder(
     path: Path,
     device: str = "cpu",
 ) -> LoadedAutoencoder:
-    "Unpacks pt-file and loads model, config, cat_dims, num_cont, model_class and metadata from pt-file."
-
+    """
+    Unpacks pt file and loads model, config, cat_dims, num_cont, model_class 
+    and metadata.
+    """
     payload = torch.load(path, map_location=device, weights_only=True)
 
     num_cont = payload["num_cont"]

@@ -18,7 +18,6 @@ PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 
 def _load_from_disk(keys: set[str], country: str) -> RegionTimeseriesFetchResult:
     """Load timeseries for country region from h5 file on disk."""
-
     data: dict = {}
     for k in keys:
         if k == "timestamps":
@@ -49,6 +48,7 @@ def _load_from_disk(keys: set[str], country: str) -> RegionTimeseriesFetchResult
     return RegionTimeseriesFetchResult.from_dict(data)
 
 def _check_values(key: str, ts_len: int, values: list[str]) -> list[str] | None:
+    """Performs sanity check for features build."""
     val_len = len(values)
     if ts_len != 96:
         raise ValueError(f"[ERROR] {key} not processed in 15min chunks; aborting now")
@@ -69,8 +69,9 @@ def _conv_todf(
     timestamps: list[str], 
     name: str
 ) -> pd.DataFrame:
-    "Converts raw stringified dataset values and checks for data consistency."
-
+    """
+    Converts raw stringified dataset values and checks for data consistency.
+    """
     ts = pd.to_datetime(timestamps, errors="coerce")
     val = _check_values(name, len(ts), values)
 
@@ -85,8 +86,10 @@ def _conv_weigh_todf(
     mids: dict,
     name: str
 ) -> pd.DataFrame:
-    "Converts raw stringified value distributions to weighted averages per timestamp and checks for data consistency."
-
+    """
+    Converts raw stringified value distributions to weighted averages per 
+    timestamp and checks for data consistency.
+    """
     ts = pd.to_datetime(timestamps, errors="coerce")
     cols = [c for c in mids.keys() if c in values.keys()]
     
@@ -109,8 +112,10 @@ def _conv_fract_todf(
     values: dict[str, list[str]], 
     timestamps: list[str]
 ) -> pd.DataFrame:
-    "Converts raw stringified protocol bucket data to fractional shares and Shannon entropy per timestamp and checks for data consistency."
-
+    """
+    Converts raw stringified protocol bucket data to fractional shares and 
+    Shannon entropy per timestamp and checks for data consistency.
+    """
     ts = pd.to_datetime(timestamps, errors="coerce")
     pcols = ["udp", "tcp", "icmp", "gre"]
 
@@ -139,7 +144,6 @@ def load_base(
     data: RegionTimeseriesFetchResult | None = None
 ) -> ProcessedRegionTimeseries:
     """Preprocesses raw timeseries data from memory or disk."""
-
     if data is None:
         keys = RegionTimeseriesFetchResult.__getatts__()
         data = _load_from_disk(keys, country)

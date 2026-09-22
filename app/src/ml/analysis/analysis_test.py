@@ -18,7 +18,10 @@ def plot_error_curve(
     fname: str = "plot_error_curve.png", 
     show: bool = False
 ) -> None:
-    """Lineplot reconstruction error over timestamps with color-coded error predictions, smoothed error curve, threshold and detected anomalies."""
+    """
+    Generates lineplot of reconstruction error over time with color-coded error
+    predictions, smoothed error curve, threshold and detected anomalies.
+    """
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(14, 5))
@@ -50,7 +53,7 @@ def plot_intervals(
     fname: str = "plot_intervals.png", 
     show: bool = False
 ) -> None:
-    """Lineplot with detected anomalies over timestamps."""
+    """Generates lineplot with detected anomalies over time."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(14, 2))
@@ -73,7 +76,7 @@ def plot_error_hist(
     fname: str = "plot_score_hist.png", 
     show: bool = False
 ) -> None:
-    """Histogram showing score counts and threshold."""
+    """Generates histogram showing score counts and threshold."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -99,7 +102,10 @@ def plot_raw_with_scores(
     fname: str = "plot_raw_with_scores.png", 
     show: bool = False
 ) -> None:
-    """Lineplot showing raw target signal with smoothed score scaled on same range and detected anomalies."""
+    """
+    Generates lineplot showing raw target signal with smoothed score scaled to
+    same range as raw datasets and detected anomalies.
+    """
     apply_custom_theme()
 
     # normalize scores to same scale as raw signal
@@ -131,7 +137,10 @@ def plot_true_pred_anomalies(
     fname: str = "plot_true_pred_anomalies.png", 
     show: bool = False
 ) -> None:
-    """Lineplot showing raw signal with predicted signal and flagged anomalies."""
+    """
+    Generates lineplot showing raw and predicted signals, as well as flagged 
+    anomalies.
+    """
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(14, 4))
@@ -190,7 +199,7 @@ def plot_attack_timeline(
     fname: str = "plot_attack_timeline.png", 
     show: bool = False
 ) -> None:
-    """Scatter plot of attack type over time"""
+    """Generates scatter plot of attack type over time."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(14, 4))
@@ -240,7 +249,7 @@ def plot_loss_components_timeseries(
     fname: str = "plot_loss_components_timeseries.png", 
     show: bool = False
 ) -> None:
-    """Lineplot with loss decomposition over time"""
+    """Generates lineplot with loss decomposition over time."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(14, 4))

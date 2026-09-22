@@ -28,11 +28,13 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def dsfile_exists(prefix: str) -> None:
+    """Checks whether dataset file exists before proceeding."""
     match = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not match:
         raise FileNotFoundError(f"[ERROR] No JSON file starting with '{prefix}' found. Aborting preprocessing stage.")
 
 def find_latest_pull(prefix: str) -> Path:
+    """Retrieves latest dataset fetch from internal file naming convention."""
     matches = list(RAW_DIR.glob(f"{prefix}*.json"))
     if not matches:
         raise FileNotFoundError(f"[ERROR] No files found starting with: {prefix}")
@@ -44,6 +46,7 @@ def nontemp_extraction(
     field_map: dict, 
     result_key: str = "main"
 ) -> dict:
+    """Extracts data from json nesting for non-temporal data."""
     data_dict: dict[str, Any] = {}
 
     for day_entry in data:
@@ -79,6 +82,9 @@ def nontemp_csplit_extraction(
     field_map: dict, 
     result_key: str = "main"
 ) -> dict:
+    """
+    Extracts data from json nesting for non-temporal data for each region.
+    """
     data_dict: dict[str, Any] = {}
 
     for region, region_data in data.items():
@@ -93,6 +99,7 @@ def temp_csplit_extraction(
     fields: list, 
     result_key: str = "main"
 ) -> dict:
+    """Extracts data from json nesting for temporal data for each region."""
     data_dict: dict[str, Any] = {}
 
     for region, region_data in data.items():
@@ -131,6 +138,10 @@ def temp_csplit_extraction(
     return data_dict
 
 def read_json_notime(data: dict, key: str) -> dict:
+    """
+    Reads dataset of non-temporal data for region-unspecific/worldwide datasets
+    and calls data extraction routine.
+    """
     print(f"[INFO] {key} preprocessed as non-temporal data...")
     
     if key == "anomalies":
@@ -163,6 +174,10 @@ def read_json_notime(data: dict, key: str) -> dict:
     return data_dict
 
 def read_json_notime_csplit(data: dict, key: str) -> dict:
+    """
+    Reads dataset of non-temporal data for region-specific datasets and calls
+    data extraction routine.
+    """
     print(f"[INFO] {key} preprocessed as non-temporal, country-resolved data...")
         
     if "target" in key:
@@ -182,6 +197,10 @@ def read_json_notime_csplit(data: dict, key: str) -> dict:
     return data_dict
 
 def read_json_time_csplit(data: dict, key: str) -> dict:
+    """
+    Reads dataset of temporal data for each region and calls data extraction 
+    routine.
+    """
     print(f"[INFO] {key} preprocessed as temporal, country-resolved data...")
     
     if key.startswith("iq"):
@@ -241,6 +260,7 @@ def read_json_time_csplit(data: dict, key: str) -> dict:
     return data_dict
 
 def save_data(data: dict, key: str) -> None:
+    """Saves preprocessed dataset in pkl files for data analysis."""
     outfile = PROCESSED_DIR / f"{key}.pkl"
     with open(outfile, "wb") as f:
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -252,6 +272,7 @@ def preprocess_single(
     save_pkl: bool = True,
     return_data: bool = False
 ) -> dict | None:
+    """Runs pipeline for preprocessing single dataset."""
     print(f"[INFO] Preprocessing {key}...")
     value = DSFILE_MAP[key]
     is_time, is_csplit, prefix = value
@@ -280,6 +301,7 @@ def preprocess_single(
         return None
 
 def preprocess_all() -> None:
+    """Runs pipeline for preprocessing all datasets."""
     for key in DSFILE_MAP:
         preprocess_single(key)
 

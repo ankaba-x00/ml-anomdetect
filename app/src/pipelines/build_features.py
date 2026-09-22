@@ -186,7 +186,7 @@ def save_feature_matrix(
     cat_dims: dict[str, int]
 ) -> None:
     """
-    Saves:
+    Stores feature matrix for unsupervised learning in pkl file incl.
       - cont scaled features (float32)
       - cat index features (int64)
       - metadata: num_cont and cat_dims
@@ -216,7 +216,7 @@ def save_supervised_feature_matrix(
     cat_dims: dict[str, int]
 ) -> None:
     """
-    Saves:
+    Stores feature matrix for supervised learning in pkl file incl.
       - cont scaled features (float32)
       - cat index features (int64)
       - labels incl. l3/l7 intensities and attack types (float32, int64)
@@ -247,6 +247,7 @@ def build_features(
     ANALYZE: bool, 
     show: bool
 ) -> None:
+    """Runs build features pipeline for selected country and learning type."""
     print(f"\n==============================")
     print(f"  FEATURES COUNTRY = {country}")
     print(f"==============================")
@@ -302,6 +303,10 @@ def build_all(
     ANALYZE: bool, 
     show_plots: bool
 ) -> None:
+    """
+    Runs build features pipeline for all pre-defined countries and learning 
+    type.
+    """
     for c in COUNTRIES:
         try:
             build_features(

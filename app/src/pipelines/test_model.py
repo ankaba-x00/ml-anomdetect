@@ -59,6 +59,7 @@ def test_model(
     vr: int, 
     latent: bool
 ) -> None:
+    """Runs testing pipeline for selected model and country."""
     print(f"\n==============================")
     print(f"     TEST {country} MODEL     ")
     print(f"==============================")
@@ -307,6 +308,9 @@ def test_all(
     vr: int, 
     latent: bool
 ) -> None:
+    """
+    Runs testing pipeline for selected model and all pre-defined countries.
+    """
     for c in COUNTRIES:
         try:
             test_model(

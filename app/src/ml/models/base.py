@@ -13,9 +13,11 @@ class BaseTabularEncoder(ABC, Generic[EncoderConfigT], nn.Module, TabularLayerAc
     """
     Base encoder class for tabular autoencoder models.
 
-    Tasks incl. setting up embeddings, encoder layers, as well as weight, bias and embedding initialization.
+    Tasks incl. setting up embeddings, encoder layers, as well as weight, bias
+    and embedding initialization.
 
-    Subclasses may override make_comp_heads() and init_comp_heads() depending on comp head composition.
+    Subclasses may override make_comp_heads() and init_comp_heads() depending
+    on comp head composition.
     """
 
     def __init__(
@@ -112,7 +114,8 @@ class BaseTabularDecoder(ABC, Generic[DecoderConfigT], nn.Module, TabularLayerAc
 
     Tasks incl. setting up decoder layers, as well as weight initialization.
 
-    Subclasses may override make_recon_heads() and init_recon_heads() depending on recon head schema.
+    Subclasses may override make_recon_heads() and init_recon_heads() depending
+    on recon head schema.
     """
     
     def __init__(

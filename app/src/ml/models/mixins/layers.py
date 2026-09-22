@@ -3,13 +3,13 @@ import torch.nn as nn
 
 class TabularLayerActMixin:
     """
-    Stateless Helper Mixin providing functionality for activating autoencoder layers.
+    Stateless Helper Mixin providing functionality for activating autoencoder 
+    layers.
     """
 
     @staticmethod
     def pick_act_func(act_name: str) -> nn.Module:
         """Selects activation function from a predifined collection."""
-
         act_dict = {
             "relu": nn.ReLU(inplace=True),
             "leaky_relu": nn.LeakyReLU(0.01, inplace=True),
@@ -28,7 +28,8 @@ class TabularLayerActMixin:
 
 class TabularLayerInitMixin:
     """
-    Stateless Helper Mixin providing functionality for initializing autoencoder layers.
+    Stateless Helper Mixin providing functionality for initializing 
+    layers.
     """
 
     @staticmethod
@@ -38,9 +39,9 @@ class TabularLayerInitMixin:
     ) -> None:
         """
         Initializes weights of model layers.
-        Input tensor modification depends on layer connectivity and activation function in use.
+        Input tensor modification depends on layer connectivity and activation
+        function in use.
         """
-
         # encoder_layers / decoder_layers 
         if isinstance(modules, nn.ModuleList):
             for m in modules.modules():
@@ -61,9 +62,9 @@ class TabularLayerInitMixin:
         act_name: str | None
     ) -> None:
         """
-        Initializes weights and biases of final compression and reconstruction heads.
+        Initializes weights and biases of final compression and reconstruction 
+        heads.
         """
-
         TabularLayerInitMixin._pick_weight_init_func(act_name, module)
         TabularLayerInitMixin._pick_bias_init_func("zeros", module)
     
@@ -72,8 +73,10 @@ class TabularLayerInitMixin:
         act_name: str | None, 
         m: nn.Module
     ) -> None:
-        """Selects init function for weights depending on activation function type."""
-
+        """
+        Selects init function for weights depending on activation function 
+        type.
+        """
         init_dict = {
             "he_normal": lambda layer: nn.init.kaiming_normal_(layer.weight),
             "he_uniform": lambda layer: nn.init.kaiming_uniform_(layer.weight, nonlinearity="relu"),
@@ -97,7 +100,6 @@ class TabularLayerInitMixin:
         m: nn.Module
     ) -> None:
         """Selects init function for bias."""
-        
         init_dict = {
             "zeros": lambda layer: nn.init.zeros_(layer.bias),
             "orthogonal": lambda layer: nn.init.orthogonal_(layer.bias)

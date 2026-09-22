@@ -23,8 +23,11 @@ def prediction(
     device: str = "cpu",
     calibration: bool = False
 ) -> MTPredictionResult:
-    """Computes per-sample reconstruction error normalized by features, quantile-bound predictions of L3/l7 attack intensities and most probable attack type."""
-
+    """
+    Computes per-sample reconstruction error normalized by features, 
+    quantile-bound predictions of L3/l7 attack intensities and most probable 
+    attack type.
+    """
     model.eval()
     
     Xc = torch.from_numpy(X_cont.astype(np.float32)).to(device)
@@ -92,8 +95,12 @@ def apply_mt_model(
     merge_gap: int = 0,
     device: str = "cpu"
 ) -> EvaluationResult:
-    """Applies multi-task autoencoder and returns anomaly scoring incl. reconstruction errors, threshold and anomaly intervals, as well as prediction, losses and confidence scoring for L3/L7 intensities and attack types."""
-    
+    """
+    Applies multi-task autoencoder and returns anomaly scoring incl. 
+    reconstruction errors, threshold and anomaly intervals, as well as 
+    prediction, losses and confidence scoring for L3/L7 intensities and attack
+    types.
+    """
     result = prediction(
         model=model,
         X_cont=X_cont,

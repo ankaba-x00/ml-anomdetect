@@ -9,9 +9,7 @@ from .mixins import TabularDecodePassingMixin, TabularVEncodePassMixin, TabularF
 
 
 class VEncoder(SharedVEncoder[VAEConfig]):
-    """
-    Encoder class for VAE model.
-    """
+    """Encoder class for VAE model."""
 
     def __init__(
         self,
@@ -22,14 +20,12 @@ class VEncoder(SharedVEncoder[VAEConfig]):
         self.config = config
     
     def make_comp_heads(self) -> None:
-        """Adds final compression heads of encoder."""
-        
+        """Adds final compression heads of encoder."""  
         self.mu_head = nn.Linear(min(self.config.hidden_dims), self.config.latent_dim)
         self.logvar_head = nn.Linear(min(self.config.hidden_dims), self.config.latent_dim)
 
     def init_comp_heads(self) -> None:
         """Initializes final compression heads of encoder."""
-
         self.init_head(self.mu_head, None)
         self.init_head(self.logvar_head, None)
 
@@ -42,7 +38,8 @@ class TabularVAE(TabularVEncodePassMixin[VAEConfig], TabularDecodePassingMixin[V
       - (optional) denoising for cont features
       - separate decoding heads for cont and cat features
       - unsupervised learning for anomaly scoring
-      - metrics: mixed ELBO loss with KL divergence and recon error combining Huber loss for cont and CE for cat features
+      - metrics: mixed ELBO loss with KL divergence and recon error combining 
+        Huber loss for cont and CE for cat features
     """
 
     def __init__(
@@ -61,7 +58,6 @@ class TabularVAE(TabularVEncodePassMixin[VAEConfig], TabularDecodePassingMixin[V
         x_cat: torch.Tensor
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         """Full forward pass through autoencoder."""
-        
         if self.config.allow_noise_injection:
             Xc, Xk = self._noise_injection(
                 x_cont, 
@@ -97,8 +93,10 @@ class TabularVAE(TabularVEncodePassMixin[VAEConfig], TabularDecodePassingMixin[V
         loss_weights: dict[str, float],
         reduction: str = "mean"
     ) -> tuple[torch.Tensor, ...] | torch.Tensor:
-        """Computes normalized weighted per-sample score and optionally reduces to average or sum."""
-
+        """
+        Computes normalized weighted per-sample score and optionally reduces to
+        average or sum.
+        """
         cont_loss, cat_loss, recon_score = self.recon_scoring(
             x_cont,
             x_cat,
@@ -134,8 +132,10 @@ class TabularVAE(TabularVEncodePassMixin[VAEConfig], TabularDecodePassingMixin[V
         self, 
         epoch: int, 
     ) -> None:
-        """Beta-annealing gives model time to learn reconstructions before forcing latent regularization. Dynamically adjusts beta for each epoch."""
-
+        """
+        Beta-annealing gives model time to learn reconstructions before forcing
+        latent regularization. Dynamically adjusts beta for each epoch.
+        """
         # linear schedule within 40% of epochs
         if self.config.beta_schedule == "linear":
             warmup = int(0.4 * self.config.num_epochs)

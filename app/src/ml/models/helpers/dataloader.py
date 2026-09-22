@@ -11,14 +11,14 @@ def unsupervised_dataloader(
     shuffle: bool,
 ) -> DataLoader:
     """
-    Build DataLoader with
-       X_f : FloatType (float32) features
-       X_i : IntegerType (int64) features 
+    Builds DataLoader with
+       Xc : FloatType (float32) features
+       Xk : IntegerType (int64) features 
     """
-    Xc_f = torch.from_numpy(X_f.astype(np.float32))
-    Xk_i = torch.from_numpy(X_i.astype(np.int64))
+    Xc = torch.from_numpy(X_f.astype(np.float32))
+    Xk = torch.from_numpy(X_i.astype(np.int64))
 
-    Tds = TensorDataset(Xc_f, Xk_i)
+    Tds = TensorDataset(Xc, Xk)
 
     return DataLoader(
         Tds, 
@@ -36,6 +36,14 @@ def supervised_dataloader(
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
+    """
+    Builds DataLoader with
+        Xc : FloatType (float32) features
+        Xk : IntegerType (int64) features 
+        y7 : FloatType (float32) label
+        y3 : FloatType (float32) label
+        ya : IntegerType (int64) label 
+    """
     Xc = torch.from_numpy(X_cont.astype(np.float32))
     Xk = torch.from_numpy(X_cat.astype(np.int64))
     y3 = torch.from_numpy(y_l3.astype(np.float32))

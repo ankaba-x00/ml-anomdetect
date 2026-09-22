@@ -67,14 +67,14 @@ TUNED_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 
 
 def load_study(country: str, db_path: Path) -> optuna.Study:
-    """Loads study from SQLite db."""
+    """Loads study from SQLite database file."""
     return optuna.load_study(
         storage=f"sqlite:///{db_path}",
         study_name=f"ae_tuning_{country}",
     )
 
 def make_trial_dataframe(study: optuna.Study) -> pd.DataFrame:
-    """Converts study trials into df."""
+    """Converts study trials into pd.DataFrame."""
     rows = []
     for t in study.trials:
         if t.state.name != "COMPLETE":
@@ -89,7 +89,7 @@ def multi_analyze(
     retune_no: int = 0,
     show_plots: bool = False
 ) -> None:
-    """Compare best validation losses across countries."""
+    """Runs multi-counry analysis pipeline."""
     print(f"\n[INFO] Multi-country analysis...")
 
     out_path = TUNED_DIR / f"{ae_type.upper()}" / "analysis" / "_multi"
@@ -215,7 +215,7 @@ def analyze_tuning(
     retune_no: int,
     show_plots: bool
 ) -> None:
-    """Runs full analysis pipeline for autoencoder after tuning."""
+    """Runs tuning analysis pipeline for selected model and country."""
     print(f"\n[INFO] Analyzing {country}...")
     
     # --------------------
@@ -334,6 +334,10 @@ def analyze_all(
     retune_no: int,
     show_plots: bool
 ) -> None:
+    """
+    Runs tuning analysis pipeline for selected model and all pre-defined 
+    countries.
+    """
     for c in COUNTRIES:
         try:
             analyze_tuning(

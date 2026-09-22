@@ -24,8 +24,9 @@ ListFields = Literal[
 @dataclass(slots=True)
 class RegionTimeseriesFetchResult:
     """
-    Immutable fetch result object for inference storing timeseries data for a single country.
-    Used for internal data-to-features conversion in memory.
+    Represents an immutable fetch result object for inference storing 
+    timeseries data for a single country. Used for internal data-to-features 
+    conversion in memory.
     """
 
     httpreq: list[str]

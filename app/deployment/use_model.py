@@ -42,7 +42,7 @@ def use_model(
     date_from: datetime, 
     date_to: datetime
 ) -> dict[str, Any]:
-    "Inference pipeline to fetch new CLoudflare data, generate feature matrix and apply model to make predictions."
+    """Runs inference pipeline for selected model, country and date."""
     ae_type = cast(Literal["ae", "vae", "mtae"], ae_type)
 
     try: 
@@ -193,6 +193,7 @@ if __name__=="__main__":
 
 
     def _is_valid_date(date: datetime) -> bool:
+        """Checks whether date input is within valid range."""
         lower_bound = datetime(2025, 11, 15, tzinfo=timezone.utc)
         upper_bound = (
             datetime.now(timezone.utc)
