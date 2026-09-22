@@ -13,14 +13,14 @@ Output:
            app/datasets/processed/<FILE_KEY>.pkl
 
 Usage:
-    python -m app.src.pipelines.process_dataset [-k] [-d] [-S] [-o <FILE_NAME>] <all|FILE_KEY> <MERGE_DIR>
+    python -m app.src.pipelines.process_dataset [-k] [-S] [-o <FILE_NAME>] <all|FILE_KEY>
 """
 
 from pathlib import Path
 
 from app.src.data.processing import DSFILE_MAP
 from app.src.data.processing.flatten import flatten_single
-from app.src.data.processing.merge_preprocess import run_merger
+from app.src.data.processing.merge_preprocess import merge_pulls
 from app.src.data.processing.preprocess import preprocess_single
 
 
@@ -36,7 +36,6 @@ def get_npulls(prefix: str) -> int:
 
 def process_dataset(
     key: str, 
-    merge_dir: int,
     save_pkl: bool, 
     h5_fname: str
 ) -> None:
@@ -47,16 +46,11 @@ def process_dataset(
     if n_pulls == 0:
         raise FileNotFoundError(f"[ERROR] No dataset found for {key}")
     elif n_pulls > 1:
-        print(f"[INFO] Merging {key}...")
-        for n in range(1, n_pulls):
-            print(f"[INFO] {key}\t merge round {n}...")
-            merged: dict = run_merger(
-                prefix=prefix,
-                merge_dir=merge_dir,
-                n=n,
-                d=merged if n > 1 else None
-            )
-            data = merged
+        try:
+            print(f"[INFO] Merging {key}...")
+            data = merge_pulls(0, n_pulls, prefix)
+        except ValueError:
+            data = merge_pulls(1, n_pulls, prefix)
         print(f"[OK] {key} successfully merged")
 
     prep_data = preprocess_single(
@@ -70,14 +64,12 @@ def process_dataset(
 
     print(f"[DONE] {key} successfully processed")
 
-
 def process_all(
-    merge_dir: int, 
     save_pkl: bool, 
     h5_fname: str
 ) -> None:
     for key in DSFILE_MAP:
-        process_dataset(key, merge_dir, save_pkl, h5_fname)
+        process_dataset(key, save_pkl, h5_fname)
 
     print(f"[DONE] All datasets processed!")
 
@@ -93,12 +85,6 @@ if __name__=="__main__":
         "-k", "--keys",
         action="store_true",
         help="show available dataset keys and exit"
-    )
-
-    parser.add_argument(
-        "-d", "--dir",
-        action="store_true",
-        help="show available merge directions and exit"
     )
 
     parser.add_argument(
@@ -119,12 +105,6 @@ if __name__=="__main__":
         help="<all|aibots_crawlers_time, anomalies, ...> file key to process"
     )
 
-    parser.add_argument(
-        "merge_dir",
-        type=int,
-        help="merge direction <0=consecutively|1=non-consecutively>"
-    )
-
     args = parser.parse_args()
 
     if args.keys:
@@ -133,19 +113,8 @@ if __name__=="__main__":
             print(f"\t- {key}")
         exit(0)
 
-    if args.dir:
-        print("Available merge directions:" \
-        "\n  - 0 : consecutively = later pull adds subsequent timestamps to previous pull" \
-        "\n  - 1 : non-consecutively = later pull adds proceeding timestamps to previous pull")
-        
-        exit(0)
-
     if args.file_key not in ["all", *DSFILE_MAP.keys()]:
         print(f"[Error] file_key {args.file_key} cannot be processed\n")
-        parser.print_help()
-        exit(1)
-
-    if args.merge_dir not in [0, 1]:
         parser.print_help()
         exit(1)
 
@@ -153,11 +122,10 @@ if __name__=="__main__":
         args.out = f"{args.file_key.lower()}.h5"
 
     if args.file_key.lower() == "all":
-        process_all(args.merge_dir, args.save, args.out)
+        process_all(args.save, args.out)
     else:
         process_dataset(
             args.file_key.lower(), 
-            args.merge_dir, 
             args.save, 
             args.out
         )

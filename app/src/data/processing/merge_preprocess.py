@@ -9,7 +9,7 @@ Output:
     pkl files : datasets/processed/<dataset>.pkl
 
 Usage: 
-    python -m app.src.data.processing.merge_preprocess [-k] [-d] [-S] [-N <int>] <all|FILE_KEY> <MERGE_DIR>
+    python -m app.src.data.processing.merge_preprocess [-k] [-S] [-N <int>] <all|FILE_KEY>
 """
 
 import json
@@ -29,10 +29,7 @@ def check_ts_order(l1: list, l2: list) -> None:
     ts2 = l2[0]["fetch"]["value"]["result"]["main"]["timestamps"][0]
     if ts1 >= ts2:
         raise ValueError(
-            "[Error] Timestamp continuity error" \
-            f"\n   last timestamp in file1:  {ts1}" \
-            f"\n   first timestamp in file2: {ts2}" \
-            "\nExpected: last_ts_file1 < first_ts_file2. Use different merge dir."
+            "[Error] Timestamp continuity error: last_ts_file1 > first_ts_file2. Use different merge dir."
         )
 
 def _find_latest_pulls(prefix: str, i: int, j: int) -> tuple[Path, Path]:
@@ -62,6 +59,21 @@ def _merge_dicts(d1: dict, d2: dict) -> dict:
             entry["idx"] = i
         
         merged[region] = combined
+    return merged
+
+def merge_pulls(
+    merge_dir: int, 
+    n_pulls: int, 
+    prefix: str
+) -> dict:
+    for n in range(1, n_pulls):
+        merged: dict = run_merger(
+            prefix=prefix,
+            merge_dir=merge_dir,
+            n=n,
+            d=merged if n > 1 else None
+        )
+        print(f"[INFO] ... completed merge round {n}")
     return merged
 
 def run_merger(
@@ -108,23 +120,18 @@ def preprocess_merged_data(
 
 def merge_single(
     key: str, 
-    merge_dir: int, 
     n_pulls: int, 
     save_only: bool, 
 ) -> None:
     print(f"[INFO] Merging {key}...")
 
-    value = DSFILE_MAP[key]
-    dsfile_exists(str(value[-1]))
+    prefix = str(DSFILE_MAP[key][-1])
+    dsfile_exists(prefix)
 
-    for n in range(1, n_pulls):
-        print(f"[INFO] {key}\t merge round {n}...")
-        merged: dict = run_merger(
-            prefix=str(value[-1]),
-            merge_dir=merge_dir,
-            n=n,
-            d=merged if n > 1 else None
-        )
+    try:
+        merged = merge_pulls(0, n_pulls, prefix)
+    except ValueError:
+        merged = merge_pulls(1, n_pulls, prefix)
     
     print(f"[OK] {key} successfully merged")
     if save_only:
@@ -133,13 +140,12 @@ def merge_single(
         preprocess_merged_data(merged, key)
 
 def merge_all(
-    merge_dir: int, 
     n_pulls: int,
     save_only: bool
 ) -> None:
     for key, value in DSFILE_MAP.items():
         if value[0]:
-            merge_single(key, merge_dir, n_pulls, save_only)
+            merge_single(key, n_pulls, save_only)
         
     print(f"[DONE] All datasets merged and preprocessed!")
 
@@ -155,12 +161,6 @@ if __name__=='__main__':
         "-k", "--keys",
         action="store_true",
         help="show available dataset keys and exit"
-    )
-
-    parser.add_argument(
-        "-d", "--dir",
-        action="store_true",
-        help="show available merge directions and exit"
     )
     
     parser.add_argument(
@@ -181,12 +181,6 @@ if __name__=='__main__':
         help="<all|[aibots_crawlers_time, bots_time, ...]> file key to process "
     )
 
-    parser.add_argument(
-        "merge_dir",
-        type=int,
-        help="merge direction <0=consecutively|1=non-consecutively>"
-    )
-
     args = parser.parse_args()
 
     time_dsfiles = [k for k, v in DSFILE_MAP.items() if v[0]]
@@ -196,23 +190,12 @@ if __name__=='__main__':
             print(f"\t- {key}")
         exit(0)
 
-    if args.dir:
-        print("Available merge directions:" \
-        "\n  - 0 : consecutively = later pull adds subsequent timestamps to previous pull" \
-        "\n  - 1 : non-consecutively = later pull adds proceeding timestamps to previous pull")
-        
-        exit(0)
-
     if args.file_key not in ["all", *time_dsfiles]:
         print(f"[Error] file_key {args.file_key} cannot be processed\n")
         parser.print_help()
         exit(1)
 
-    if args.merge_dir not in [0, 1]:
-        parser.print_help()
-        exit(1)
-
     if args.file_key.lower() == "all":
-        merge_all(args.merge_dir, args.N, args.save)
+        merge_all(args.N, args.save)
     else:
-        merge_single(args.file_key, args.merge_dir, args.N, args.save)
+        merge_single(args.file_key, args.N, args.save)

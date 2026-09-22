@@ -77,8 +77,8 @@ This package has multiple sequential stages
     <br>`./bin/run_fetch.sh`
 
 IMPORTANT: in run_fetch.sh, set PROCESS=true if dataset is fetched in one round or with the last fetch round before you continue with analyzing dataset and/or ML stages. If you forget to set PROCESS=true, run the dedicated pipeline for processing and analyzing datasets via
-    <br>`python -m app.src.pipeline.process_dataset -S all 0`</br>
-    <br>`python -m app.src.pipeline.analyze_dataset`</br>
+    <br>`python -m app.src.pipelines.process_dataset -S all`</br>
+    <br>`python -m app.src.pipelines.analyze_dataset`</br>
 
 ### Build and Train Models
 

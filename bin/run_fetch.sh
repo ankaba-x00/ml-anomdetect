@@ -100,8 +100,8 @@ echo "[FETCH] Completed!"
 if [ "$PROCESS" == true ]; then
     echo "===================================="
     echo "[PROCESS] Executing:"
-    echo "python -m app.src.pipelines.process_dataset -S all 0"
-    eval python -m app.src.pipelines.process_dataset -S all 0
+    echo "python -m app.src.pipelines.process_dataset -S all"
+    eval python -m app.src.pipelines.process_dataset -S all
     echo "[PROCESS] Completed!"
     echo
 
