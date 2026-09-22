@@ -1,8 +1,8 @@
 # app/deployment/__init__.py
 """
-inference module
+deployment package
 =================
-this module provides core utilities for using a packaged model bundle for inference
+this package provides core utilities for inference
 - schema : fetch result object for inference
 """
 
