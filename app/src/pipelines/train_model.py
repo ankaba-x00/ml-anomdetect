@@ -29,9 +29,12 @@ import json, pickle
 from pathlib import Path
 import numpy as np
 from sklearn.preprocessing import RobustScaler
+from typing import Literal
+from torch import Tensor
 
-from app.src.data import ISO_3166_alpha2, timeseries_seq_split
-from app.src.data.feature_engineering import (
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.processing import timeseries_seq_split
+from app.src.data.building.feature_engineering import (
     COUNTRIES,
     load_feature_matrix, 
     load_supervised_feature_matrix
@@ -46,14 +49,14 @@ from app.src.ml.training.train_mt import train_mt_autoencoder
 
 FILE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = FILE_DIR.parents[2]
-CONFIG_DIR = PROJECT_ROOT / "app" / "src" / "config" / "train"
+CONFIG_DIR = PROJECT_ROOT / "app" / "config" / "train"
 BEST_MODELS_DIR = PROJECT_ROOT / "results" / "ml" / "tuned"
 OUT_DIR = PROJECT_ROOT / "results" / "ml" / "trained"
 FULL_OUT_DIR = PROJECT_ROOT / "app" / "deployment" / "models"
 
 
 def train_model(
-    ae_type: str,
+    ae_type: Literal["ae", "vae", "mtae"],
     country: str, 
     config_path: str,
     tr: int, 
@@ -72,17 +75,22 @@ def train_model(
     # Load feature matrix
     # ------------------------------------
     if ae_type in ["ae", "vae"]:
-        X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
     else:
-        X_cont, X_cat, y_l3, y_l7, y_at, num_cont, cat_dims = (
+        fmatrix = (
             load_supervised_feature_matrix(country)
         )
-    Xc = X_cont.values.astype(np.float32)
-    Xk = X_cat.values.astype(np.int64)
-    if ae_type in ["mtae"]:
-        y3 = y_l3.values.astype(np.float32)
-        y7 = y_l7.values.astype(np.float32)
-        ya = y_at.values.astype(np.int64)
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+    Xk = fmatrix.X_cat.to_numpy(dtype=np.int64)
+    if (
+        ae_type in ["mtae"]
+        and fmatrix.y_l3 is not None
+        and fmatrix.y_l7 is not None
+        and fmatrix.y_at is not None
+    ):
+        y3 = fmatrix.y_l3.to_numpy(dtype=np.float32)
+        y7 = fmatrix.y_l7.to_numpy(dtype=np.float32)
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     # ------------------------------------
     # Load Config
@@ -92,8 +100,7 @@ def train_model(
     elif config_path == "tuned":
         print("[INFO] Reading config from tuning run...")
         retune_no = int(input("[SELECT] Which tuning run? [0 = base|int] "))
-        tune_phase = "base" if retune_no == 0 else f"retune_{retune_no}"
-        cfg_path = BEST_MODELS_DIR / f"{ae_type.upper()}" / f"{country}_best_config_{tune_phase}.json"
+        cfg_path = BEST_MODELS_DIR / f"{ae_type.upper()}" / f"{country}_{retune_no}_best_config.json"
     if config_path == "trained":
         cfg_path = OUT_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
     
@@ -111,13 +118,13 @@ def train_model(
             cfg_dict = json.load(f)
         cfg = config_map[ae_type](**cfg_dict)
     else:
-        _, cfg, _, _ = load_autoencoder(cfg_path)
+       cfg = load_autoencoder(cfg_path).cfg
 
     loss_weights = {
         "cont_w": cfg.cont_w,
         "cat_w": cfg.cat_w
     }
-    if ae_type in ["mtae"]:
+    if isinstance(cfg, MTAEConfig):
         loss_weights["l3_w"] = cfg.lambda_l3
         loss_weights["l7_w"] = cfg.lambda_l7
         loss_weights["at_w"] = cfg.lambda_at
@@ -136,15 +143,15 @@ def train_model(
         # ------------------------------------
         # Train model
         # ------------------------------------
-        if ae_type in ["ae", "vae"]:
-            model, history = train_autoencoder(
+        if isinstance(cfg, (AEConfig, VAEConfig)):
+            model, hist_tracker = train_autoencoder(
                 Xc_scald, Xk,
                 None, None,
                 cfg,
                 loss_weights
             )
         else:
-            model, history = train_mt_autoencoder(
+            model, hist_tracker = train_mt_autoencoder(
             Xc_scald, Xk, y3, y7, ya,
             None, None, None, None, None,
             cfg,
@@ -158,16 +165,16 @@ def train_model(
         # Split dataset
         # ------------------------------------
         print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
-        (Xc_tr, Xk_tr), (Xc_val, Xk_val), _ = timeseries_seq_split(
-            Xc, Xk,
+        [Xc_tr, Xk_tr], [Xc_val, Xk_val], _ = timeseries_seq_split(
+            [Xc, Xk],
             tr/100,
-            vr/100,
+            vr/100
         )
 
         if ae_type in ["mtae"]:
-            y3_tr, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
-            y7_tr, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
-            ya_tr, ya_val, _ = timeseries_seq_split(ya, None, tr/100, vr/100)
+            [y3_tr], [y3_val], _ = timeseries_seq_split([y3], tr/100, vr/100)
+            [y7_tr], [y7_val], _ = timeseries_seq_split([y7], tr/100, vr/100)
+            [ya_tr], [ya_val], _ = timeseries_seq_split([ya], tr/100, vr/100)
 
         # ------------------------------------
         # Scale cont features
@@ -179,15 +186,15 @@ def train_model(
         # ------------------------------------
         # Train model
         # ------------------------------------
-        if ae_type in ["ae", "vae"]:
-            model, history = train_autoencoder(
+        if isinstance(cfg, (AEConfig, VAEConfig)):
+            model, hist_tracker = train_autoencoder(
                 Xc_tr_scald, Xk_tr, 
                 Xc_val_scald, Xk_val, 
                 cfg,
                 loss_weights
             )
         else:
-            model, history = train_mt_autoencoder(
+            model, hist_tracker = train_mt_autoencoder(
                 Xc_tr_scald, Xk_tr, y3_tr, y7_tr, ya_tr,
                 Xc_val_scald, Xk_val, y3_val, y7_val, ya_val,
                 cfg,
@@ -208,14 +215,14 @@ def train_model(
         "total_samples": len(Xc),
     }
     if ae_type in ["mtae"]:
-        metadata["attack_type_weights"] = history["attack_type_weights"]
+        metadata["attack_type_weights"] = hist_tracker.__getitem__("attack_type_weights")
     
     model_path = out_path / f"{country}_autoencoder.pt"
     save_autoencoder(
         model=model, 
         config=cfg,
-        cat_dims=cat_dims,
-        num_cont=num_cont,
+        cat_dims=fmatrix.cat_dims,
+        num_cont=fmatrix.num_cont,
         path=model_path,
         metadata=metadata
     )
@@ -227,7 +234,7 @@ def train_model(
 
     history_path = out_path / f"{country}_training_history.json"
     with open(history_path, "w") as f:
-        json.dump(history, f, indent=2)
+        hist_tracker.to_json(f)
     print(f"[OK] Saved training history to {history_path}")
 
     # ------------------------------------
@@ -260,34 +267,36 @@ def train_model(
     if full or tr == 100:
         print(f"[INFO] Computing threshold on calibration window...")
 
-        if ae_type in ["mte"]:
-            attack_type_weights = history["attack_type_weights"]
+        if isinstance(cfg, MTAEConfig):
+            attack_type_weights = Tensor(hist_tracker.__getitem__("attack_type_weights"))
+            med_q = cfg.quantiles.index(0.5)
+            pred_quantiles = cfg.quantiles[med_q:]
+            print(f"[INFO] Quantiles used for prediction: {pred_quantiles}")
         else:
-            attack_type_weights = None
+            attack_type_weights, pred_quantiles = None, None
 
-        threshold_dict, _ = calibrate_threshold(
+        cal_result = calibrate_threshold(
             country=country, 
             model=model, 
             scaler=scaler,
             device=cfg.device,
             loss_weights=loss_weights,
             attack_type_weights=attack_type_weights,
-            pred_quantiles=getattr(cfg, "pred_quantiles", None),
-            beta=getattr(cfg, "beta", 1.0),
-            cw=cw,
+            pred_quantiles=pred_quantiles,
             method=method, 
+            cw=cw,
             tune_temperature=True
         )
 
-        thr_path = out_path / f"{country}_cal_threshold.json"
-        with open(thr_path, "w") as f:
-            json.dump(threshold_dict, f, indent=2)
-        print(f"[OK] Saved threshold to {thr_path}")
+        cal_path = out_path / f"{country}_cal_threshold.json"
+        with open(cal_path, "w") as f:
+            cal_result.to_json(f)
+        print(f"[OK] Saved threshold to {cal_path}")
 
         print(f"[DONE] Preparation for inference model for {country}")
 
 def train_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     config_path: str,
     tr: int, 
     vr: int, 

@@ -1,11 +1,15 @@
+import torch
 from abc import ABC, abstractmethod
 import torch.nn as nn
+from typing import Any, Generic, TypeVar
 
-from .configs import AEConfig, VAEConfig, MTAEConfig
+from .configs.cbase import BaseConfig, SharedEncoderConfig, SharedVEncoderConfig, SharedDecoderConfig, SharedMTDecoderConfig
 from .mixins import TabularLayerActMixin, TabularLayerInitMixin
 
 
-class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitMixin):
+EncoderConfigT = TypeVar("EncoderConfigT", bound=BaseConfig)
+
+class BaseTabularEncoder(ABC, Generic[EncoderConfigT], nn.Module, TabularLayerActMixin, TabularLayerInitMixin):
     """
     Base encoder class for tabular autoencoder models.
 
@@ -16,8 +20,8 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
 
     def __init__(
         self,
-        config: AEConfig | VAEConfig | MTAEConfig
-    ):
+        config: EncoderConfigT
+    ) -> None:
         super().__init__()
         
         self.config = config
@@ -35,7 +39,7 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
                 return min(max(4, card // 2), 16)
 
             for name, card in config.cat_dims.items():
-                dim = embedding_dim if config.embedding_dim else emb_dim(card)
+                dim = config.embedding_dim if config.embedding_dim else emb_dim(card)
                 self.embeddings[name] = nn.Embedding(card, dim)
                 emb_sizes[name] = dim
 
@@ -82,7 +86,27 @@ class BaseTabularEncoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
         pass
 
 
-class BaseTabularDecoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitMixin):
+SharedEncoderConfigT = TypeVar(
+    "SharedEncoderConfigT", bound=SharedEncoderConfig
+)
+
+class SharedEncoder(BaseTabularEncoder[SharedEncoderConfigT]):
+    def __init__(self, config: SharedEncoderConfigT) -> None:
+        super().__init__(config)
+
+
+SharedVEncoderConfigT = TypeVar(
+    "SharedVEncoderConfigT", bound=SharedVEncoderConfig
+)
+
+class SharedVEncoder(BaseTabularEncoder[SharedVEncoderConfigT]):
+    def __init__(self, config: SharedVEncoderConfigT) -> None:
+        super().__init__(config)
+
+
+DecoderConfigT = TypeVar("DecoderConfigT", bound=BaseConfig)
+
+class BaseTabularDecoder(ABC, Generic[DecoderConfigT], nn.Module, TabularLayerActMixin, TabularLayerInitMixin):
     """
     Base decoder class for tabular autoencoder models.
 
@@ -93,8 +117,8 @@ class BaseTabularDecoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
     
     def __init__(
         self,
-        config: AEConfig | VAEConfig | MTAEConfig
-    ):
+        config: DecoderConfigT
+    ) -> None:
         super().__init__()
 
         self.config = config
@@ -136,7 +160,27 @@ class BaseTabularDecoder(ABC, nn.Module, TabularLayerActMixin, TabularLayerInitM
         pass
 
 
-class BaseTabularPredictor(ABC, nn.Module):
+SharedDecoderConfigT = TypeVar(
+    "SharedDecoderConfigT", bound=SharedDecoderConfig
+)
+
+class SharedDecoder(BaseTabularDecoder[SharedDecoderConfigT]):
+    def __init__(self, config: SharedDecoderConfigT) -> None:
+        super().__init__(config)
+
+
+SharedMTDecoderConfigT = TypeVar(
+    "SharedMTDecoderConfigT", bound=SharedMTDecoderConfig
+)
+
+class SharedMTDecoder(BaseTabularDecoder[SharedMTDecoderConfigT]):
+    def __init__(self, config: SharedMTDecoderConfigT) -> None:
+        super().__init__(config)
+
+
+ConfigT = TypeVar("ConfigT", bound=BaseConfig)
+
+class TabularBase(ABC, Generic[ConfigT], nn.Module):
     """
     Base class for tabular autoencoder models.
 
@@ -145,24 +189,28 @@ class BaseTabularPredictor(ABC, nn.Module):
     Subclasses override encode(), decode(), forward(), scoring().
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        config: ConfigT
+    ) -> None:
         super().__init__()
+        self.config = config
 
     @abstractmethod
-    def encode(self) -> None:
+    def encode(self, x_cont: torch.Tensor, x_cat: torch.Tensor, *args: Any, **kwargs: Any) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Return latent variables."""
         pass
 
     @abstractmethod
-    def decode(self) -> None:
+    def decode(self, z: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]] | tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return cont and cat reconstruction."""
         pass
 
     @abstractmethod
-    def forward(self) -> None:
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
         """Full forward pass through autoencoder."""
         
     @abstractmethod
-    def scoring(self) -> None:
+    def scoring(self, *args: Any, **kwargs: Any) -> tuple[torch.Tensor, ...] | torch.Tensor:
         """Computes reconstruction error."""
         pass

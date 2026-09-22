@@ -1,44 +1,21 @@
 #!/usr/bin/env python3
 """
-Processes and flattens nesting level of pkl files for specified key after fetching and preprocessing.
+Flattens nesting level of pkl files for specified key after fetching and preprocessing.
 
 Usage:
-    python -m app.src.data.io_utils [-k] <FILE_KEY>
+    python -m app.src.data.processing.flatten [-k] [-o <FILE_NAME>] <all|FILE_KEY>
 """
 import pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
+from . import DSFILE_MAP
 
-DSFILE_MAP = {
-    "aibots_crawlers_time": "aibots_crawlers_time.pkl",
-    "anomalies": "anomalies.pkl",
-    "bots_time": "bots_time.pkl",
-    "httpreq_automated_time": "httpreq_automated_time.pkl",
-    "httpreq_human_time": "httpreq_human_time.pkl",
-    "httpreq_time": "httpreq_time.pkl",
-    "httpreq": "httpreq.pkl",
-    "iq_bandwidth_time": "iq_bandwidth_time.pkl",
-    "iq_dns_time": "iq_dns_time.pkl",
-    "iq_latency_time": "iq_latency_time.pkl",
-    "l3_origin_bitrate_time": "l3_origin_bitrate_time.pkl",
-    "l3_origin_duration_time": "l3_origin_duration_time.pkl",
-    "l3_origin_protocol_time": "l3_origin_protocol_time.pkl",
-    "l3_origin_time": "l3_origin_time.pkl",
-    "l3_origin": "l3_origin.pkl",
-    "l3_target": "l3_target.pkl",
-    "l3_target_bitrate_time": "l3_target_bitrate_time.pkl",
-    "l3_target_duration_time": "l3_target_duration_time.pkl",
-    "l3_target_protocol_time": "l3_target_protocol_time.pkl",
-    "l3_target_time": "l3_target_time.pkl",
-    "l7_mitigations_time": "l7_mitigations_time.pkl",
-    "l7_origin": "l7_origin.pkl",
-    "l7_target": "l7_target.pkl",
-    "l7_time": "l7_time.pkl",
-    "traffic_time": "traffic_time.pkl",
-    "traffic": "traffic.pkl",
-}
+
+FILE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = FILE_DIR.parents[2]
+PROCESSED_DIR = PROJECT_ROOT / "datasets" / "processed"
 
 
 def check_dsfiles_exist(file: str, folder: Path) -> Path:
@@ -111,8 +88,8 @@ def conv_maxlayer_2(data: dict) -> pd.DataFrame:
         
     return pd.concat(records, ignore_index=True)
 
-def _detect_nesting_level(data) -> int:
-    if not isinstance(data, dict) or not data:
+def _detect_nesting_level(data: dict) -> int:
+    if not data:
         return 1
     
     first_val = next(iter(data.values()))
@@ -127,14 +104,20 @@ def _detect_nesting_level(data) -> int:
     else:
         return 1
 
-def _load_dsfile(file: str, folder: Path) -> dict:
-    path = check_dsfiles_exist(DSFILE_MAP[file], folder)
+def _load_dsfile(key: str, folder: Path) -> dict:
+    path = check_dsfiles_exist(f"{key}.pkl", folder)
     with open(path, "rb") as f:
-        data = pickle.load(f)
+        data: dict = pickle.load(f)
     return data
 
-def conv_pkltodf(file: str, folder: Path) -> pd.DataFrame:
-    data = _load_dsfile(file, folder)
+def conv_pkltodf(
+    key: str, 
+    folder: Path, 
+    data: dict | None = None
+) -> pd.DataFrame:
+    if data is None:
+        data = _load_dsfile(key, folder)
+
     max_layer = _detect_nesting_level(data)
     if max_layer == 3:
         return conv_maxlayer_3(data)
@@ -143,36 +126,70 @@ def conv_pkltodf(file: str, folder: Path) -> pd.DataFrame:
     else:
         raise ValueError("[ERROR] Data dict layering not valid. Aborting dataframe conversion!")
 
+def flatten_single(key: str, file_name: str, data: dict | None = None) -> None:
+    if DSFILE_MAP[key][0]:
+        print(f"[INFO] Processing {key}...")
+    
+        df = conv_pkltodf(key, PROCESSED_DIR, data)
+
+        file_path = PROCESSED_DIR / file_name
+        df.to_hdf(file_path, key=key, format="table", complevel=9, index=True, mode="a")
+        print(f"[OK] {key} saved to {file_path}")
+
+        print(f"[OK] {key} successfully flattened")
+
+def flatten_all(file_name: str) -> None:
+    for key in DSFILE_MAP.keys():
+        if DSFILE_MAP[key][0]:
+            flatten_single(key, file_name)
+
+    print("[DONE] All datasets processed!")
+
 
 if __name__=="__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Process and flatten pickled dataset files"
+        description="Flatten pickled dataset files and return dataframe"
     )
 
     parser.add_argument(
         "-k", "--keys",
         action="store_true",
-        help="show available file keys and exit"
+        help="show available dataset keys and exit"
+    )
+
+    parser.add_argument(
+        "-o", "--out",
+        nargs="?",
+        default=None,
+        help="output file [default: <file_key>.h5]"
     )
 
     parser.add_argument(
         "file_key",
-        help="file key to process [aibots_crawlers_time, anomalies, ...]"
+        help="<all|aibots_crawlers_time, anomalies, ...> file key to process"
     )
+
 
     args = parser.parse_args()
 
+    time_dsfiles =  [k for k, v in DSFILE_MAP.items() if v[0]]
     if args.keys:
         print("Available file keys:")
-        for key in DSFILE_MAP.keys():
+        for key in time_dsfiles:
             print(f"\t- {key}")
         exit(0)
 
-    FILE_DIR = Path(__file__).resolve().parent
-    PROJECT_ROOT = FILE_DIR.parents[1]
-    DSDIR = PROJECT_ROOT / "datasets" / "processed"
+    if args.out is None:
+        args.out = f"{args.file_key.lower()}.h5"
 
-    df = conv_pkltodf(args.file_key, DSDIR)
-    print(df)
+    if args.file_key not in ["all", *time_dsfiles]:
+        print(f"[Error] file_key {args.file_key} cannot be processed\n")
+        parser.print_help()
+        exit(1)
+
+    if args.file_key.lower() == 'all':
+        flatten_all(args.out)
+    else:
+        flatten_single(args.file_key.lower(), args.out)

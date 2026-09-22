@@ -6,7 +6,7 @@ Analyze model performance after testing for one or multiple countries:
 - (optional) plots raw signal with error overlay interactively
 
 Output:
-    PATH : results/ml/tested/<MODEL>/analysis/<COUNTRY>
+    PATH: results/ml/tested/<MODEL>/analysis/<COUNTRY>
     FILES for AE/VAE: <COUNTRY>_errorcurves_<METHOD>.png
                       <COUNTRY>_hist_<METHOD>.png
                       <COUNTRY>_intervals_<METHOD>.png 
@@ -31,10 +31,13 @@ import json, pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from sklearn.preprocessing import RobustScaler
+from typing import Literal
 
-from app.src.data.feature_engineering import load_feature_matrix, load_supervised_feature_matrix
-from app.src.data import ISO_3166_alpha2, timeseries_seq_split
-from app.src.data.feature_engineering import COUNTRIES
+from app.src.data.building.feature_engineering import load_feature_matrix, load_supervised_feature_matrix
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.processing import timeseries_seq_split
+from app.src.data.building.feature_engineering import COUNTRIES
 from app.src.ml.analysis import (
     plot_error_curve,
     plot_intervals,
@@ -56,10 +59,10 @@ TESTED_DIR = PROJECT_ROOT / "results" / "ml" / "tested"
 
 
 def _load_data(
-    ae_type: str,
+    ae_type: Literal["ae", "vae", "mtae"],
     country: str, 
     method: str
-) -> tuple[pd.DataFrame, float, pd.DataFrame]:
+) -> tuple[pd.DataFrame, float, pd.DataFrame, list[int]]:
     err_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_scores_{method}.csv"
     thr_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_threshold_{method}.json"
     int_path = TESTED_DIR / f"{ae_type.upper()}" / f"{country}_intervals_{method}.csv"
@@ -73,7 +76,9 @@ def _load_data(
 
     df_err = pd.read_csv(err_path, parse_dates=["ts"])
     with open(thr_path, "r") as f:
-        threshold = json.load(f)["threshold"]
+        threshold_dict = json.load(f)
+    threshold = threshold_dict["threshold"]
+    data_ratio = [threshold_dict["train_ratio"], threshold_dict["val_ratio"]]
 
     df_int = pd.read_csv(
         int_path, 
@@ -81,11 +86,12 @@ def _load_data(
         date_format="ISO8601"
     )
 
-    return df_err, threshold, df_int
+    return df_err, threshold, df_int, data_ratio
 
 def analyze_raw(
-    ae_type: str,
-    country: str, 
+    ae_type: Literal["ae", "vae", "mtae"],
+    country: str,
+    data_ratio: list[int],
     method: str, 
     df_err: pd.DataFrame, 
     out_path: Path,
@@ -95,32 +101,28 @@ def analyze_raw(
     scaler_path = TESTED_DIR / f"{country}_scaler.pkl"
 
     with open(scaler_path, "rb") as f:
-        scaler = pickle.load(f)
+        scaler: RobustScaler = pickle.load(f)
     
     if ae_type in ["ae", "vae"]:
-        X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
     else:
-        X_cont, X_cat, y_l3, y_l7, y_at, num_cont, cat_dims = (
-            load_supervised_feature_matrix(country)
-        )
+        fmatrix = load_supervised_feature_matrix(country)
 
-    (raw_tr, _), (raw_val, _), (raw_te, _) = timeseries_seq_split(
-        X_cont.values, np.zeros_like(X_cont.values),
-        0.75,
-        0.15
-    )
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+
+    [raw_tr], [raw_val], [raw_te] = timeseries_seq_split([Xc], data_ratio[0]/100, data_ratio[1]/100)
 
     raw_te_scald = scaler.transform(raw_te).astype(np.float32)
-    ts_eval = X_cont.index[len(raw_tr)+len(raw_val):]
+    ts_eval = pd.to_datetime(fmatrix.X_cont.index)[len(raw_tr)+len(raw_val):]
     
-    scores = df_err["scores"].values
-    mask = df_err["is_flagged"].astype(bool).values
+    scores = df_err["scores"].to_numpy(dtype=np.float32)
+    mask = df_err["is_flagged"].to_numpy(dtype=np.int64)
 
     if len(scores) != raw_te_scald.shape[0]:
         raise ValueError(f"[ERROR] Mismatch of dataset split ratio between test run and analysis")
     
     print("\nFeature signal options for plotting:")
-    options = X_cont.columns
+    options = fmatrix.X_cont.columns
     for i in range(0, len(options), 2):
         if i + 1 < len(options):
             print(f"{i} {options[i]:<25} {i+1} {options[i+1]}")
@@ -146,13 +148,13 @@ def analyze_raw(
                 mask,
                 out_path,
                 f"{country}_raw_{name}_erroroverlay_{method}.png",
-                True
+                show_plots
             )
         except IndexError:
             print("[Error] Enter valid integer from signal list")
 
 def analyze_testing(
-    ae_type: str,
+    ae_type: Literal["ae", "vae", "mtae"],
     country: str, 
     method: str, 
     show_plots: bool,
@@ -167,7 +169,7 @@ def analyze_testing(
     out_path = TESTED_DIR / f"{ae_type.upper()}" / "analysis" / country
     out_path.mkdir(parents=True, exist_ok=True)
 
-    df_err, threshold, df_int = _load_data(ae_type, country, method)
+    df_err, threshold, df_int, data_ratio = _load_data(ae_type, country, method)
 
     if ae_type in ["mtae"]:
         pred_quantiles = [0.5, 0.75, 0.9]
@@ -224,61 +226,32 @@ def analyze_testing(
             show_plots
         )
         for q in pred_quantiles:
-            plot_regression_scatter(
-                df_err["l3_true"],
-                df_err[f"l3_pred_{q}"],
-                "L3 Intensity",
-                5000,
-                out_path,
-                f"{country}_l3_regression_scatter_{q}.png",
-                show_plots
-            )
-            plot_regression_scatter(
-                df_err["l7_true"],
-                df_err[f"l7_pred_{q}"],
-                "L7 Intensity",
-                5000,
-                out_path,
-                f"{country}_l7_regression_scatter_{q}.png",
-                show_plots
-            )
-            plot_true_pred_anomalies(
-                "L3 intensities",
-                df_err["ts"],
-                df_err["l3_true"],
-                df_err[f"l3_pred_{q}"],
-                df_err["is_flagged"],
-                df_int["start_idx"],
-                df_int["end_idx"],
-                out_path,
-                f"{country}_l3_raw_erroroverlay_{q}.png",
-                show_plots
-            )
-            plot_true_pred_anomalies(
-                "L7 intensities",
-                df_err["ts"],
-                df_err["l7_true"],
-                df_err[f"l7_pred_{q}"],
-                df_err["is_flagged"],
-                df_int["start_idx"],
-                df_int["end_idx"],
-                out_path,
-                f"{country}_l7_raw_erroroverlay_{q}.png",
-                show_plots
-            )
+            for l in ["l3", "l7"]:
+                plot_regression_scatter(
+                    df_err[f"{l}_true"].to_numpy(dtype=np.float32),
+                    df_err[f"{l}_pred_{q}"].to_numpy(dtype=np.float32),
+                    f"L{l[1]} Intensity",
+                    5000,
+                    out_path,
+                    f"{country}_{l}_regression_scatter_{q}.png",
+                    show_plots
+                )
+                plot_true_pred_anomalies(
+                    pd.to_datetime(df_err["ts"].values),
+                    df_err[f"{l}_true"].to_numpy(dtype=np.float32),
+                    df_err[f"{l}_pred_{q}"].to_numpy(dtype=np.float32),
+                    df_err["is_flagged"].to_numpy(dtype=np.int64),
+                    df_int["start_idx"],
+                    df_int["end_idx"],
+                    l,
+                    out_path,
+                    f"{country}_{l}_raw_erroroverlay_{q}.png",
+                    show_plots
+                )
         plot_attack_timeline(
             df_err,
             out_path,
             f"{country}_attack_timeline_{method}.png",
-            show_plots
-        )
-        plot_intervals(
-            country, 
-            df_err, 
-            df_int, 
-            method, 
-            out_path,
-            f"{country}_intervals_{method}.png",
             show_plots
         )
         plot_loss_components_timeseries(
@@ -291,7 +264,8 @@ def analyze_testing(
     if plot_raw:
         analyze_raw(
             ae_type, 
-            country, 
+            country,
+            data_ratio,
             method, 
             df_err, 
             out_path, 
@@ -301,7 +275,7 @@ def analyze_testing(
     print(f"[DONE] Analysis for {country}")
 
 def analyze_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     method: str, 
     show_plots: bool, 
     plot_raw: bool

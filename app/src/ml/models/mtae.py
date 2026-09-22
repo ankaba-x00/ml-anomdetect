@@ -1,14 +1,15 @@
 import numpy as np
+import numpy.typing as npt
 import torch
 import torch.nn as nn
 
-from .ae import Encoder, TabularAE
-from .base import BaseTabularDecoder
+from .ae import Encoder
+from .base import TabularBase, SharedMTDecoder
 from .configs import MTAEConfig
-from .mixins import TabularMTScoringMixin
+from .mixins import TabularMTDecodePassMixin, TabularEncodePassingMixin, TabularFeatureForwardMixin, TabularReconScoringMixin, TabularMTScoringMixin
 
 
-class MTDecoder(BaseTabularDecoder):
+class MTDecoder(SharedMTDecoder[MTAEConfig]):
     """
     Decoder class for MTAE model.
     """
@@ -16,7 +17,7 @@ class MTDecoder(BaseTabularDecoder):
     def __init__(
         self,
         config: MTAEConfig
-    ):
+    ) -> None:
         super().__init__(config=config)
 
         self.config = config
@@ -46,17 +47,20 @@ class MTDecoder(BaseTabularDecoder):
         """Initializes final reconstruction heads of decoder."""
 
         for module in self.cat_recon_heads.children():
-            self.init_head(module, self.config.activation_de)
+            if isinstance(module, nn.Linear):
+                self.init_head(module, self.config.activation_de)
         
         for head in [self.cont_recon_head, self.l3_head, self.l7_head]:
-            self.init_head(head, self.config.activation_de)
-        
+            if isinstance(module, nn.Linear):
+                self.init_head(head, self.config.activation_de)
+
         for module in self.at_head.children():
             if isinstance(module, nn.Linear):
                 self.init_head(module, self.config.activation_de_cls)
 
 
-class MTTabularAE(TabularAE, TabularMTScoringMixin):
+
+class MTTabularAE(TabularEncodePassingMixin[MTAEConfig], TabularMTDecodePassMixin[MTAEConfig], TabularBase[MTAEConfig], TabularFeatureForwardMixin, TabularMTScoringMixin, TabularReconScoringMixin):
     """
     Hybrid tabular autoencoder with:
       - cont and cat inputs
@@ -70,7 +74,7 @@ class MTTabularAE(TabularAE, TabularMTScoringMixin):
     def __init__(
         self,
         config: MTAEConfig
-    ):
+    ) -> None:
         super().__init__(
             config=config
         )
@@ -79,53 +83,11 @@ class MTTabularAE(TabularAE, TabularMTScoringMixin):
         self.D = MTDecoder(config)
         self.current_alpha = 0.0
 
-    def decode(
-        self,
-        z: torch.Tensor
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
-        """Decodes from latent space and applies temperature scaling."""
-
-        h = z
-        for layer in self.D.decoder_layers:
-            h = layer(h)
-        
-        cont_recon = self.D.cont_recon_head(h)
-
-        cat_logits = {}
-        for name in self.config.cat_dims.keys():
-            logits = self.D.cat_recon_heads[name](h)
-            if self.config.temperature != 0.:
-                logits = logits / self.config.temperature
-            cat_logits[name] = logits
-        
-        l3_recon = self._enforce_monotonicity(self.D.l3_head, h)
-        l7_recon = self._enforce_monotonicity(self.D.l7_head, h)
-        at_logits = self.D.at_head(h)
-        
-        return cont_recon, cat_logits, l3_recon, l7_recon, at_logits
-    
-    def _enforce_monotonicity(
-        self, 
-        module: nn.Module,
-        feat: torch.Tensor
-    ) -> torch.Tensor:
-        """Enforces monotonicity along quantile axis to avoid quantile crossover."""
-        
-        head = module(feat)
-        softplus = nn.Softplus()
-
-        base = head[:, :1]
-        step_offsets = softplus(head[:, 1:])
-
-        quantile_matrix = torch.cat([base, step_offsets], dim=1)
-
-        return torch.cumsum(quantile_matrix, dim=1)
-
     def forward(
         self,
         x_cont: torch.Tensor, 
         x_cat: torch.Tensor    
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
         """Full forward pass through autoencoder."""
 
         if self.config.allow_noise_injection:
@@ -159,7 +121,7 @@ class MTTabularAE(TabularAE, TabularMTScoringMixin):
         attack_type_weights: torch.Tensor,
         in_warmup: bool = False,
         reduction: str = "mean"
-    ) -> None:
+    ) -> tuple[torch.Tensor, ...] | torch.Tensor:
         """Computes per-sample reconstruction error, quantile and focal loss and optionally reduces to average or sum."""
         
         cont_loss, cat_loss, recon_score = self.recon_scoring(
@@ -167,8 +129,8 @@ class MTTabularAE(TabularAE, TabularMTScoringMixin):
             x_cat,
             cont_recon,
             cat_logits,
-            self.config.cat_dims,
             loss_weights,
+            self.config.cat_dims
         )
 
         l3_loss, l7_loss, at_loss, total_score = self.hybrid_scoring(
@@ -190,9 +152,9 @@ class MTTabularAE(TabularAE, TabularMTScoringMixin):
             per_sample_score = recon_score + self.current_alpha * total_score
 
         if reduction == "mean":
-            return cont_loss, cat_loss, recon_score, l3_loss, l7_loss, at_loss, per_sample_score.mean()
+            return cont_loss, cat_loss, recon_score, l3_loss, l7_loss, at_loss, torch.mean(per_sample_score)
         elif reduction == "sum":
-            return cont_loss, cat_loss, recon_score, l3_loss, l7_loss, at_loss, per_sample_score.sum()
+            return cont_loss, cat_loss, recon_score, l3_loss, l7_loss, at_loss, torch.sum(per_sample_score)
         else:
             return per_sample_score
     
@@ -201,11 +163,11 @@ class MTTabularAE(TabularAE, TabularMTScoringMixin):
     # -----------------------------
     def compute_attack_type_weights(
         self,
-        ya: np.ndarray,
+        ya: npt.NDArray[np.int64],
         n_attack_types: int,
         type_max_ratio: float = 20.0,
         eps: float = 1.0
-    ) -> np.ndarray | torch.Tensor:
+    ) -> torch.Tensor:
         """Computes inverse-frequency type weights for scoring attack types."""
 
         counts = np.bincount(ya, minlength=n_attack_types).astype(np.float32)

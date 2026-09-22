@@ -6,7 +6,7 @@ Set search space parameters in config/tune/config_<MODEL>.yml.
 Check README_tuning.md for additional documentation.
 
 Output:
-    PATH : results/aml/tuned/<MODEL>
+    PATH: results/aml/tuned/<MODEL>
     FILES: <COUNTRY>_<RETUNE_NO>_study.db
            <COUNTRY>_<RETUNE_NO>_best_config.json 
            <COUNTRY>_<RETUNE_NO>_best_history.json
@@ -18,7 +18,7 @@ Usage:
     python -m app.src.pipelines.tune_model [-tr <int>] [-vr <int>] [-N <int>] [-P <median|halving|hyperband>] [-S <random|tpe|gp|brute>] [-L] [-r <int>] <MODEL> <COUNTRY|all>
 """
 
-import json, optuna, warnings
+import optuna, warnings
 import numpy as np
 from optuna.pruners import (
     MedianPruner, 
@@ -33,9 +33,11 @@ from optuna.samplers import (
 )
 from pathlib import Path
 from sklearn.preprocessing import RobustScaler
+from typing import Literal
 
-from app.src.data import ISO_3166_alpha2, timeseries_seq_split
-from app.src.data.feature_engineering import (
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.processing import timeseries_seq_split
+from app.src.data.building.feature_engineering import (
     COUNTRIES, 
     load_feature_matrix,
     load_supervised_feature_matrix
@@ -57,7 +59,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def tune_model(
-    ae_type: str,
+    ae_type: Literal["ae", "vae", "mtae"],
     country: str, 
     n_trials: int, 
     sampler_type: str,
@@ -123,30 +125,36 @@ def tune_model(
     print("\n[INFO] Retraining on best params")
 
     if ae_type in ["ae", "vae"]:
-        X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
     else:
-        X_cont, X_cat, y3_s, y7_s, ya_s, num_cont, cat_dims = load_supervised_feature_matrix(country)
-    
-    Xc = X_cont.values.astype(np.float32)
-    Xk = X_cat.values.astype(np.int64)
-    if ae_type in ["mtae"]:
-        y3 = y3_s.values.astype(np.float32)
-        y7 = y7_s.values.astype(np.float32)
-        ya = ya_s.values.astype(np.int64)
+        fmatrix = (
+            load_supervised_feature_matrix(country)
+        )
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+    Xk = fmatrix.X_cat.to_numpy(dtype=np.int64)
+    if (
+        ae_type in ["mtae"]
+        and fmatrix.y_l3 is not None
+        and fmatrix.y_l7 is not None
+        and fmatrix.y_at is not None
+    ):
+        y3 = fmatrix.y_l3.to_numpy(dtype=np.float32)
+        y7 = fmatrix.y_l7.to_numpy(dtype=np.float32)
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
-    (Xc_train, Xk_train), (Xc_val, Xk_val), _ = timeseries_seq_split(
-        Xc, Xk,
+    [Xc_tr, Xk_tr], [Xc_val, Xk_val], _ = timeseries_seq_split(
+        [Xc, Xk],
         tr/100,
         vr/100
     )
     if ae_type in ["mtae"]:
-        y3_tr, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
-        y7_tr, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
-        ya_tr, ya_val, _ = timeseries_seq_split(ya, None, tr/100, vr/100)
+        [y3_tr], [y3_val], _ = timeseries_seq_split([y3], tr/100, vr/100)
+        [y7_tr], [y7_val], _ = timeseries_seq_split([y7], tr/100, vr/100)
+        [ya_tr], [ya_val], _ = timeseries_seq_split([ya], tr/100, vr/100)
 
     scaler = RobustScaler()
-    Xc_train_scald = scaler.fit_transform(Xc_train).astype(np.float32)
+    Xc_tr_scald = scaler.fit_transform(Xc_tr).astype(np.float32)
     Xc_val_scald = scaler.transform(Xc_val).astype(np.float32)
     
 
@@ -156,6 +164,7 @@ def tune_model(
         "mtae": MTAEConfig
     }
     cfg = study.best_trial.user_attrs["config"]
+    del cfg["hidden_dims"]
     best_cfg = config_map[ae_type](**cfg)
 
     loss_weights = {
@@ -170,15 +179,15 @@ def tune_model(
         }
 
     if ae_type in ["ae", "vae"]:
-        best_model, best_history = train_autoencoder(
-            Xc_train_scald, Xk_train, 
+        model, hist_tracker = train_autoencoder(
+            Xc_tr_scald, Xk_tr, 
             Xc_val_scald, Xk_val, 
             best_cfg,
             loss_weights
         )
     else:
-        best_model, best_history = train_mt_autoencoder(
-            Xc_train_scald, Xk_train, y3_tr, y7_tr, ya_tr,
+         model, hist_tracker = train_mt_autoencoder(
+            Xc_tr_scald, Xk_tr, y3_tr, y7_tr, ya_tr,
             Xc_val_scald, Xk_val, y3_val, y7_val, ya_val,
             best_cfg,
             loss_weights
@@ -191,7 +200,7 @@ def tune_model(
         best_cfg.to_json(f)
 
     with open(out_path / f"{country}_{retune_no}_best_history.json", "w") as f:
-        json.dump(best_history, f, indent=2)
+        hist_tracker.to_json(f)
 
     writer = TrialSummaryWriter(
         retune_no,
@@ -215,9 +224,9 @@ def tune_model(
 
         plot_latent_space(
             country, 
-            Xc_train_scald, 
-            Xk_train,
-            best_model,
+            Xc_tr_scald, 
+            Xk_tr,
+            model,
             best_cfg.device,
             1000,
             out_path,
@@ -227,7 +236,7 @@ def tune_model(
     print(f"\n[DONE] Tuned model for {country}")
 
 def tune_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     n_trials: int, 
     sampler_type: str,
     pruner_type: str, 

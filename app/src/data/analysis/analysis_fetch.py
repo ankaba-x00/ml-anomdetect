@@ -1,6 +1,7 @@
 import warnings
 import pandas as pd
 import numpy as np
+import numpy.typing as npt
 import seaborn as sns
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -31,16 +32,10 @@ custom_rc = {
     "grid.linestyle": "--",
 }
 
-
 def apply_custom_theme() -> None:
     """Apply consistent Seaborn + Matplotlib styling."""
     sns.set_theme(style="whitegrid", rc=custom_rc)
     sns.set_context("poster", rc=custom_rc)
-
-
-#########################################
-##              BOXPLOTS               ##
-#########################################
 
 def boxplot_valdist(
     df: pd.DataFrame,
@@ -71,7 +66,7 @@ def boxplot_valdist(
         order=order,
         fliersize=8,
         linewidth=1,
-        whis=[0, 100],
+        whis=(0, 100),
         color=col,
         ax=ax
     )
@@ -136,7 +131,7 @@ def boxplot_valdist_daytypes(
         hue=HUE,
         fliersize=8,
         linewidth=1,
-        whis=[0, 100],
+        whis=(0, 100),
         palette=palette,
         ax=ax
     )
@@ -216,7 +211,7 @@ def boxplot_valdist_daytimes(
         hue_order=hue_order,
         fliersize=5,
         linewidth=1,
-        whis=[0, 100],
+        whis=(0, 100),
         palette=palette,
         ax=ax
     )
@@ -241,7 +236,7 @@ def boxplot_valdist_daytimes(
         ncol=5,
         frameon=True
     )
-    plt.tight_layout(rect=[0.05, 0.05, 0.98, 0.95])
+    plt.tight_layout(rect=(0.05, 0.05, 0.98, 0.95))
     plt.savefig(
         folder / fname, 
         bbox_inches="tight", 
@@ -252,18 +247,13 @@ def boxplot_valdist_daytimes(
     if show: plt.show()
     plt.close(fig)
 
-
-#########################################
-##              HEATMAPS               ##
-#########################################
-
 def heatmap_activity_fluctuations(
     df: pd.DataFrame,
     drop_cols: list = ["range", "std", "ratio"],
     vmin: float = 0.0,
     vmax: float = 1.0,
     cmap: str = "YlOrRd",
-    top_n: int = None,
+    top_n: int | None = None,
     title: str = "",
     xlabel: str = "Daytime",
     ylabel: str = "Countries",
@@ -278,7 +268,7 @@ def heatmap_activity_fluctuations(
 
     heatmap_df = df.drop(columns=[c for c in drop_cols if c in df.columns])
 
-    if top_n:
+    if top_n is not None:
         heatmap_df = heatmap_df.head(top_n)
     
     plt.figure(figsize=(max(6, len(heatmap_df.columns) * 3 - 1), max(6, len(heatmap_df) * 0.4)))
@@ -306,7 +296,6 @@ def heatmap_activity_fluctuations(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
-
 
 def heatmap_anomalies(
     df: pd.DataFrame,
@@ -343,7 +332,7 @@ def heatmap_anomalies(
     T = T.reindex(columns=full_range)
     O = O.reindex(columns=full_range)
         
-    norm = Normalize(vmin=0, vmax=np.nanpercentile(df["duration"], 95)) 
+    norm = Normalize(vmin=0, vmax=float(np.nanpercentile(df["duration"], 95))) 
 
     teal_cmap = LinearSegmentedColormap.from_list(
         "green", palette1
@@ -374,18 +363,22 @@ def heatmap_anomalies(
             cmap = orange_cmap if tcode == 1 else teal_cmap
             color = cmap(norm(dur))
 
-            rect = mpl.patches.Rectangle((j, i), 1, 1,
-                                        facecolor=color,
-                                        edgecolor="gray",
-                                        lw=0.3)
+            rect = mpl.patches.Rectangle(
+                (j, i), 1, 1,
+                facecolor=color,
+                edgecolor="gray",
+                lw=0.3
+            )
             ax.add_patch(rect)
             if ongoing_flag:
                 ax.add_patch(
-                    mpl.patches.Rectangle((j, i), 1, 1,
-                                        facecolor="none",
-                                        edgecolor="black",
-                                        lw=0.6,
-                                        hatch="///")
+                    mpl.patches.Rectangle(
+                        (j, i), 1, 1,
+                        facecolor="none",
+                        edgecolor="black",
+                        lw=0.6,
+                        hatch="///"
+                    )
                 )
     ax.set_xlim(0, len(full_range))
     ax.set_ylim(0, len(D.index))
@@ -400,8 +393,8 @@ def heatmap_anomalies(
     ax.set_xlabel(xlabel, fontsize=22)
     ax.set_ylabel(ylabel, fontsize=20)
     
-    cb_ax1 = fig.add_axes([0.15, 0.05, 0.35, 0.02])
-    cb_ax2 = fig.add_axes([0.55, 0.05, 0.35, 0.02])
+    cb_ax1 = fig.add_axes((0.15, 0.05, 0.35, 0.02))
+    cb_ax2 = fig.add_axes((0.55, 0.05, 0.35, 0.02))
     for cmap, cax, label in [(teal_cmap, cb_ax1, "AS duration (hours)"),
                              (orange_cmap, cb_ax2, "LOCATION duration (hours)")]:
         sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
@@ -421,7 +414,7 @@ def heatmap_anomalies(
         ncol=3,
         frameon=True
     )
-    plt.tight_layout(rect=[0, 0.12, 1, 1])
+    plt.tight_layout(rect=(0, 0.12, 1, 1))
     plt.savefig(
         folder / fname, 
         bbox_inches="tight", 
@@ -431,7 +424,6 @@ def heatmap_anomalies(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
-
 
 def heatmap_log10_attack_profile(
     norm_matrix: pd.DataFrame,
@@ -487,11 +479,6 @@ def heatmap_log10_attack_profile(
     if show: plt.show()
     plt.close()
 
-
-#########################################
-##              BARPLOTS               ##
-#########################################
-
 def barplot_activity_fluctuations(
     df: pd.DataFrame,
     metric: str = "range",
@@ -539,7 +526,6 @@ def barplot_activity_fluctuations(
     if show: plt.show()
     plt.close()
 
-
 def barplot_top_attackers(
     df: pd.DataFrame,
     top_n: int = 30,
@@ -583,11 +569,6 @@ def barplot_top_attackers(
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close()
-
-
-#########################################
-##              LINEPLOTS              ##
-#########################################
 
 def lineplot_clustering_eval_curves(
     df: pd.DataFrame,
@@ -640,11 +621,6 @@ def lineplot_clustering_eval_curves(
     if show: plt.show()
     plt.close(fig)
 
-
-#########################################
-##             CLUSTERING              ##
-#########################################
-
 def pca_clusterplot(
     X: np.ndarray, 
     labels: np.ndarray, 
@@ -684,26 +660,20 @@ def pca_clusterplot(
     if show: plt.show()
     plt.close()
 
-
-#########################################
-##             RADAR CHARTS            ##
-#########################################
-
 def _safe_normalize(arr: np.ndarray) -> np.ndarray:
     if arr.size == 0:
         return arr
     vmax = arr.max()
     return arr / vmax if vmax > 0 else arr
 
-
 def radarchart_attack_fingerprint(
-    L3: pd.DataFrame,
-    L7: pd.DataFrame,
+    L3: pd.Series,
+    L7: pd.Series,
     country: str = "US",
     dir: str = "origin",
     top_n: int = 30,
-    col1= "#133a88",
-    col2= "#971613",
+    col1: str = "#133a88",
+    col2: str = "#971613",
     folder: Path = Path.cwd(),
     fname: str = "radarchart_attack_fingerprint.png",
     show: bool = False
@@ -726,8 +696,11 @@ def radarchart_attack_fingerprint(
     L7n = _safe_normalize(vals_L7)
 
     N = len(top)
-    angles = np.linspace(0, 2 * np.pi, N, endpoint=False)  
-    def close(v): return np.concatenate([v, [v[0]]])
+
+    def close(v: npt.NDArray) -> npt.NDArray: 
+        return np.concatenate([v, [v[0]]])
+
+    angles = np.linspace(0, 2 * np.pi, N, endpoint=False) 
     angles_c = close(angles)
 
     fig = plt.figure(figsize=(12, 12))

@@ -1,11 +1,12 @@
 from pathlib import Path
-from typing import Union
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 from .common import apply_custom_theme
+from app.src.data.building import ATTACK_LABELS
 
 
 def plot_error_curve(
@@ -57,7 +58,6 @@ def plot_intervals(
     for _, row in df_int.iterrows():
         ax.axvspan(row["start_ts"], row["end_ts"], color="red", alpha=0.3)
     ax.set_title(f"{country} – Anomaly Intervals ({method})")
-    ax.set_yticks([])
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=150)
     print(f"[OK] Saved to {fname}")
@@ -71,14 +71,13 @@ def plot_error_hist(
     method: str, 
     folder: Path = Path.cwd(),
     fname: str = "plot_score_hist.png", 
-    show: bool = False,
-    MT: bool = False
+    show: bool = False
 ) -> None:
     """Histogram showing score counts and threshold."""
     apply_custom_theme()
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    sns.histplot(df["loss_total"] if MT else df["scores"], bins=60, ax=ax)
+    sns.histplot(list(df["scores"]), bins=60, ax=ax)
     ax.axvline(threshold, color="red", linestyle="--", label="Threshold")
     ax.legend()
     ax.set_yscale("log")
@@ -92,10 +91,10 @@ def plot_error_hist(
 
 def plot_raw_with_scores(
     signal_name: str,
-    ts: Union[np.ndarray, pd.Index, pd.Series], 
-    raw_signal: np.ndarray, 
-    scores: np.ndarray, 
-    mask: np.ndarray, 
+    ts: pd.DatetimeIndex, 
+    raw_signal: npt.NDArray[np.float32], 
+    scores: npt.NDArray[np.float32], 
+    mask: npt.NDArray[np.int64], 
     folder: Path = Path.cwd(),
     fname: str = "plot_raw_with_scores.png", 
     show: bool = False
@@ -121,13 +120,13 @@ def plot_raw_with_scores(
     plt.close()
 
 def plot_true_pred_anomalies(
-    signal_name: str,
-    ts: pd.Series, 
-    y_true: pd.Series, 
-    y_pred: pd.Series, 
-    mask: np.ndarray, 
+    ts: pd.DatetimeIndex, 
+    y_true: npt.NDArray[np.float32], 
+    y_pred: npt.NDArray[np.float32], 
+    mask: npt.NDArray[np.int64],
     anomaly_starts: pd.Series,
     anomaly_ends: pd.Series,
+    signal: str,
     folder: Path = Path.cwd(),
     fname: str = "plot_true_pred_anomalies.png", 
     show: bool = False
@@ -139,7 +138,7 @@ def plot_true_pred_anomalies(
     ax.plot(
         ts, 
         y_true, 
-        label=f"{signal_name} true", 
+        label=f"{signal} true", 
         color='black', 
         linewidth=1.2, 
         zorder=2
@@ -147,7 +146,7 @@ def plot_true_pred_anomalies(
     ax.plot(
         ts, 
         y_pred, 
-        label=f"{signal_name} pred", 
+        label=f"{signal} pred", 
         color='orange', 
         linewidth=1.4, 
         zorder=3
@@ -175,9 +174,9 @@ def plot_true_pred_anomalies(
             label="Anomaly",
             zorder=4,
         )
-    plt.title(f"{signal_name} true vs pred with anomalies")
+    plt.title(f"L{signal[1]} true vs pred with anomalies")
     ax.set_xlabel("Time")
-    ax.set_ylabel(signal_name)
+    ax.set_ylabel(f"L{signal[1]} intensity")
     plt.legend(fontsize=10)
     plt.grid(True)
     plt.savefig(folder / fname, dpi=150)
@@ -186,7 +185,7 @@ def plot_true_pred_anomalies(
     plt.close()
 
 def plot_attack_timeline(
-    df, 
+    df: pd.DataFrame, 
     folder: Path = Path.cwd(), 
     fname: str = "plot_attack_timeline.png", 
     show: bool = False
@@ -194,7 +193,7 @@ def plot_attack_timeline(
     """Scatter plot of attack type over time"""
     apply_custom_theme()
 
-    fig, ax = plt.subplots(figsize=(14, 2))
+    fig, ax = plt.subplots(figsize=(14, 4))
     ax.scatter(
         df["ts"],
         df["at_pred"],
@@ -203,17 +202,40 @@ def plot_attack_timeline(
         s=12,
         alpha=0.8
     )
+    legend_text = "\n".join(
+        [f"{i}: {name}" for i, name in enumerate(ATTACK_LABELS)]
+    )
+    fig.text(
+        1, 0.55,
+        legend_text,
+        va="center",
+        ha="left",
+        fontsize=9,
+        bbox=dict(
+            boxstyle="round",
+            facecolor="white",
+            edgecolor="#9f9f9f",
+            alpha=0.9,
+        ),
+    )
     ax.set_title(f"Attack type timeline")
     ax.set_xlabel("Time")
-    ax.set_ylabel("Attack class")
+    ax.set_ylabel("Attack type")
+    ax.set_yticks([y for y in range(len(ATTACK_LABELS))])
     ax.grid(True)
     plt.tight_layout()
-    plt.savefig(folder / fname, dpi=150)
+    plt.savefig(
+        folder / fname, 
+        bbox_inches="tight", 
+        pad_inches=.6, 
+        dpi=150
+    )
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)
 
 def plot_loss_components_timeseries(
-    df, 
+    df: pd.DataFrame, 
     folder: Path = Path.cwd(), 
     fname: str = "plot_loss_components_timeseries.png", 
     show: bool = False
@@ -233,5 +255,6 @@ def plot_loss_components_timeseries(
     ax.grid(True)
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=150)
+    print(f"[OK] Saved to {fname}")
     if show: plt.show()
     plt.close(fig)

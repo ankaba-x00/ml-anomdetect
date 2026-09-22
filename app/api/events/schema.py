@@ -8,6 +8,7 @@ class PredictionRequest(BaseModel):
     date_from: datetime
     date_to: datetime
 
+
 class PredictionResponse(BaseModel):
     country: str
     threshold: float
@@ -15,6 +16,7 @@ class PredictionResponse(BaseModel):
     anomalies: list[str]
     predictions: bool
     status: str
+
 
 class MTPredictionResponse(BaseModel):
     country: str

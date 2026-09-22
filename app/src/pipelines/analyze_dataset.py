@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Visually and numerically explores datasets as pulled from Cloudflare
+Explore datasets visually and numerically as pulled from Cloudflare
 - value distributions : boxplots ts, daytime, daytype resolved
 - activity fluctuations : heatmaps daytime, daytype resolved
 - activity fluctuations : barplots top/tail countries daytime, daytype resolved
@@ -10,17 +10,29 @@ Visually and numerically explores datasets as pulled from Cloudflare
 - attack profiles : radar plots with attack fingerprint for specified countries origin, target resolved
 
 Output:
-    png files : results/exploration/<figure_type>.png
+    PATH: results/data/<FOLDER_NAME>
+    FILES:  <httpreq|traffic>_<daytime|daytype>_fluctuations.png
+            <httpreq|traffic>_<daytime|daytype>_tail30_fluctuation.png
+            <httpreq|traffic>_<daytime|daytype>_top30_fluctuation.png
+            <httpreq|traffic>_dist_<daytime|daytype>.png
+            <httpreq|traffic>_dist.png
+            anomalies_heatmap.png
+            <l3|l7>_log10_attack_profile.png
+            <l3|l7>_origin_cluster_eval_curves.png
+            <l3|l7>_origin_finalk_cluster_pca.png
+            <l3|l7>_top_attackers.png
+            fingerprint_<COUNTRY>_<origin|target>.png
 
 Usage: 
-    python -m app.src.exploration.exploration
+    python -m app.src.pipelines.analyze_dataset [-s] [-o <FOLDER_NAME>]
 """
 
 from typing import Optional
 import pandas as pd
+from pathlib import Path
 
-from app.src.data import conv_pkltodf
-from .core import (
+from app.src.data.processing.flatten import conv_pkltodf
+from app.src.data.analysis import (
     timezones, 
     add_local_daytypes, 
     add_local_daytimes, 
@@ -44,11 +56,19 @@ from .core import (
 )
 
 
-#########################################
-##        VALUE DISTRIBUTIONS          ##
-#########################################
+BASE_DIR = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = BASE_DIR.parent
+INDIR = BASE_DIR / "datasets" / "processed"
+OUTDIR = PROJECT_ROOT / "results" / "data" 
 
-def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
+
+def gen_valdist(
+    typ: str, 
+    in_folder: Path, 
+    out_folder: Path, 
+    show: bool
+) -> None:
+    """Generates boxplots to display value distributions within the datasets. """
     if typ == "traffic":
         name = "NetFlow traffic"
         shortname = "traffic"
@@ -64,9 +84,9 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
         colpal1 = ["#A0C684", "#31800C"]
         colpal2 = ["#ADE287", "#84AF64", "#537737", "#31800C", "#244D05"]
     else:
-        raise ValueError("[ERROR] Filename not recognized, aborting explorarion run!")
+        raise ValueError("[ERROR] Filename not recognized, aborting data analysis")
     
-    df = conv_pkltodf(f"{typ}", in_folder)
+    df = conv_pkltodf(typ, in_folder)
     boxplot_valdist(
         df,
         col=color1,
@@ -86,7 +106,7 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
         ylabel=f"Absolute {yname}",
         palette={"Weekday": colpal1[0], "Weekend": colpal1[1]},
         folder=out_folder,
-        fname=f"{typ}_dist_daytypes.png",
+        fname=f"{typ}_dist_daytype.png",
         show=show
     )
 
@@ -106,16 +126,17 @@ def gen_valdist(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
             "Early night": colpal2[4]
         },
         folder=out_folder,
-        fname=f"{typ}_dist_daytimes.png",
+        fname=f"{typ}_dist_daytime.png",
         show=show
     )
 
-
-#########################################
-##        ACTIVITY FLUCTUATIONS        ##
-#########################################
-
-def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
+def gen_actfluct(
+    typ: str, 
+    in_folder: Path, 
+    out_folder: Path, 
+    show: bool
+) -> None:
+    """Generates barplot and heatmap to display activity fluctuations within datasets."""
     if typ == "traffic":
         name = "traffic"
         color = "#5EA7E3"
@@ -125,7 +146,7 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
         color = "#8DB76F"
         colpal = "Greens"
     else:
-        raise ValueError("[ERROR] Filename not recognized, aborting explorarion run!")
+        raise ValueError("[ERROR] Filename not recognized, aborting data analysis")
 
     for category in ["daytype", "daytime"]:
         if category == "daytype":
@@ -144,24 +165,22 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
             mod_df_medians = add_fluctuation_metrics(mod_df)
             values = mod_df_medians.loc[:, "Business hours":"Morning"]
 
-        barplot_activity_fluctuations(
-            mod_df_medians, 
-            title=f"Countries with strongest {category} activity fluctuations for {name} intensity",
-            col=color,
-            folder=out_folder,
-            fname=f"{typ}_{category}_top30_fluctuation.png",
-            show=show
-        )
+        act_types: dict[str, list] = {
+            "name": ["top", "tail"],
+            "adj": ["strongest", "lowest"],
+            "head": [True, False]
+        }
 
-        barplot_activity_fluctuations(
-            mod_df_medians, 
-            head=False, 
-            title=f"Countries with lowest {category} activity fluctuations for {name} intensity",
-            col=color,
-            folder=out_folder,
-            fname=f"{typ}_{category}_tail30_fluctuation.png",
-            show=show
-        )
+        for i in range(2):
+            barplot_activity_fluctuations(
+                mod_df_medians,
+                head=act_types["head"][i],
+                title=f"Countries with {act_types['adj'][i]} {category} activity fluctuations for {name} intensity",
+                col=color,
+                folder=out_folder,
+                fname=f"{typ}_{category}_{act_types['name'][i]}30_fluctuation.png",
+                show=show
+            )
 
         heatmap_activity_fluctuations(
             mod_df_medians,
@@ -174,12 +193,12 @@ def gen_actfluct(typ: str, in_folder: str, out_folder: str, show: bool) -> None:
             show=show
         )
 
-
-#########################################
-##              ANOMALIES              ##
-#########################################
-
-def gen_anomheatmap(in_folder: str, out_folder: str, show: bool = False) -> None:
+def gen_anomheatmap(
+    in_folder: Path, 
+    out_folder: Path, 
+    show: bool
+) -> None:
+    """Generates heatmap to display anomalies that Cloudflare flagged."""
     df = conv_pkltodf("anomalies", in_folder)
     heatmap_anomalies(
         df,
@@ -191,14 +210,9 @@ def gen_anomheatmap(in_folder: str, out_folder: str, show: bool = False) -> None
         show=show
 )
 
-
-#########################################
-##           ATTACK PROFILES           ##
-#########################################
-
 def _load_data_worldwide(
     file: str,
-    folder: str, 
+    folder: Path, 
     col: str = "worldwide"
 ) -> pd.DataFrame:
     df = conv_pkltodf(file, folder)
@@ -215,13 +229,13 @@ def _ask_for_k() -> int:
             if 2 <= k <= 15:
                 return k
             else:
-                print("[INFO] Enter a number between 2 and 15.")
+                print("[INFO] Enter a number between 2 and 15")
         except ValueError:
-            print("[ERROR] Invalid input — please enter an integer.")
+            print("[ERROR] Invalid input — please enter an integer")
 
 def _run_kmeans_analysis(
     df: pd.DataFrame, 
-    folder: str,
+    folder: Path,
     name: str,
     col: str,
     k_min: int = 2, 
@@ -230,6 +244,7 @@ def _run_kmeans_analysis(
     interactive: bool = False,
     show: bool = False
 ) -> int:
+    """Runs clustering analysis, determins optimal k and produces PCA cluster plot."""
     countries, X = preprocess_matrix(df)
     eval_df = evaluate_kmeans_over_k(X, k_min=k_min, k_max=k_max)
     lineplot_clustering_eval_curves(
@@ -242,7 +257,7 @@ def _run_kmeans_analysis(
     
     if final_k is None:
         best_k = eval_df["silhouette"].idxmax()
-        sugg_k = eval_df.loc[best_k, "k"]
+        sugg_k = eval_df["k"].at[best_k]
         print(f"[INFO] Best k acc to Silhouette: {sugg_k}")
         if interactive:
             final_k = _ask_for_k()
@@ -267,11 +282,12 @@ def _run_kmeans_analysis(
     return final_k
 
 def gen_attackprofile(
-    in_folder: str, 
-    out_folder: str, 
-    interactive: str = False,
-    show: bool = False
+    in_folder: Path, 
+    out_folder: Path, 
+    interactive: bool,
+    show: bool
 ) -> None:
+    """Generates attack profiles for selected countries incl. radarcharts, barplot and heatmap."""
     for key in ["l3_origin", "l7_origin"]:
         if key == "l3_origin":
             col = "#01205f"
@@ -328,34 +344,48 @@ def gen_attackprofile(
                 show=show
             )
 
-
-#########################################
-##                 RUN                 ##
-#########################################
-
-def run_exploration(
-    in_folder: str, 
-    out_folder: str, 
-    show: bool = False
+def analyze_dataset(
+    out_folder: str,
+    show_plots: bool
 ) -> None:
+    out_path = OUTDIR / out_folder
+    out_path.mkdir(parents=True, exist_ok=True)
+    print("[INFO] Artefacts saved to:", out_path)
+
     for typ in ["traffic", "httpreq"]:
-        gen_valdist(typ, in_folder, out_folder, show)
-        gen_actfluct(typ, in_folder, out_folder, show)
-    gen_anomheatmap(in_folder, out_folder, show)
-    gen_attackprofile(in_folder, out_folder, interactive=False, show=show)
+        gen_valdist(typ, INDIR, out_path, show_plots)
+        gen_actfluct(typ, INDIR, out_path, show_plots)
+    gen_anomheatmap(INDIR, out_path, show_plots)
+    gen_attackprofile(INDIR, out_path, False, show_plots)
+
+    print("[DONE] Data analysis completed!")
 
 
 if __name__ == "__main__":
-    from pathlib import Path
+    import argparse
+    import datetime
     
-    BASE_DIR = Path(__file__).resolve().parents[2]
-    PROJECT_ROOT = BASE_DIR.parent
-    INDIR = BASE_DIR / "datasets" / "processed"
-    OUTDIR = PROJECT_ROOT / "results" / "exploration" / "y2024-2025"
-    OUTDIR.mkdir(parents=True, exist_ok=True)
-    
-    SHOW = False
+    parser = argparse.ArgumentParser(
+        description="Analyzes dataset value and activity distributions"
+    )
 
-    print("[INFO] Starting data exploration...")
-    result = run_exploration(INDIR, OUTDIR, SHOW)
-    print("[DONE] Data exploration completed!")
+    parser.add_argument(
+        "-s", "--show",
+        action="store_true",
+        help="show plots interactively when generated"
+    )
+
+    parser.add_argument(
+        "-o", "--out",
+        nargs="?",
+        default=None,
+        help="output subfolder [default: patch_<DATE>]"
+    )
+
+    args = parser.parse_args()
+
+    if args.out is None:
+        today = datetime.date.today()
+        args.out = f"patch_{today}"
+    
+    analyze_dataset(args.out, args.show)

@@ -1,8 +1,8 @@
 # app/src/ml/analysis/__init__.py
 """
-analysis plotting utilities
-==========================
-this package provides core utilities for visual analysis of ml build/train/tune/test stages
+ml analysis package
+===================
+this package provides core utilities for analysis of ml build/train/tune/test stages
 - common : shared functionalities
 - analysis_build : standardized plotting utilities for building feature matrix stage
 - analysis_train : standardized plotting utilities for train model stage

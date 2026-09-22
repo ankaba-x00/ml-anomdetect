@@ -23,8 +23,8 @@ import pickle, json, math
 import pandas as pd
 from typing import Union
 
-from app.src.data import ISO_3166_alpha2
-from app.src.data.feature_engineering import (
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.building.feature_engineering import (
     COUNTRIES,
     build_feature_matrix,
     build_supervised_feature_matrix,
@@ -253,46 +253,45 @@ def build_features(
 
     if BUILD:
         if fm_type == "super":
-            X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = (
-                build_supervised_feature_matrix(country)
-            )
+           fmatrix = build_supervised_feature_matrix(country)
         else:
-            X_cont, X_cat, num_cont, cat_dims = build_feature_matrix(country)
+            fmatrix = build_feature_matrix(country)
     else:
         if fm_type == "super":
-            X_cont, X_cat, y_l3, y_l7, y_attack, num_cont, cat_dims = (
-                load_supervised_feature_matrix(country, FEATURE_DIR)
-            )
+            fmatrix = load_supervised_feature_matrix(country, FEATURE_DIR)
         else:
-            X_cont, X_cat, num_cont, cat_dims = (
-                load_feature_matrix(country)
-            )
+            fmatrix = load_feature_matrix(country)
     
     if SAVE:
-        if fm_type == "super":
+        if (
+            fm_type == "super"
+            and fmatrix.y_l3 is not None
+            and fmatrix.y_l7 is not None
+            and fmatrix.y_at is not None
+        ):
             save_supervised_feature_matrix(
                 country, 
-                X_cont, 
-                X_cat, 
-                y_l3, 
-                y_l7, 
-                y_attack, 
-                num_cont, 
-                cat_dims
+                fmatrix.X_cont, 
+                fmatrix.X_cat, 
+                fmatrix.y_l3, 
+                fmatrix.y_l7, 
+                fmatrix.y_at, 
+                fmatrix.num_cont, 
+                fmatrix.cat_dims
             )
         else:
             save_feature_matrix(
                 country, 
-                X_cont, 
-                X_cat, 
-                num_cont, 
-                cat_dims
+                fmatrix.X_cont, 
+                fmatrix.X_cat, 
+                fmatrix.num_cont, 
+                fmatrix.cat_dims
             )
     if ANALYZE:
         analyze_feature_matrix(
             country, 
             fm_type,
-            X_cont, 
+            fmatrix.X_cont, 
             show
         ) 
 

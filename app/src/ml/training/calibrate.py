@@ -1,12 +1,14 @@
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.base import TransformerMixin
+from sklearn.preprocessing import RobustScaler
+from typing import Sequence
 
-from app.src.data.feature_engineering import (
+from app.src.data.building.feature_engineering import (
     load_feature_matrix, 
     load_supervised_feature_matrix
 )
+from . import CalibrationResult, ScoresStats, TuneTemperatureResult
 from .anomaly_utils import get_threshold
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
@@ -18,33 +20,49 @@ from app.src.ml.training.evaluate_mt import prediction
 def calibrate_threshold(
     country: str,
     model: TabularAE | TabularVAE | MTTabularAE,
-    scaler: TransformerMixin,
+    scaler: RobustScaler,
     device: str,
     loss_weights: dict[str, float],
     attack_type_weights: torch.Tensor | None,
-    pred_quantiles: list[float] | None,
-    beta: float,
-    cw: int = 30,
+    pred_quantiles: Sequence[float] | None,
     method: str = "p99",
-    tune_temperature: bool = True
-) -> tuple[dict[str, np.ndarray | float], dict[str, np.ndarray |float]]:
+    cw: int = 30,
+    tune_temperature: bool = True,
+) -> CalibrationResult:
     """Computes anomaly threshold with optional temperature scaling for specified calibration window and method."""
+
+    # ------------------------------------
+    # Set up tracking
+    # ------------------------------------
+    tracker = CalibrationResult(
+        country=country,
+        device=device,
+        cont_w=loss_weights["cont_w"],
+        cat_w=loss_weights["cat_w"],
+        method=method,
+        cal_window_days=cw,
+    )
     
     # ------------------------------------
     # Build features
     # ------------------------------------
     if isinstance(model, MTTabularAE):
-        X_cont, X_cat, y_l3, y_l7, y_at, _, _ = load_supervised_feature_matrix(country)
+        fmatrix = load_supervised_feature_matrix(country)
     else:
-        X_cont, X_cat, _, _ = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
 
-    Xc = X_cont.values.astype(np.float32)
-    Xk = X_cat.values.astype(np.int64)
-    ts = X_cont.index
-    if isinstance(model, MTTabularAE):
-        y3 = y_l3.values.astype(np.float32)
-        y7 = y_l7.values.astype(np.float32)
-        ya = y_at.values.astype(np.int64)
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+    Xk = fmatrix.X_cat.to_numpy(dtype=np.int64)
+    ts = fmatrix.X_cont.index
+    if (
+        isinstance(model, MTTabularAE)
+        and fmatrix.y_l3 is not None
+        and fmatrix.y_l7 is not None
+        and fmatrix.y_at is not None
+    ):
+        y3 = fmatrix.y_l3.to_numpy(dtype=np.float32)
+        y7 = fmatrix.y_l7.to_numpy(dtype=np.float32)
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     # ------------------------------------
     # Select calibration window
@@ -55,7 +73,6 @@ def calibrate_threshold(
 
     Xc_cal = Xc[cal_window]
     Xk_cal = Xk[cal_window]
-    ts_cal = ts[cal_window]
     if isinstance(model, MTTabularAE):
         y3_cal = y3[cal_window]
         y7_cal = y7[cal_window]
@@ -73,8 +90,7 @@ def calibrate_threshold(
     # Tune temperature scaling 
     # ------------------------------------
     best_temp = 1.0
-    temperature_tuned = False
-    temp_results = {}
+    temp_results: dict[str, dict[str, float | int]] = {}
     if tune_temperature and len(Xc_cal) > 100:
         print(f"[INFO] Tuning inference temperature...")
         
@@ -82,7 +98,11 @@ def calibrate_threshold(
         
         best_temp_metric = float('inf')
         for temp in temperature_range:
-            if isinstance(model, MTTabularAE):
+            if (
+                isinstance(model, MTTabularAE) 
+                and attack_type_weights is not None 
+                and pred_quantiles is not None
+            ):
                 temp_scores = prediction(
                     model,
                     Xc_cal_scld,
@@ -96,30 +116,32 @@ def calibrate_threshold(
                     temp,
                     device,
                     calibration=True
-                )
-            else:
+                ).scores
+            elif isinstance(model, (TabularAE, TabularVAE)):
                 temp_scores = reconstruction(
                     model,
                     Xc_cal_scld,
                     Xk_cal,
                     loss_weights,
                     temp,
-                    beta,
                     device
                 )
-            
+
             temp_prelim = get_threshold(method, temp_scores)
             temp_clean_scores = temp_scores[temp_scores < temp_prelim]
             temp_metric = np.median(temp_clean_scores) if len(temp_clean_scores) > 0 else np.median(temp_scores)
-            temp_results[temp] = {
-                "scores_mean": float(temp_scores.mean()),
-                "scores_std": float(temp_scores.std()),
-                "scores_median": float(np.median(temp_scores)),
-                "clean_scores_median": float(temp_metric),
-                "prelim_threshold": float(temp_prelim),
-                "clean_samples": len(temp_clean_scores),
-            }
-            stability_score = temp_results[temp]["scores_std"] / (temp_results[temp]["scores_mean"] + 1e-8)
+
+            result = TuneTemperatureResult(
+                scores_mean=float(temp_scores.mean()),
+                scores_std=float(temp_scores.std()),
+                scores_median=float(np.median(temp_scores)),
+                clean_scores_median=float(temp_metric),
+                prelim_threshold=float(temp_prelim),
+                clean_samples=len(temp_clean_scores),
+            )
+            temp_results[f"{temp}"] = result.to_dict()
+
+            stability_score = result.scores_std / (result.scores_mean + 1e-8)
             extreme_penalty = abs(temp - 1.0) * 0.1
             combined_metric = temp_metric * (1 + stability_score * 0.1 + extreme_penalty)
         
@@ -128,7 +150,14 @@ def calibrate_threshold(
                 best_temp = temp
         
         print(f"[CAL] Computed optimal inference temperature in cw: {best_temp:.1f}")
-        temperature_tuned = True
+
+        # ------------------------------------
+        # Track temperature tuning
+        # ------------------------------------
+        tracker["temp_training"] = model.config.temperature
+        tracker["temp_inference"] = best_temp
+        tracker["temp_results"] = temp_results
+        tracker["temp_range"] = temperature_range
     else:
         print(f"[INFO] Inference temperature set to config default: {model.config.temperature}")
         best_temp = model.config.temperature
@@ -136,7 +165,11 @@ def calibrate_threshold(
     # ------------------------------------
     # Compute recon error in window
     # ------------------------------------ 
-    if isinstance(model, MTTabularAE):
+    if (
+        isinstance(model, MTTabularAE) 
+        and attack_type_weights is not None 
+        and pred_quantiles is not None
+    ):
         scores = prediction(
             model,
             Xc_cal_scld,
@@ -150,15 +183,14 @@ def calibrate_threshold(
             best_temp,
             device,
             calibration=True
-        )
-    else:
+        ).scores
+    elif isinstance(model, (TabularAE, TabularVAE)):
         scores = reconstruction(
             model,
             Xc_cal_scld,
             Xk_cal,
             loss_weights,
             best_temp,
-            beta,
             device
         )
     print(f"[CAL] Computed {len(scores)} scores")
@@ -181,44 +213,25 @@ def calibrate_threshold(
     threshold = get_threshold(method, clean_scores)
     print(f"[CAL] Computed threshold ({method}) = {threshold:.6f}")
 
-    anomaly_rate = np.mean(scores > threshold) * 100
+    anomaly_rate = float(np.mean(scores > threshold) * 100)
     print(f"[CAL] Expected anomaly rate: {anomaly_rate:.2f}%")
 
     # ------------------------------------
-    # Return results
+    # Track threshold calibration
     # ------------------------------------
-    threshold_dict = {
-        "country": country,
-        "device": device, 
-        "method": method, 
-        "threshold": threshold,
-        "calibration_window_days": cw,
-        "calibration_samples": len(Xc_cal),
-        "clean_samples": len(clean_scores),
-        "preliminary_anomalies_removed": removed_count,
-        "cont_w": loss_weights["cont_w"],
-        "cat_w": loss_weights["cat_w"],
-        "scores_stats": {
-            "min": float(scores.min()),
-            "mean": float(scores.mean()),
-            "median": float(np.median(scores)),
-            "max": float(scores.max()),
-            "std": float(scores.std()),
-            "p99": float(np.percentile(scores, 99)),
-        },
-        "anomaly_rate_pct": float(anomaly_rate),
-        "temperature_training": 1.0,
-        "temperature_inference": best_temp,
-        "temperature_tuned": temperature_tuned,
-        "temperature_results": temp_results if tune_temperature else {},
-        "temperature_range": temperature_range if tune_temperature else [],
-    }
-    
-    debug_dict = {
-        "window": ts_cal, 
-        "scores": scores,
-        "clean_scores": clean_scores,
-        "preliminary_threshold": float(prelim),
-    }
+    scores_stats = ScoresStats(
+        min=float(scores.min()),
+        max=float(scores.max()),
+        median=float(np.median(scores)),
+        mean=float(scores.mean()),
+        std=float(scores.std())
+    )
+    scores_stats[f"{method}"] = get_threshold(method, scores)
+    tracker["threshold"] = threshold
+    tracker["cal_samples"] = len(Xc_cal)
+    tracker["clean_samples"] = len(clean_scores)
+    tracker["prelim_anom_removed"] = removed_count
+    tracker["scores_stats"] = scores_stats.to_dict()
+    tracker["pred_anom_rate"] = anomaly_rate
 
-    return threshold_dict, debug_dict
+    return tracker

@@ -9,7 +9,7 @@ B) MTAE to predict L3/L7 intensities and attack types
 - (optional) performs latent space analysis
 
 Output:
-    PATH : results/ml/tested/<MODEL>
+    PATH: results/ml/tested/<MODEL>
     FILES : <COUNTRY>_scores_<method>.csv
             <COUNTRY>_threshold_<method>.json
             <COUNTRY>_intervals_<method>.csv
@@ -24,15 +24,22 @@ import json, pickle, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from sklearn.preprocessing import RobustScaler
+from typing import Literal
 
-from app.src.data import ID_TO_ATTACK, ISO_3166_alpha2, timeseries_seq_split
-from app.src.data.feature_engineering import (
+from app.src.data.building import ID_TO_ATTACK
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.processing import timeseries_seq_split
+from app.src.data.building.feature_engineering import (
     COUNTRIES,
     load_feature_matrix, 
     load_supervised_feature_matrix
 )
 from app.src.ml.analysis import plot_latent_space
+from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.configs import MTAEConfig
 from app.src.ml.models.helpers import load_autoencoder
+from app.src.ml.models.vae import TabularVAE
 from app.src.ml.training.anomaly_utils import get_threshold
 from app.src.ml.training.evaluate_ae import apply_model
 from app.src.ml.training.evaluate_mt import apply_mt_model
@@ -45,7 +52,7 @@ OUT_DIR = PROJECT_ROOT / "results" / "ml" / "tested"
 
 
 def test_model(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     country: str, 
     method: str, 
     tr: int, 
@@ -71,54 +78,57 @@ def test_model(
     # ------------------------
     # Load model, weights, config, scaler
     # ------------------------
-    model, cfg, model_num_cont, model_cat_dims, metadata = load_autoencoder(model_path, metadata=True)
+    model_bundle = load_autoencoder(model_path)
 
-    try:
-        loss_weights = metadata["loss_weights"]
+    if model_bundle.metadata is not None:
+        loss_weights = model_bundle.metadata["loss_weights"]
         if ae_type in ["mtae"]:
-            attack_type_weights = torch.Tensor(metadata["attack_type_weights"])
-    except KeyError:
-        print("[ERROR] No weights saved in model metadata")
+            attack_type_weights = torch.Tensor(model_bundle.metadata["attack_type_weights"])
 
     with open(scaler_path, "rb") as f:
-        scaler = pickle.load(f)
+        scaler: RobustScaler = pickle.load(f)
 
     # ------------------------
     # Load feature matrix
     # ------------------------
     if ae_type in ["ae", "vae"]:
-        X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
     else:
-        X_cont, X_cat, y_l3, y_l7, y_at, num_cont, cat_dims = (
+        fmatrix = (
             load_supervised_feature_matrix(country)
         )
 
-    assert model_num_cont == num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
-    assert model_cat_dims == cat_dims, "[ERROR] cant_dims mismatch between scaler and feature matrix"
-
-    Xc = X_cont.values.astype(np.float32)
-    Xk = X_cat.values.astype(np.int64)
-    ts = X_cont.index
-    if ae_type in ["mtae"]:
-        y3 = y_l3.values.astype(np.float32)
-        y7 = y_l7.values.astype(np.float32)
-        ya = y_at.values.astype(np.int64)
+    assert model_bundle.num_cont == fmatrix.num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
+    assert model_bundle.cat_dims == fmatrix.cat_dims, "[ERROR] cant_dims mismatch between scaler and feature matrix"
+    
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+    Xk = fmatrix.X_cat.to_numpy(dtype=np.int64)
+    ts = pd.to_datetime(fmatrix.X_cont.index)
+    if (
+        ae_type in ["mtae"]
+        and fmatrix.y_l3 is not None
+        and fmatrix.y_l7 is not None
+        and fmatrix.y_at is not None
+    ):
+        y3 = fmatrix.y_l3.to_numpy(dtype=np.float32)
+        y7 = fmatrix.y_l7.to_numpy(dtype=np.float32)
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     # ------------------------
     # Split dataset
     # ------------------------
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
-    (Xc_tr, _), (_, _), (Xc_te, Xk_te) = timeseries_seq_split(
-        Xc, Xk, 
-        tr/100, 
+    [Xc_tr, _], _, [Xc_te, Xk_te] = timeseries_seq_split(
+        [Xc, Xk],
+        tr/100,
         vr/100
     )
     ts_te = ts[len(Xc_tr) + int(len(ts) * vr/100):]
 
     if ae_type in ["mtae"]:
-        _, _, y3_te = timeseries_seq_split(y3, None, tr/100, vr/100)
-        _, _, y7_te = timeseries_seq_split(y7, None, tr/100, vr/100)
-        _, _, ya_te = timeseries_seq_split(ya, None, tr/100, vr/100)
+        _, _, [y3_te] = timeseries_seq_split([y3], tr/100, vr/100)
+        _, _, [y7_te] = timeseries_seq_split([y7], tr/100, vr/100)
+        _, _, [ya_te] = timeseries_seq_split([ya], tr/100, vr/100)
 
     # ------------------------
     # Scale cont features
@@ -128,27 +138,27 @@ def test_model(
     # ------------------------
     # Apply model
     # ------------------------
-    if ae_type in ["ae", "vae"]:
+    if isinstance(model_bundle.model, (TabularAE, TabularVAE)):
         result = apply_model(
-            model=model,
+            model=model_bundle.model,
             X_cont=Xc_te_scald,
             X_cat=Xk_te,
             loss_weights=loss_weights,
-            device=cfg.device,
+            device=model_bundle.cfg.device,
             method=method,
-            temperature=cfg.temperature, 
-            beta=getattr(cfg, "beta", 1.0)
+            temperature=model_bundle.cfg.temperature
         )
     else:
         # ------------------------
         # Set quantiles
         # ------------------------
-        med_q = cfg.quantiles.index(0.5)
-        pred_quantiles = cfg.quantiles[med_q:]
-        print(f"[INFO] Quantiles used for prediction: {pred_quantiles}")
+        if isinstance(model_bundle.cfg, MTAEConfig):
+            med_q = model_bundle.cfg.quantiles.index(0.5)
+            pred_quantiles = model_bundle.cfg.quantiles[med_q:]
+            print(f"[INFO] Quantiles used for prediction: {pred_quantiles}")
 
         result = apply_mt_model(
-            model=model,
+            model=model_bundle.model,
             X_cont=Xc_te_scald,
             X_cat=Xk_te,
             y_l3=y3_te,
@@ -160,31 +170,27 @@ def test_model(
             method=method,
             min_length=1,
             merge_gap=0,
-            device=cfg.device
+            device=model_bundle.cfg.device
         )
 
-    scores = result["scores"]
-    threshold = result["threshold"]
-    mask = result["mask"]
-    starts = result["anomaly_starts"]
-    ends = result["anomaly_ends"]
-
-    if ae_type in ["mtae"]:
-        l3_preds = result["l3_pred"][0.5]
-        l7_preds = result["l7_pred"][0.5]
+        l3_preds = result["l7_pred_0.5"]
+        l7_preds = result["l7_pred_0.5"]
         at_preds = result["at_pred"]
 
     # ------------------------
     # Print summary
     # ------------------------
     print("\n--- Test Summary ---")
-    print(f"Total samples = {len(scores)}")
-    print(f"Threshold = {threshold:.6f}")
-    print(f"Flagged samples = {mask.sum()}")
-    print(f"Flagged intervals = {len(starts)}\n")
+    print(f"Total samples = {len(result.scores)}")
+    print(f"Threshold = {result.threshold:.6f}")
+    print("Quantile: 0.5")
+    print(f"Flagged samples = {result.mask.sum()}")
+    print(f"Flagged intervals = {len(result.anom_starts)}\n")
 
-    for s, e in zip(starts, ends):
-        interval_str = f"{ts_te[s].strftime('%d/%m/%y,%H:%M')} - {ts_te[e-1].strftime('%d/%m/%y,%H:%M')} ({e-s} anomalies)"
+    for s, e in zip(result.anom_starts, result.anom_ends):
+        start = ts_te[s].strftime("%d/%m/%y,%H:%M")
+        end = ts_te[e-1].strftime("%d/%m/%y,%H:%M")
+        interval_str = f"{start} - {end} ({e-s} anomalies)"
         print(f"  > Interval {interval_str}")
         if ae_type in ["mtae"]:
             print(
@@ -194,22 +200,20 @@ def test_model(
             )
 
     print(f"\nScore Statistics:")
-    print(f"Min:       {scores.min():.6f}")
-    print(f"Max:       {scores.max():.6f}")
-    print(f"Mean:      {scores.mean():.6f}")
-    print(f"Std:       {scores.std():.6f}")
-    print(f"Score {method}: {get_threshold(method, scores):4f}\n")
-
-    
+    print(f"Min:       {result.scores.min():.6f}")
+    print(f"Max:       {result.scores.max():.6f}")
+    print(f"Mean:      {result.scores.mean():.6f}")
+    print(f"Std:       {result.scores.std():.6f}")
+    print(f"Score {method}: {get_threshold(method, result.scores):4f}\n")
 
     # ------------------------
     # Save artefacts
     # ------------------------
     df_out = pd.DataFrame({
         "ts": ts_te,
-        "scores": scores,
-        "threshold": threshold,
-        "is_flagged": mask.astype(int),
+        "scores": result.scores,
+        "threshold": result.threshold,
+        "is_flagged": result.mask.astype(int),
     })
 
     if ae_type in ["mtae"]:
@@ -225,8 +229,8 @@ def test_model(
             "at_conf": result["at_conf"]
         }
         for q in pred_quantiles:
-            mt_dict_out[f"l3_pred_{q}"] = result["l3_pred"][q]
-            mt_dict_out[f"l7_pred_{q}"] = result["l7_pred"][q]
+            mt_dict_out[f"l3_pred_{q}"] = result[f"l3_pred_{q}"]
+            mt_dict_out[f"l7_pred_{q}"] = result[f"l7_pred_{q}"]
         df_out = pd.concat([df_out, pd.DataFrame(mt_dict_out)], axis=1)
 
     score_path = out_path / f"{country}_scores_{method}.csv"
@@ -234,11 +238,11 @@ def test_model(
     print(f"[OK] Saved test scores to {score_path}")
 
     df_int = pd.DataFrame({
-        "start_idx": starts,
-        "end_idx": ends,
-        "start_ts": ts_te[starts] if len(starts) else [],
-        "end_ts": ts_te[ends - 1] if len(ends) else [],
-        "duration_samples": ends - starts
+        "start_idx": result.anom_starts,
+        "end_idx": result.anom_ends,
+        "start_ts": ts_te[result.anom_starts] if len(result.anom_starts) else [],
+        "end_ts": ts_te[result.anom_ends - 1] if len(result.anom_ends) else [],
+        "duration_samples": result.anom_ends - result.anom_starts
     })
     int_path = out_path / f"{country}_intervals_{method}.csv"
     df_int.to_csv(int_path, index=False)
@@ -247,19 +251,21 @@ def test_model(
     thr_path = out_path / f"{country}_threshold_{method}.json"
     threshold_data = {
         "country": country,
+        "train_ratio": tr,
+        "val_ratio": vr,
         "method": method,
-        "threshold": float(threshold),
+        "threshold": float(result.threshold),
         "loss_weights": loss_weights,
-        "test_samples": len(scores),
-        "anomaly_count": int(mask.sum()),
-        "interval_count": len(starts),
+        "test_samples": len(result.scores),
+        "anomaly_count": int(result.mask.sum()),
+        "interval_count": len(result.anom_starts),
         "error_stats": {
-            "min": float(scores.min()),
-            "mean": float(scores.mean()),
-            "median": float(np.median(scores)),
-            "max": float(scores.max()),
-            "std": float(scores.std()),
-            "p995": float(np.percentile(scores, 99.5)),
+            "min": float(result.scores.min()),
+            "mean": float(result.scores.mean()),
+            "median": float(np.median(result.scores)),
+            "max": float(result.scores.max()),
+            "std": float(result.scores.std()),
+            "p995": float(np.percentile(result.scores, 99.5)),
         },
         "test_period": {
             "start": str(ts_te[0].date()),
@@ -285,8 +291,8 @@ def test_model(
             country, 
             Xc_te_scald,
             Xk_te,
-            model,
-            cfg.device,
+            model_bundle.model,
+            model_bundle.cfg.device,
             1000,
             out_path,
             f"{country}_latent_space.png"
@@ -295,7 +301,7 @@ def test_model(
     print(f"[DONE] Tested model for {country}")
 
 def test_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     method: str, 
     tr: int, 
     vr: int, 

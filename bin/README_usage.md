@@ -11,7 +11,8 @@
 
 ## Overview
 This package has multiple sequential stages
-1. You need to fetch datasets and preprocess data
+1. You need to fetch and process datasets
+2. You need to build features and optionally compute attack label
 2. You need to build and train models
 3. You need to tune, validate and test models
 4. You can use models now to make predictions
@@ -49,6 +50,7 @@ This package has multiple sequential stages
     START_DATE="12/05/2024"
     END_DATE="12/05/2025"
     FETCH_TIME=true
+    PROCESS=true
     ``` 
 
    3.2. EXAMPLE2 To fetch complete dataset with 3 years of training data, the following parameters are enough
@@ -56,6 +58,7 @@ This package has multiple sequential stages
     START_DATE="12/05/2022"
     END_DATE="12/05/2025"
     FETCH_ALL=true
+    PROCESS=true
     ```
 
    3.3. EXAMPLE3 To fetch a particular dataset within a date range, the following parameter suffice
@@ -63,45 +66,31 @@ This package has multiple sequential stages
     START_DATE="12/05/2025"
     END_DATE="12/07/2025"
     FETCH_TRAFFIC=true
+    PROCESS=false
     ```
 
-   3.4. ADVICE: For multi-year ranges, consider splitting the fetch into several chunks. You can merge them afterwards. To avoid CloudFlare API rate limit, it is highly recommended to start these multi-pull fetches sequentially on different days. 
+   3.4. ADVICE: For multi-year ranges, consider splitting the fetch into several fetch rounds. You can merge them afterwards. To avoid CloudFlare API rate limit, it is highly recommended to start these multi-pull fetches sequentially on different days. 
 
-   3.5. WARNING: Each fetch produces a raw dataset file timestamped by the day of the fetch. Running multiple fetches on the same date will overwrite the previous file unless you modify the naming convention in app/src/data/fetch.py. 
+   3.5. WARNING: Each fetch produces a raw dataset file timestamped by the day of the fetch. Running multiple fetches on the same date will overwrite the previous file unless you modify the naming convention in app/src/data/fetch.py which is not recommended as the automatic merge routine will fail. 
 
 5. Run run_fetch.sh via
     <br>`./bin/run_fetch.sh`
 
-6. Preprocess data depending on your usage
-
-   5.1. One pull per dataset file
-        1. EXAMPLE1: If you downloaded all datasets, run
-        <br>`python -m app.src.data.preprocess all`
-        2. EXAMPLE2: If you did not fetch all datasets, you can specify the file key instead of all. You get a list of all file keys via
-        <br>`python -m app.src.data.preprocess -k all`
-        3. ADVICE: If you have multiple datasets you need to preprocess, remove individual fetch keys from the file ./app/src/data/preprocess directly to automate the process for your dataset bundle
-
-   5.2. Multiple pulls per dataset file
-        1. EXAMPLE1: If you downloaded all datasets and have 3 pulls per dataset file, you need to check the pull directions. If the first downloaded file is fetching data before the second, the pulls are consecutively, ergo merge direction = 0
-        <br>`python -m app.src.data.merge_preprocess -N 3 all 0`
-        2. EXAMPLE2: If the first downloaded file is fetching data after the second, the pulls are non-consecutively, ergo merge direction = 1
-        <br>`python -m app.src.data.merge_preprocess -N 3 all 1`</br>
-        3. ADVICE: If you have multiple datasets you need to preprocess, remove individual fetch keys from the file ./app/src/data/merge_preprocess directly to automate the process for your dataset bundle
-
-   5.3. You can run an automated analysis on your raw datasets via
-    <br>`python -m app.src.exploration.exploration`</br>
+IMPORTANT: in run_fetch.sh, set PROCESS=true if dataset is fetched in one round or with the last fetch round before you continue with analyzing dataset and/or ML stages. If you forget to set PROCESS=true, run the dedicated pipeline for processing and analyzing datasets via
+    <br>`python -m app.src.pipeline.process_dataset -S all 0`</br>
+    <br>`python -m app.src.pipeline.analyze_dataset`</br>
 
 ### Build and Train Models
 
-1. Specify all countries you want to build as models in ./app/src/config/models.yml by adding their respective 2-letter country codes. For a list of 2-letter country codes, see regions dictionary in ./app/src/exploration/core/params.py
+1. Specify all countries you want to build as models in ./app/config/models.yml by adding their respective 2-letter country codes. For a list of 2-letter country codes, see regions dictionary in ./app/src/data/analysis/params.py
 2. Open ./bin/run_train.sh and edit training and validation configuration parameters to your liking.
 3. Run run_train.sh to train models as specified
     <br>`./bin/run_train.sh`
 4. CAREFUL: run_train.sh is an automatisation script that executes 3 steps: training, validation and analysis of training. See file for individual run commands. 
 
 ### Tune Models
-1. Choose hyperparamter search space in app/src/config/tune/<MODEL>.yml. Please read the **Tuning Usage Guide**:
-<br> --> see ./app/src/config/tune/README_tune.md (**recommended**)
+1. Choose hyperparamter search space in app/config/tune/<MODEL>.yml. Please read the **Tuning Usage Guide**:
+<br> --> see ./app/config/tune/README_tune.md (**recommended**)
 2. Open ./bin/run_tune.sh and edit tuning and testing configuration parameters to your liking.
 3. Run run_tune.sh to tune and test models as specified
     <br>`./bin/run_tune.sh`
@@ -142,7 +131,7 @@ b. If you executed the file from $PROJECT_ROOT and still get a FileNotFound Erro
 
 Sometime CloudFlare does not return any values for a given location while also not throwing an error. In this case, you might get timestamps only and the values list in the json is empty. The fetch will not break if the API operation continues as normal. If this occurs, you will later get an error while building the feature matrix that looks like this (example shows missing values for a country in l3attack_origin_protocol):
 
-    X_cont_df, X_cat_df, num_cont, cat_dims, = build_feature_matrix(country)
+    fmatrix = build_feature_matrix(country)
     KeyError: "None of [Index(['udp', 'tcp', 'icmp', 'gre'], dtype='object', name='metric')] are in the [columns]"
     
 To overcome this error, do as follows
@@ -152,14 +141,31 @@ a. Check the raw json file for this country. If indeed the values are missing, y
 b. Before doing so, check the following website if the dataset is available for your traget country: https://radar.cloudflare.com/explorer?dataSet=netflows
 
 c. If you confirmed availability, fetch again, e.g. for the above error example
-        <br>`python -m app.src.data.fetch -S 11/15/2022 -E 11/15/2023 -l3ort`
+        <br>`python -m app.src.pipelines.fetch_dataset -S 11/15/2022 -E 11/15/2023 -l3ort`
     <br>ADVICE: You might want to comment out other datasets in the parser section of fetch.py if the flag fetches multiple datasets.
 
-d. If you confirmed unavailability, you cannot build the country model with the current setup. In this case, you can choose a different country or modify the feature matrix build to exclude this dataset. For the latter, you need to modify the feature matrix build:
-- open ./app/src/data/feature_engineering.py
-- find the unavailable dataset in build_country_dataframe() under section "1. load all datasets", e.g. 
+d. If you confirmed unavailability, you cannot build the country model with the current setup. In this case, you can choose a different country or modify the feature matrix build to exclude this dataset. 
+For the latter, you need to modify the feature matrix build:
+- open ./app/src/data/building/build_utils.py
+- uncomment the respective unavailable dataset in the return object of load_base()
+e.g.
+    <br>`l3o=_conv_todf(data.l3_origin, data.timestamps, "l3_origin"),`
+    to 
+    <br>`# l3o=_conv_todf(data.l3_origin, data.timestamps, "l3_origin"),`
+- open ./app/src/data/building/build_utils.py
+- uncomment the respective unavailable dataset in ProcessedRegionTimeseries
+e.g. 
+    <br>`l3o: pd.DataFrame` 
+    to 
+    <br>`# l3o: pd.DataFrame`
+- open ./app/src/data/building/feature_engineering.py
+- remove the respective unavailable dataset from build_country_dataframe() step 2 [line 56-64]
+e.g.
+    <br>`df = pd.concat([bundle.l3o, bundle.l3t, ...])`
+    to 
+    <br>`df = pd.concat([bundle.l3t, ...])`
+
+e.g. 
     <br>`s_l3o = _load_time_series("l3_origin_time", country, "l3_origin")`
-- search for all variable instances of this dataset and remove variable where it is used, e.g.
-    <br>`s_l3o`
 - search for all name instances of the dataset and remove where it is used, e.g.
     <br>`"l3_origin"`

@@ -2,12 +2,13 @@ import torch
 import numpy as np
 import torch.nn as nn
 
-from .base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor
+from .ae import Decoder
+from .base import SharedVEncoder, TabularBase
 from .configs import VAEConfig
-from .mixins import TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin, TabularKLScoringMixin
+from .mixins import TabularDecodePassingMixin, TabularVEncodePassMixin, TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin, TabularKLScoringMixin
 
 
-class VEncoder(BaseTabularEncoder):
+class VEncoder(SharedVEncoder[VAEConfig]):
     """
     Encoder class for VAE model.
     """
@@ -15,7 +16,7 @@ class VEncoder(BaseTabularEncoder):
     def __init__(
         self,
         config: VAEConfig
-    ):
+    ) -> None:
         super().__init__(config=config)
     
         self.config = config
@@ -33,40 +34,7 @@ class VEncoder(BaseTabularEncoder):
         self.init_head(self.logvar_head, None)
 
 
-class VDecoder(BaseTabularDecoder):
-    """
-    Decoder class for VAE model.
-    """
-
-    def __init__(
-        self,
-        config: VAEConfig
-    ):
-        super().__init__(config=config)
-    
-        self.config = config
-
-    def make_recon_heads(self) -> None:
-        """Adds final reconstruction heads of decoder."""
-
-        dim = max(self.config.hidden_dims)
-
-        self.cont_recon_head = nn.Linear(dim, self.config.num_cont)
-
-        self.cat_recon_heads = nn.ModuleDict()
-        for name, card in self.config.cat_dims.items():
-            self.cat_recon_heads[name] = nn.Linear(dim, card)
-
-    def init_recon_heads(self) -> None:
-        """Initializes final reconstruction heads of decoder."""
-
-        self.init_head(self.cont_recon_head, self.config.activation_de)
-
-        for module in self.cat_recon_heads.children():
-            self.init_head(module, self.config.activation_de)
-
-
-class TabularVAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin, TabularKLScoringMixin):
+class TabularVAE(TabularVEncodePassMixin[VAEConfig], TabularDecodePassingMixin[VAEConfig], TabularBase[VAEConfig], TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin, TabularKLScoringMixin):
     """
     Hybrid tabular VAE with:
       - cont and cat inputs
@@ -80,102 +48,12 @@ class TabularVAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeature
     def __init__(
         self,
         config: VAEConfig
-    ):
-        super().__init__()
+    ) -> None:
+        super().__init__(config)
         self.config = config
         self.E = VEncoder(config)
-        self.D = VDecoder(config)
+        self.D = Decoder(config)
         self.current_beta = 0.
-    
-    def encode(
-        self, 
-        x_cont: torch.Tensor, 
-        x_cat: torch.Tensor,
-        param_out: bool = False
-    ) -> torch.Tensor:
-        """Passes input through encoder and returns latent variables."""
-        
-        if self.config.use_embedding:
-            x_cat_e = self._embed(
-                x_cat, 
-                self.config.cat_dims, 
-                self.E.embeddings
-            )
-        else:
-            x_cat_e = self._encod(
-                x_cat, 
-                self.config.cat_dims
-            )
-        
-        x = torch.cat([x_cont, x_cat_e], dim=1)
-
-        mu, logvar = self._parametrize(x)
-        z = self._reparametrize(mu, logvar)
-
-        if not param_out:
-            return z
-        return z, mu, logvar
-    
-    def _parametrize(
-        self, 
-        x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Parametrizes latent distribution determistically. Input data is mapped to the variational distribution and mean (mu) and log-variance (logvar) returned.
-        """
-        
-        h = x
-        for layer in self.E.encoder_layers:
-            h = layer(h)
-        
-        mu = self.E.mu_head(h)
-        logvar = self.E.logvar_head(h)
-
-        # for benchmarking kl_divergence clamp values
-        # μ ~ N(0, 1) → mean near 0, std near 1
-        # logvar near 0, between ~[-4, +4]
-        if self.config.debug_kl_stats:
-            print(
-                f"[KL DIAGNOSTICS] μ mean={mu.mean().item():.4f} std={mu.std().item():.4f} | "
-                f"logvar mean={logvar.mean().item():.4f} std={logvar.std().item():.4f}"
-            )
-        
-        return mu, logvar
-
-    def _reparametrize(
-        self, 
-        mu: torch.Tensor, 
-        logvar: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Reparametrizes to stochastically sample z from the distribution via z = mu + eps ⊙ std with eps ~ N(0, I).
-        """
-
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        
-        return mu + eps * std
-    
-    def decode(
-        self, 
-        z: torch.Tensor
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Decodes from latent space and applies temperature scaling."""
-        
-        h = z
-        for layer in self.D.decoder_layers:
-            h = layer(h)
-        
-        cont_recon = self.D.cont_recon_head(h)
-
-        cat_logits = {}
-        for name in self.config.cat_dims.keys():
-            logits = self.D.cat_recon_heads[name](h)
-            if self.config.temperature != 0.:
-                logits = logits / self.config.temperature
-            cat_logits[name] = logits
-        
-        return cont_recon, cat_logits
     
     def forward(
         self, 
@@ -194,8 +72,17 @@ class TabularVAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeature
         else:
             Xc, Xk = x_cont, x_cat
 
-        z, mu, logvar = self.encode(Xc, Xk, param_out=True)
+        z, mu, logvar = self.encode(Xc, Xk, all_vars=True)
         cont_recon, cat_logits = self.decode(z)
+
+        # for benchmarking kl_divergence clamp values
+        # μ ~ N(0, 1) → mean near 0, std near 1
+        # logvar near 0, between ~[-4, +4]
+        if self.config.debug_kl_stats:
+            print(
+                f"[KL DIAGNOSTICS] μ mean={mu.mean().item():.4f} std={mu.std().item():.4f} | "
+                f"logvar mean={logvar.mean().item():.4f} std={logvar.std().item():.4f}"
+            )
 
         return cont_recon, cat_logits, mu, logvar
 
@@ -209,7 +96,7 @@ class TabularVAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeature
         logvar: torch.Tensor | None,
         loss_weights: dict[str, float],
         reduction: str = "mean"
-    ) -> tuple[torch.Tensor] | torch.Tensor:
+    ) -> tuple[torch.Tensor, ...] | torch.Tensor:
         """Computes normalized weighted per-sample score and optionally reduces to average or sum."""
 
         cont_loss, cat_loss, recon_score = self.recon_scoring(
@@ -217,22 +104,26 @@ class TabularVAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeature
             x_cat,
             cont_recon,
             cat_logits,
-            self.config.cat_dims,
             loss_weights,
+            self.config.cat_dims
         )
 
-        kl_score = self.kl_scoring(
-            mu,
-            logvar,
-            logvar_clamp=self.config.logvar_clamp,
-            use_free_bits=self.config.use_kl_clipping,
-            free_bits=self.config.kl_clamp
-        )
+        kl_score = torch.zeros_like(recon_score)
+        if mu is not None and logvar is not None:
+            kl_score = self.kl_scoring(
+                mu,
+                logvar,
+                logvar_clamp=self.config.logvar_clamp,
+                use_free_bits=self.config.use_kl_clipping,
+                free_bits=self.config.kl_clamp
+            )
             
         per_sample_score = recon_score + self.current_beta * kl_score
 
         if reduction == "mean":
-            return cont_loss, cat_loss, recon_score, kl_score, per_sample_score.mean()
+            return cont_loss, cat_loss, recon_score, kl_score, torch.mean(per_sample_score)
+        elif reduction == "sum":
+            return cont_loss, cat_loss, recon_score, kl_score, torch.sum(per_sample_score)
         else:
             return per_sample_score
     

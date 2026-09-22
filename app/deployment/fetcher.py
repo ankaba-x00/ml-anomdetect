@@ -1,16 +1,20 @@
+import sys
 from datetime import datetime, timezone
+from typing import Any
 
-from app.src.data.fetch import _headers, _requests_session
+from . import RegionTimeseriesFetchResult
+from app.src.data.processing import FIELD_MAP
+from app.src.data.fetching.fetch import _headers, _requests_session
 
 
 def _fetch_timedata(
     TITLE: str, 
     URL: str, 
-    BASE_PARAMS: dict, 
+    BASE_PARAMS: dict[str, Any], 
     date_from: datetime, 
     date_to: datetime
-) -> dict | None:
-    """Fetches timeseries data in memory for country from Cloudflare API in 15-min buckets."""
+) -> dict[str, list[str]]:
+    """Fetches timeseries data in memory."""
     DATE_MIN, DATE_MAX = date_from, date_to.replace(hour=23, minute=45)
 
     session = _requests_session()
@@ -23,25 +27,6 @@ def _fetch_timedata(
     resp = session.get(URL, headers=_headers(), params=params, timeout=30)
     if resp.status_code == 200:
         try:
-            FIELD_MAP = {
-                "bitrate": [
-                    "UNDER_500_MBPS",
-                    "_500_MBPS_TO_1_GBPS",
-                    "_1_GBPS_TO_10_GBPS",
-                    "_10_GBPS_TO_100_GBPS",
-                    "OVER_100_GBPS",
-                ],
-                "duration": [
-                    "UNDER_10_MINS",
-                    "_10_MINS_TO_20_MINS",
-                    "_20_MINS_TO_40_MINS",
-                    "_40_MINS_TO_1_HOUR",
-                    "_1_HOUR_TO_3_HOURS",
-                    "OVER_3_HOURS",
-                ],
-                "protocol": ["UDP", "TCP", "ICMP", "GRE"],
-                "default": ["values"],
-            }
             if "bitrate" in TITLE:
                 group = "bitrate"
             elif "duration" in TITLE:
@@ -64,14 +49,18 @@ def _fetch_timedata(
         except Exception as e:
             print(f"[ERROR] JSON decode error for {params['dateStart']}:", e)
     else:
-        print(f"HTTP {resp.status_code} for {params['dateStart']}")
-        return
+        print(f"[ERROR] HTTP {resp.status_code} for {params['dateStart']}")
+        sys.exit(1)
 
     return region_results
 
-def run_fetch(country: str, date_from: datetime, date_to: datetime) -> dict:
+def run_fetch(
+    country: str, 
+    date_from: datetime, 
+    date_to: datetime
+) -> RegionTimeseriesFetchResult:
     """
-    Fetches datasets in memory.
+    Fetches timeseries datasets from Cloudflare API in memory for specified country in 15-min buckets.
 
     Assumes:
     - date_from : incl. start e.g. (2024-11-15); automatically sets time to 00:00Z 
@@ -79,64 +68,65 @@ def run_fetch(country: str, date_from: datetime, date_to: datetime) -> dict:
     """
     print(f"[INFO] Fetching data for {country}...")
     
-    results = {}
+    results: dict[str, dict[str, list[str]] | list[str]] = {}
     
     params = {"name": "main", "location": country}
     TITLE = "httpreq_time"
     URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
-    results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+    results[TITLE[:-5]] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
 
     TITLE = "traffic_time"
     URL="https://api.cloudflare.com/client/v4/radar/netflows/timeseries"
-    results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+    results[TITLE[:-5]] = _fetch_timedata(TITLE, URL, params, date_from, date_to)["values"]
 
     TITLE = "aibots_crawlers_time"
     URL = "https://api.cloudflare.com/client/v4/radar/ai/bots/timeseries"
-    results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+    results[TITLE[:-5]] = _fetch_timedata(TITLE, URL, params, date_from, date_to)["values"]
 
     TITLE = "bots_time"
     URL = "https://api.cloudflare.com/client/v4/radar/bots/timeseries"
-    results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+    results[TITLE[:-5]] = _fetch_timedata(TITLE, URL, params, date_from, date_to)["values"]
 
     TITLE = f"l7attack_time"
     URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer7/timeseries"
-    results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+    results["l7"] = _fetch_timedata(TITLE, URL, params, date_from, date_to)["values"]
 
     BOT_CLASS = ["Likely_Automated", "Likely_Human"]
     URL="https://api.cloudflare.com/client/v4/radar/http/timeseries"
     for botcl in BOT_CLASS:
         TITLE = f"httpreq_{botcl.replace('Likely_', '').lower()}_time"
         params = {"name": "main", "location": country, "botClass": botcl}
-        results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+        results[TITLE[:-5]] = _fetch_timedata(TITLE, URL, params, date_from, date_to)["values"]
 
     DIRECTION = ["Origin", "Target"]
     for dir in DIRECTION:
         params = {"name": "main", "location": country, "direction": dir}
         TITLE = f"l3attack_{dir.lower()}_time"
         URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries"
-        results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+        results[f"l3_{dir.lower()}"] = _fetch_timedata(TITLE, URL, params, date_from, date_to)["values"]
         if dir == "Origin":
             TITLE = f"l3attack_{dir.lower()}_bitrate_time"
             URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/bitrate"
-            results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+            results[f"l3_{dir.lower()}_bitrate"] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
             TITLE = f"l3attack_{dir.lower()}_duration_time"
             URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/duration"
-            results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+            results[f"l3_{dir.lower()}_duration"] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
             TITLE = f"l3attack_{dir.lower()}_protocol_time"
             URL = "https://api.cloudflare.com/client/v4/radar/attacks/layer3/timeseries_groups/protocol"
-            results[TITLE] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
+            results[f"l3_{dir.lower()}_protocol"] = _fetch_timedata(TITLE, URL, params, date_from, date_to)
     
-    if "httpreq_time" in results:
-        block = results["httpreq_time"]
+    if "httpreq" in results:
+        block = results["httpreq"]
         if isinstance(block, dict) and "timestamps" in block:
             results["timestamps"] = block.pop("timestamps")
+            results["httpreq"] = block["values"]
 
-    return results
+    return RegionTimeseriesFetchResult.from_dict(results)
 
 
 if __name__=="__main__": 
 
     country = "US"
-    DATE_FROM = datetime(2025, 11, 14, tzinfo=timezone.utc)
-    DATE_TO   = datetime(2025, 11, 14, tzinfo=timezone.utc)
+    DATE_FROM = datetime(2026, 2, 14, tzinfo=timezone.utc)
+    DATE_TO   = datetime(2026, 2, 14, tzinfo=timezone.utc)
     run_fetch(country, DATE_FROM, DATE_TO)

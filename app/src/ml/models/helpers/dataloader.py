@@ -1,11 +1,12 @@
 import numpy as np
+import numpy.typing as npt
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 
 def unsupervised_dataloader(
-    X_f: np.ndarray, 
-    X_i: np.ndarray,
+    X_f: npt.NDArray[np.float32],
+    X_i: npt.NDArray[np.int64],
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:
@@ -27,11 +28,11 @@ def unsupervised_dataloader(
     )
 
 def supervised_dataloader(
-    X_cont: np.ndarray,
-    X_cat: np.ndarray,
-    y_l3: np.ndarray,
-    y_l7: np.ndarray,
-    y_attack: np.ndarray,
+    X_cont: npt.NDArray[np.float32],
+    X_cat: npt.NDArray[np.int64],
+    y_l3: npt.NDArray[np.float32],
+    y_l7: npt.NDArray[np.float32],
+    y_attack: npt.NDArray[np.int64],
     batch_size: int,
     shuffle: bool,
 ) -> DataLoader:

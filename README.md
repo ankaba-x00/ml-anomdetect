@@ -26,6 +26,7 @@ A production-grade anomaly detection module that identifies abnormal network tra
 - <100ms Real-time inference (GPU/CPU) with CLI and web GUI interfaces
 - Containerization with Docker
 - CI/CD-ready project structure with modular pipelines
+- Automatic type checking with mypy
 - Monitoring-ready with analysis pipelines & structured result folders
 
 ## Model details
@@ -90,18 +91,18 @@ Below is a minimal quick-start.
     
 
 - Run following commands in $PROJECT_ROOT which is ./ml-anomdetect
-- Specify countries you want to build as models in: ./ml-anomdetect/app/src/config/models.yml
+- Specify countries you want to build as models in: ./ml-anomdetect/app/config/models.yml
 - Flag -h gives more information on usage, flags, print verbosity etc.
 - Example below is for AT model (use <all> for all countries specified in models.yml)
 
-### 2. Data acquision and preprocessing
+### 2. Data acquision, processing and building features
     
-    python -m app.src.data.fetch
-    python -m app.src.data.preprocess
+    python -m app.src.pipelines.fetch_dataset -S 09/09/2025 -E 09/09/2026 -A
+    python -m app.src.pipelines.process_dataset -S all 1
+    python -m app.src.pipelines.build_features -B -S super AT
     
 ### 3. Multi-task model training, validation, tuning, testing
     
-    python -m app.src.pipelines.build_features -B -S super AT
     python -m app.src.pipelines.train_model config mtae AT
     python -m app.src.pipelines.validate_model mtae AT
     python -m app.src.pipelines.tune_model --ntrials 60 --pruner hyperband mtae AT
@@ -109,6 +110,7 @@ Below is a minimal quick-start.
     
 ### 4. Analysis training, validation, tuning, testing
     
+    python -m app.src.pipelines.analyze_dataset
     python -m app.src.pipelines.analyze_labels mtae AT
     python -m app.src.pipelines.analyze_training mtae AT
     python -m app.src.pipelines.analyze_tuning mtae AT
@@ -117,7 +119,7 @@ Below is a minimal quick-start.
 ### 5. Run inference
     python -m app.src.pipelines.train_model -F config mtae AT
     # CLI 
-    python -m app.deployment.run_inference -d 01/01/2026 AT
+    python -m app.deployment.use_model -d 01/01/2026 mtae AT
     # GUI 
     docker-compose up --build
 
@@ -129,12 +131,11 @@ app/
 ├── deployment/       # Production models & inference as CLI
 ├── src/
 │   ├── config/       # Set countries, model configuration & tuning search space
-│   ├── data/         # Data ingestion & preprocessing
-│   ├── exploration/  # Data EDA, diagnostics & visualizations
-│   ├── ml/           # All DL helper incl. models, training, tuning, & analysis 
-│   └── pipelines/    # Training, validation, tuning, testing & analysis workflows
+│   ├── data/         # Data helpers for ingestion, processing & analysis
+│   ├── ml/           # ML helper incl. models, training, tuning, & analysis 
+│   └── pipelines/    # Fetch, build, train, validate, tune, test & analyze workflows
 └── tests/            # PyTest-based unit tests
-results/              # All workflow artifacts incl. models, scalars, summaries & plots
+results/              # Workflow artifacts incl. models, scalars, summaries & plots
 bin/                  # Automation & maintenance tasks
 ```
 

@@ -8,7 +8,7 @@ B) MTAE to predict L3/L7 intensities and attack types
 - (optional) performs latent space analysis
 
 Output: 
-    PATH : results/ml/validated/<MODEL>
+    PATH: results/ml/validated/<MODEL>
     FILES : <COUNTRY>_validation.csv
             analysis/<COUNTRY>_latent_space_pca_coords.csv
             analysis/<COUNTRY>_latent_space.png
@@ -21,15 +21,22 @@ import pickle, torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from sklearn.preprocessing import RobustScaler
+from typing import Literal
 
-from app.src.data import ID_TO_ATTACK, ISO_3166_alpha2, timeseries_seq_split
-from app.src.data.feature_engineering import (
+from app.src.data.building import ID_TO_ATTACK
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.processing import timeseries_seq_split
+from app.src.data.building.feature_engineering import (
     COUNTRIES, 
     load_feature_matrix, 
     load_supervised_feature_matrix
 )
 from app.src.ml.analysis import plot_latent_space
+from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.configs import MTAEConfig
 from app.src.ml.models.helpers import load_autoencoder
+from app.src.ml.models.vae import TabularVAE
 from app.src.ml.training.anomaly_utils import get_threshold
 from app.src.ml.training.evaluate_ae import apply_model
 from app.src.ml.training.evaluate_mt import apply_mt_model
@@ -42,7 +49,7 @@ OUT_DIR = PROJECT_ROOT / "results" / "ml" / "validated"
 
 
 def validate_model(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     country: str, 
     tr: int, 
     vr: int,
@@ -71,54 +78,57 @@ def validate_model(
     # --------------------
     # Load model, weights, config, scaler
     # --------------------
-    model, cfg, model_num_cont, model_cat_dims, metadata = load_autoencoder(model_path, metadata=True)
+    model_bundle = load_autoencoder(model_path)
 
-    try:
-        loss_weights = metadata["loss_weights"]
+    if model_bundle.metadata is not None:
+        loss_weights = model_bundle.metadata["loss_weights"]
         if ae_type in ["mtae"]:
-            attack_type_weights = torch.Tensor(metadata["attack_type_weights"])
-    except KeyError:
-        print("[ERROR] No weights saved in model metadata")
+            attack_type_weights = torch.Tensor(model_bundle.metadata["attack_type_weights"])
     
     with open(scaler_path, "rb") as f:
-        scaler = pickle.load(f)
+        scaler: RobustScaler = pickle.load(f)
 
     # --------------------
     # Load feature matrix
     # --------------------
     if ae_type in ["ae", "vae"]:
-        X_cont, X_cat, num_cont, cat_dims = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
     else:
-        X_cont, X_cat, y_l3, y_l7, y_at, num_cont, cat_dims = (
+        fmatrix = (
             load_supervised_feature_matrix(country)
         )
 
-    assert model_num_cont == num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
-    assert model_cat_dims == cat_dims, "[ERROR] cant_dims mismatch between scaler and feature matrix"
-
-    Xc = X_cont.values.astype(np.float32)
-    Xk = X_cat.values.astype(np.int64)
-    ts = X_cont.index
-    if ae_type in ["mtae"]:
-        y3 = y_l3.values.astype(np.float32)
-        y7 = y_l7.values.astype(np.float32)
-        ya = y_at.values.astype(np.int64)
+    assert model_bundle.num_cont == fmatrix.num_cont, "[ERROR] num_cont mismatch between scaler and feature matrix"
+    assert model_bundle.cat_dims == fmatrix.cat_dims, "[ERROR] cant_dims mismatch between scaler and feature matrix"
+    
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+    Xk = fmatrix.X_cat.to_numpy(dtype=np.int64)
+    ts = pd.to_datetime(fmatrix.X_cont.index)
+    if (
+        ae_type in ["mtae"]
+        and fmatrix.y_l3 is not None
+        and fmatrix.y_l7 is not None
+        and fmatrix.y_at is not None
+    ):
+        y3 = fmatrix.y_l3.to_numpy(dtype=np.float32)
+        y7 = fmatrix.y_l7.to_numpy(dtype=np.float32)
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     # --------------------
     # Split dataset
     # --------------------
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
-    (Xc_tr, _), (Xc_val, Xk_val), _ = timeseries_seq_split(
-        Xc, Xk,
+    [Xc_tr, _], [Xc_val, Xk_val], _ = timeseries_seq_split(
+        [Xc, Xk],
         tr/100,
         vr/100,
     )
     ts_val = ts[len(Xc_tr): len(Xc_tr) + len(Xc_val)]
 
     if ae_type in ["mtae"]:
-        _, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
-        _, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
-        _, ya_val, _ = timeseries_seq_split(ya, None, tr/100, vr/100)
+        _, [y3_val], _ = timeseries_seq_split([y3], tr/100, vr/100)
+        _, [y7_val], _ = timeseries_seq_split([y7], tr/100, vr/100)
+        _, [ya_val], _ = timeseries_seq_split([ya], tr/100, vr/100)
     
     # --------------------
     # Scale cont features
@@ -128,27 +138,27 @@ def validate_model(
     # --------------------
     # Apply model
     # --------------------
-    if ae_type in ["ae", "vae"]:
+    if isinstance(model_bundle.model, (TabularAE, TabularVAE)):
         result = apply_model(
-            model=model,
+            model=model_bundle.model,
             X_cont=Xc_val_scald,
             X_cat=Xk_val,
             loss_weights=loss_weights,
-            device=cfg.device,
+            device=model_bundle.cfg.device,
             method=method,
-            temperature=cfg.temperature,
-            beta=getattr(cfg, "beta", 1.0),
+            temperature=model_bundle.cfg.temperature
         )
     else:
         # --------------------
         # Set quantiles
         # --------------------
-        med_q = cfg.quantiles.index(0.5)
-        pred_quantiles = cfg.quantiles[med_q:]
-        print(f"[INFO] Quantiles used for prediction: {pred_quantiles}")
+        if isinstance(model_bundle.cfg, MTAEConfig):
+            med_q = model_bundle.cfg.quantiles.index(0.5)
+            pred_quantiles = model_bundle.cfg.quantiles[med_q:]
+            print(f"[INFO] Quantiles used for prediction: {pred_quantiles}")
 
         result = apply_mt_model(
-            model=model,
+            model=model_bundle.model,
             X_cont=Xc_val_scald,
             X_cat=Xk_val,
             y_l3=y3_val,
@@ -160,31 +170,27 @@ def validate_model(
             method=method,
             min_length=1,
             merge_gap=0,
-            device=cfg.device
+            device=model_bundle.cfg.device
         )
 
-    scores = result["scores"]
-    threshold = result["threshold"]
-    mask = result["mask"]
-    starts = result["anomaly_starts"]
-    ends = result["anomaly_ends"]
-
-    if ae_type in ["mtae"]:
-        l3_preds = result["l3_pred"][0.5]
-        l7_preds = result["l7_pred"][0.5]
+        l3_preds = result["l7_pred_0.5"]
+        l7_preds = result["l7_pred_0.5"]
         at_preds = result["at_pred"]
 
     # --------------------
     # Print summary
     # --------------------
     print("\n--- Validation Summary ---")
-    print(f"Total samples: {len(scores)}")
-    print(f"Threshold ({method}): {threshold:4f}")
-    print(f"Flagged samples: {int(mask.sum())}")
-    print(f"Flagged intervals = {len(starts)}\n")
+    print(f"Total samples: {len(result.scores)}")
+    print(f"Threshold ({method}): {result.threshold:4f}")
+    print("Quantile: 0.5")
+    print(f"Flagged samples: {int(result.mask.sum())}")
+    print(f"Flagged intervals = {len(result.anom_starts)}\n")
 
-    for s, e in zip(starts, ends):
-        interval_str = f"{ts_val[s].strftime('%d/%m/%y,%H:%M')} - {ts_val[e-1].strftime('%d/%m/%y,%H:%M')} ({e-s} anomalies)"
+    for s, e in zip(result.anom_starts, result.anom_ends):
+        start = ts_val[s].strftime("%d/%m/%y,%H:%M")
+        end = ts_val[e-1].strftime("%d/%m/%y,%H:%M")
+        interval_str = f"{start} - {end} ({e-s} anomalies)"
         print(f"  > Interval {interval_str}")
         if ae_type in ["mtae"]:
             print(
@@ -194,22 +200,20 @@ def validate_model(
             )
 
     print(f"\nScore Statistics:")
-    print(f"Min:       {scores.min():.6f}")
-    print(f"Max:       {scores.max():.6f}")
-    print(f"Mean:      {scores.mean():.6f}")
-    print(f"Std:       {scores.std():.6f}")
-    print(f"Score {method}: {get_threshold(method, scores):4f}\n")
-
-    
+    print(f"Min:       {result.scores.min():.6f}")
+    print(f"Max:       {result.scores.max():.6f}")
+    print(f"Mean:      {result.scores.mean():.6f}")
+    print(f"Std:       {result.scores.std():.6f}")
+    print(f"Score {method}: {get_threshold(method, result.scores):4f}\n")
 
     # ------------------------------------
     # Save artefacts
     # ------------------------------------
     df_out = pd.DataFrame({
         "ts": ts_val,
-        "scores": scores,
-        "threshold": threshold,
-        "is_flagged": mask.astype(int),
+        "scores": result.scores,
+        "threshold": result.threshold,
+        "is_flagged": result.mask.astype(int),
     })
 
     if ae_type in ["mtae"]:
@@ -225,9 +229,9 @@ def validate_model(
             "l7_true": y7_val,
         }
         for q in pred_quantiles:
-            mt_dict_out[f"l3_pred_{q}"] = result["l3_pred"][q]
-            mt_dict_out[f"l7_pred_{q}"] = result["l7_pred"][q]
-        df_out = pd.concat([df_out, pd.DataFrame(mt_dict_out)], ignore_index=True)
+            mt_dict_out[f"l3_pred_{q}"] = result[f"l3_pred_{q}"]
+            mt_dict_out[f"l7_pred_{q}"] = result[f"l7_pred_{q}"]
+        df_out = pd.concat([df_out, pd.DataFrame(mt_dict_out)], axis=1)
 
     val_path = out_path / f"{country}_validation.csv"
     df_out.to_csv(val_path, index=False)
@@ -245,8 +249,8 @@ def validate_model(
             country, 
             Xc_val_scald,
             Xk_val,
-            model,
-            cfg.device,
+            model_bundle.model,
+            model_bundle.cfg.device,
             1000,
             out_path,
             f"{country}_latent_space.png"
@@ -255,7 +259,7 @@ def validate_model(
     print(f"[DONE] Validated model for {country}")
 
 def validate_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     tr: int, 
     vr: int, 
     method: str,

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union
 import pandas as pd
 
 
@@ -55,15 +54,10 @@ def compute_attack_thresholds(df: pd.DataFrame) -> AttackThresholds:
 
 def score_attack_types(
     row: pd.Series,
-    thresholds: AttackThresholds,
-    return_scores: bool = False
-) -> Union[int, dict[str, float]]:
+    thresholds: AttackThresholds
+) -> dict[str, float]:
     """
-    Stage A : Attack label derivation with scoring system.
-    Returns
-    -------
-    if return_scores = False : single label index (0-7)
-    if returns_scores = True : scores dict
+    Stage A : Attack label derivation with scoring.
     """
     # extract features
     udp = float(row.get("udp_frac", 0.0))
@@ -79,7 +73,7 @@ def score_attack_types(
     bots = float(row.get("bots_total", 0.0))
     
     # calculate normalized scores (0-1 range)
-    def norm(x, ref):
+    def norm(x: float, ref: float) -> float:
         return min(x / ref, 2.0) / 2.0 if ref > 0 else 0.0
 
     l3_norm = norm(l3, thresholds.L3_HIGH)
@@ -90,7 +84,7 @@ def score_attack_types(
     bots_norm = norm(bots, thresholds.BOTS_HIGH)
     
     # use dynamic protocol thresholds if available
-    def eval_thres(thres, val):
+    def eval_thres(thres: float, val: float) -> float:
         return thres if thres > 0 else val
     
     udp_threshold = eval_thres(thresholds.UDP_DOMINANT, 0.6)
@@ -203,15 +197,13 @@ def score_attack_types(
     scores["normal"] = max(0.0, 1 - 1.2 * max_attack)
     
     # find best label and apply minimum confidence threshold (except for normal)
-    best_label = max(scores, key=scores.get)
-    best_score = scores[best_label]
-    
-    if best_label != "normal" and best_score < 0.3:
-        best_label = "normal"
-    
-    if return_scores:
-        return scores
-    return ATTACK_TO_ID[best_label]
+    # best_label, best_score = max(scores.items(), key=lambda item: item[1])
+    # if best_label != "normal" and best_score < 0.3:
+    #     best_label = "normal"
+    # if return_best_idx:
+    #     return ATTACK_TO_ID[best_label]
+
+    return scores
 
 def temporal_attack_labeling(
     semantic_labels: pd.Series,
@@ -220,9 +212,6 @@ def temporal_attack_labeling(
 ) -> pd.Series:
     """
     Stage B : temporal validation of sematic attack labels; never re-classifies attack type.
-    Returns
-    -------
-    semantic labels as pd.Series 
     """
 
     final = semantic_labels.copy()

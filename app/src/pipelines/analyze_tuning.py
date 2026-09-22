@@ -6,7 +6,7 @@ Analyze model performance after tuning for one or multiple countries:
 - (optional) performs multi-country comparison
 
 Output:
-    PATH : results/ml/tuned/analysis/<MODEL>/<COUNTRY>
+    PATH: results/ml/tuned/analysis/<MODEL>/<COUNTRY>
     FILES : <RETUNE_NO>_optimization_history.png | .html, 
             <RETUNE_NO>_param_importance.png | .html, 
             <RETUNE_NO>_parallel_coordinates.png | .html, 
@@ -20,7 +20,7 @@ Output:
             <RETUNE_NO>_loss_component_analysis.png,
     Add. FILES for MTAE: <RETUNE_NO>attack_type_weights.png
                          <RETUNE_NO>attack_type_balance.png
-    PATH : results/ae_ml/tuned/analysis/<MODEL>/_multi
+    PATH: results/ae_ml/tuned/analysis/<MODEL>/_multi
     FILES : <RETUNE_NO>_best_losses.png, 
             <RETUNE_NO>_best_losses.json, 
             <RETUNE_NO>_best_weights.png, 
@@ -37,9 +37,11 @@ import json, optuna
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from typing import Literal
 
-from app.src.data import ATTACK_LABELS, ISO_3166_alpha2
-from app.src.data.feature_engineering import COUNTRIES
+from app.src.data.building import ATTACK_LABELS
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.building.feature_engineering import COUNTRIES
 from app.src.ml.analysis import (
     save_optuna_plots,
     plot_correlation_heatmap,
@@ -83,7 +85,7 @@ def make_trial_dataframe(study: optuna.Study) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 def multi_analyze(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     retune_no: int = 0,
     show_plots: bool = False
 ) -> None:
@@ -172,7 +174,7 @@ def multi_analyze(
         print(f"[OK] Saved to {weights_fname}")
     else:
         plot_multi_mt_weights_overview(
-            weights_data, 
+            weights_data,
             out_path, 
             f"{retune_no}_best_weights.png", 
             show_plots
@@ -206,7 +208,7 @@ def multi_analyze(
     print(f"[OK] Multi-country comparison completed!")
 
 def analyze_tuning(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     country: str, 
     multi: bool, 
     all: bool, 
@@ -246,7 +248,12 @@ def analyze_tuning(
         f"{retune_no}_correlation_heatmap.png", 
         show_plots
     )
-    plot_3d_scatter(df, out_path, f"{retune_no}_3d_scatter.png", show_plots)
+    plot_3d_scatter(
+        df, 
+        out_path, 
+        f"{retune_no}_3d_scatter.png", 
+        show_plots
+    )
     plot_loss_curves_all_trials(
         study,
         country,
@@ -292,7 +299,7 @@ def analyze_tuning(
             type_weights = study.best_trial.user_attrs["attack_type_weights"]
             plot_attack_type_weights(
                 country,
-                np.array(type_weights),
+                np.array(type_weights, dtype=np.float32),
                 ATTACK_LABELS,
                 out_path,
                 f"{retune_no}_attack_type_weights.png",
@@ -303,9 +310,9 @@ def analyze_tuning(
             val_type_counts = study.best_trial.user_attrs["val_at_counts"]
             plot_attack_type_balance(
                 country,
-                np.array(type_weights),
-                np.array(train_type_counts),
-                np.array(val_type_counts),
+                np.array(type_weights, dtype=np.float32),
+                np.array(train_type_counts, dtype=np.int64),
+                np.array(val_type_counts, dtype=np.int64),
                 ATTACK_LABELS,
                 out_path,
                 f"{retune_no}_attack_type_balance.png",
@@ -322,7 +329,7 @@ def analyze_tuning(
         )
 
 def analyze_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     multi: bool, 
     retune_no: int,
     show_plots: bool

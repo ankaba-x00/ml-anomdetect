@@ -5,8 +5,13 @@
 ##################################
 
 ### DATE RANGE ###
-START_DATE="08/01/2025"  # format MM/DD/YYYY
-END_DATE="08/31/2025"  # format MM/DD/YYYY
+START_DATE="08/01/2026"  # format MM/DD/YYYY
+END_DATE="08/31/2026"  # format MM/DD/YYYY
+
+### PROCESS DATASETS ###
+# processes final dataset
+# set true, if dataset is fetched in one round or with last fetch round before you continue
+PROCESS=true
 
 ### TOGGLE DATASSET GROUPS ###
 FETCH_ALL=false
@@ -86,9 +91,27 @@ $FETCH_L7_TIME && ARGS+=" -l7t"
 # EXECUTION  - DO NOT EDIT #
 ############################
 
+echo "===================================="
 echo "[FETCH] Executing:"
 echo "python -m app.src.data.fetch $ARGS"
 eval python -m app.src.data.fetch $ARGS
 echo "[FETCH] Completed!"
+
+if [ "$PROCESS" == true ]; then
+    echo "===================================="
+    echo "[PROCESS] Executing:"
+    echo "python -m app.src.pipelines.process_dataset -S all 0"
+    eval python -m app.src.pipelines.process_dataset -S all 0
+    echo "[PROCESS] Completed!"
+    echo
+
+    echo "===================================="
+    echo "[ANALYZE] Executing:"
+    echo "python -m app.src.pipelines.analyze_dataset"
+    eval python -m app.src.pipelines.analyze_dataset
+    echo "[ANALYZE] Completed!"
+    echo
+fi
+
 echo 
 echo "[DONE] Full fetch workflow completed!"

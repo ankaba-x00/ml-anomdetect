@@ -1,25 +1,26 @@
 from pathlib import Path
 import seaborn as sns
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from typing import cast
 
 from app.src.ml.models.ae import TabularAE
 from app.src.ml.models.vae import TabularVAE
 from app.src.ml.models.mtae import MTTabularAE
 
 
-custom_rc = {
+custom_rc: dict[str, int | float | str] = {
     "figure.titlesize": 22,
     "axes.titlesize": 20,
     "axes.labelsize": 18,
     "xtick.labelsize": 14,
     "ytick.labelsize": 14,
-    "font.family": "Arial",
+    "font.family": "sans-serif",
     "legend.title_fontsize": 14,
     "legend.fontsize": 12,
     "grid.alpha": 0.4,
@@ -29,13 +30,12 @@ custom_rc = {
 
 def apply_custom_theme() -> None:
     """Apply consistent Matplotlib styling."""
-    mpl.rcParams.update(custom_rc)
-    sns.set_style("whitegrid")
+    sns.set_theme(style="whitegrid", rc=custom_rc)
 
 def plot_latent_space(
     country: str,
-    X_cont: np.ndarray,
-    X_cat: np.ndarray,
+    X_cont: npt.NDArray[np.float32],
+    X_cat: npt.NDArray[np.int64],
     model: TabularAE | TabularVAE | MTTabularAE,
     device: str,
     max_samples: int = 1000,
@@ -57,9 +57,9 @@ def plot_latent_space(
     
     model.eval()
     with torch.no_grad():
-            z = model.encode(Xc_tensor, Xk_tensor).cpu().numpy()
-            # TODO: rewrite mte to use encode()
-            #z = model.encoder(Xc_tensor, Xk_tensor).cpu().numpy()
+            z = model.encode(Xc_tensor, Xk_tensor)
+
+    z = cast(torch.Tensor, z).detach().cpu().numpy()
     if len(z) < 10:
         print(f"[INFO] Not enough samples for latent space visualization: {len(z)}")
         return

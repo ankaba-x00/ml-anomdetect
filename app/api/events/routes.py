@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from datetime import timezone
 
-from app.src.data.feature_engineering import COUNTRIES
+from app.src.data.building.feature_engineering import COUNTRIES
 from app.deployment.use_model import use_model
 from app.api.events.schema import PredictionRequest, PredictionResponse, MTPredictionResponse
 
@@ -9,15 +9,17 @@ from app.api.events.schema import PredictionRequest, PredictionResponse, MTPredi
 router = APIRouter()
 
 @router.get("/healthz")
-def health_check():
+def health_check() -> dict[str, bool]:
     return {"running": True}
 
 @router.get("/countries")
-def get_countries():
+def get_countries() -> dict[str, list[str]]:
     return {"countries": COUNTRIES}
 
-@router.post("/infer")
-def infer(request: PredictionRequest):
+ResponseType = PredictionResponse | MTPredictionResponse
+
+@router.post("/infer", response_model=ResponseType)
+def infer(request: PredictionRequest) -> ResponseType:
     model = request.model.lower()
     if model not in ["ae", "vae", "mtae"]:
         raise HTTPException(status_code=400, detail=f"Unknown model: {model}")

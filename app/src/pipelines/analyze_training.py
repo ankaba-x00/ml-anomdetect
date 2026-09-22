@@ -27,9 +27,11 @@ Usage:
 import json
 from pathlib import Path
 import pandas as pd
+import numpy as np
+from typing import Literal
 
-from app.src.data import ISO_3166_alpha2
-from app.src.data.feature_engineering import COUNTRIES
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.building.feature_engineering import COUNTRIES
 from app.src.ml.analysis import (
     plot_training_curves, 
     plot_detailed_loss_curves, 
@@ -53,9 +55,9 @@ VAL_DIR = PROJECT_ROOT / "results" / "ml" / "validated"
 
 
 def analyze_training(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     country: str, 
-    method: bool,
+    method: str,
     show_plots: bool
 ) -> None:
     """Runs full analysis pipeline for autoencoder after training and validation."""
@@ -87,7 +89,7 @@ def analyze_training(
     # --------------------
     # Set config
     # --------------------
-    threshold = get_threshold(method, val_df["scores"])
+    threshold = get_threshold(method, val_df["scores"].to_numpy(dtype=np.float32))
     if ae_type in ["mtae"]:
         pred_quantiles = [0.5, 0.75, 0.9]
         print(f"[INFO] Quantiles used for prediction: {pred_quantiles}")
@@ -148,8 +150,8 @@ def analyze_training(
     else:
         for q in pred_quantiles:
             plot_regression_scatter(
-                val_df["l3_true"],
-                val_df[f"l3_pred_{q}"],
+                val_df["l3_true"].to_numpy(dtype=np.float32),
+                val_df[f"l3_pred_{q}"].to_numpy(dtype=np.float32),
                 f"L3 Intensity [{int(q*100)}th]",
                 5000,
                 out_val,
@@ -157,8 +159,8 @@ def analyze_training(
                 show_plots
             )
             plot_regression_scatter(
-                val_df["l7_true"],
-                val_df[f"l7_pred_{q}"],
+                val_df["l7_true"].to_numpy(dtype=np.float32),
+                val_df[f"l7_pred_{q}"].to_numpy(dtype=np.float32),
                 f"L7 Intensity [{int(q*100)}th]",
                 5000,
                 out_val,
@@ -197,7 +199,7 @@ def analyze_training(
 
 
 def analyze_all(
-    ae_type: str, 
+    ae_type: Literal["ae", "vae", "mtae"], 
     method: str,
     show_plots: bool
 ) -> None:    

@@ -5,8 +5,29 @@ import torch.nn.functional as F
 
 class TabularFeatureEncodeMixin:
     """
-    Stateless Helper Mixin providing functionality for categorical feature encoding for tabular autoencoders during encoding phase.
+    Stateless Feature Mixin providing functionality preprosessing categorical features via encoding or embedding.
     """
+
+    def prepare_input(
+        self, 
+        x_cont: torch.Tensor, 
+        x_cat: torch.Tensor,
+        use_embedding: bool,
+        cat_dims: dict[str, int],
+        embeddings: nn.ModuleDict | None = None
+    ) -> torch.Tensor:
+        if use_embedding and embeddings is not None:
+            x_cat_e = TabularFeatureEncodeMixin._embed(
+                x_cat, 
+                cat_dims, 
+                embeddings
+            )
+        else:
+            x_cat_e = TabularFeatureEncodeMixin._encod(
+                x_cat, 
+                cat_dims
+            )
+        return torch.cat([x_cont, x_cat_e], dim=1)
 
     @staticmethod
     def _embed(
@@ -47,7 +68,7 @@ class TabularFeatureForwardMixin:
         x_cat: torch.Tensor,
         noise_gauss_std: float,
         noise_mask_prob: float
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, ...]:
         """Inject noise to continuous and categorical features enabling denoising autoencoder"""
 
         # Cont: adds Gaussian noise

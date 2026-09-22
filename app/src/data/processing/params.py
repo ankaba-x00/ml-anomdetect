@@ -1,0 +1,48 @@
+DSFILE_MAP = {
+    "aibots_crawlers_time": [True, False, "aibots_crawlers_time_pull"],
+    "anomalies": [False, False, "anomalies_pull"],
+    "bots_time": [True, False, "bots_time_pull"],
+    "httpreq_time": [True, False, "httpreq_time_pull"],
+    "httpreq_automated_time": [True, False, "httpreq_automated_time_pull"],
+    "httpreq_human_time": [True, False, "httpreq_human_time_pull"],
+    "httpreq": [False, False, "httpreq_pull"],
+    "traffic_time": [True, False, "traffic_time_pull"],
+    "traffic": [False, False, "traffic_pull"],
+    "iq_bandwidth_time": [True, False, "inetqal_bandwidth_time_pull"],
+    "iq_dns_time": [True, False, "inetqal_dns_time_pull"],
+    "iq_latency_time": [True, False, "inetqal_latency_time_pull"],
+    "l3_origin": [False, True, "l3attack_origin_pull"],
+    "l3_origin_time": [True, False, "l3attack_origin_time_pull"],
+    "l3_origin_bitrate_time": [True, False, "l3attack_origin_bitrate_time_pull"],
+    "l3_origin_protocol_time": [True, False, "l3attack_origin_protocol_time_pull"],
+    "l3_origin_duration_time": [True, False, "l3attack_origin_duration_time_pull"],
+    "l3_target": [False, True, "l3attack_target_pull"],
+    "l3_target_time": [True, False, "l3attack_target_time_pull"],
+    "l3_target_bitrate_time": [True, False, "l3attack_target_bitrate_time_pull"],
+    "l3_target_duration_time": [True, False, "l3attack_target_duration_time_pull"],
+    "l3_target_protocol_time": [True, False, "l3attack_target_protocol_time_pull"],
+    "l7_target": [False, True, "l7attack_target_pull"],
+    "l7_time": [True, False, "l7attack_time_pull"],
+    "l7_mitigations_time": [True, False, "l7attack_mitigations_time_pull"],
+    "l7_origin": [False, True, "l7attack_origin_pull"]
+} # name: time_data, csplit, file
+
+FIELD_MAP = {
+    "bitrate": [
+        "UNDER_500_MBPS",
+        "_500_MBPS_TO_1_GBPS",
+        "_1_GBPS_TO_10_GBPS",
+        "_10_GBPS_TO_100_GBPS",
+        "OVER_100_GBPS",
+    ],
+    "duration": [
+        "UNDER_10_MINS",
+        "_10_MINS_TO_20_MINS",
+        "_20_MINS_TO_40_MINS",
+        "_40_MINS_TO_1_HOUR",
+        "_1_HOUR_TO_3_HOURS",
+        "OVER_3_HOURS",
+    ],
+    "protocol": ["UDP", "TCP", "ICMP", "GRE"],
+    "default": ["values"],
+}

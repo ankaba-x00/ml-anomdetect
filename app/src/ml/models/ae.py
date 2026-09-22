@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 
-from .base import BaseTabularEncoder, BaseTabularDecoder, BaseTabularPredictor
-from .configs import AEConfig, MTAEConfig
-from .mixins import TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularLayerInitMixin, TabularReconScoringMixin
+from .base import TabularBase, SharedEncoder, SharedDecoder
+from .configs import AEConfig, VAEConfig, MTAEConfig
+from .mixins import TabularDecodePassingMixin, TabularEncodePassingMixin, TabularFeatureForwardMixin, TabularLayerInitMixin, TabularReconScoringMixin
 
 
-class Encoder(BaseTabularEncoder, TabularLayerInitMixin):
+class Encoder(SharedEncoder[AEConfig | MTAEConfig], TabularLayerInitMixin):
     """
     Encoder class for AE model.
     """
@@ -14,7 +14,7 @@ class Encoder(BaseTabularEncoder, TabularLayerInitMixin):
     def __init__(
         self,
         config: AEConfig | MTAEConfig
-    ):
+    ) -> None:
         super().__init__(config=config)
         
         self.config = config
@@ -30,15 +30,15 @@ class Encoder(BaseTabularEncoder, TabularLayerInitMixin):
         self.init_head(self.comp_head, self.config.activation_en)
 
 
-class Decoder(BaseTabularDecoder, TabularLayerInitMixin):
+class Decoder(SharedDecoder[AEConfig | VAEConfig], TabularLayerInitMixin):
     """
     Decoder class for AE model.
     """
 
     def __init__(
         self,
-        config: AEConfig
-    ):
+        config: AEConfig | VAEConfig
+    ) -> None:
         super().__init__(config=config)
         
         self.config = config
@@ -60,10 +60,11 @@ class Decoder(BaseTabularDecoder, TabularLayerInitMixin):
         self.init_head(self.cont_recon_head, self.config.activation_de)
 
         for module in self.cat_recon_heads.children():
-            self.init_head(module, self.config.activation_de)
+            if isinstance(module, nn.Linear):
+                self.init_head(module, self.config.activation_de)
 
 
-class TabularAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureForwardMixin, TabularReconScoringMixin):
+class TabularAE(TabularEncodePassingMixin[AEConfig], TabularDecodePassingMixin[AEConfig], TabularBase[AEConfig], TabularFeatureForwardMixin, TabularReconScoringMixin):
     """
     Hybrid tabular AE with:
       - cont and cat inputs
@@ -76,61 +77,12 @@ class TabularAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureF
 
     def __init__(
         self,
-        config: AEConfig | MTAEConfig,
-    ):
-        super().__init__()
+        config: AEConfig
+    ) -> None:
+        super().__init__(config)
         self.config = config
         self.E = Encoder(config)
         self.D = Decoder(config)
-    
-    def encode(
-        self, 
-        x_cont: torch.Tensor, 
-        x_cat: torch.Tensor
-    ) -> torch.Tensor:
-        """Passes input through encoder and returns latent variables."""
-        
-        if self.config.use_embedding:
-            x_cat_e = self._embed(
-                x_cat, 
-                self.config.cat_dims, 
-                self.E.embeddings
-            )
-        else:
-            x_cat_e = self._encod(
-                x_cat, 
-                self.config.cat_dims
-            )
-
-        x = torch.cat([x_cont, x_cat_e], dim=1)
-        h = x
-        for layer in self.E.encoder_layers:
-            h = layer(h)
-        
-        z = self.E.comp_head(h)
-
-        return z
-
-    def decode(
-        self, 
-        z: torch.Tensor
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Decodes from latent space and applies temperature scaling."""
-        
-        h = z
-        for layer in self.D.decoder_layers:
-            h = layer(h)
-        
-        cont_recon = self.D.cont_recon_head(h)
-
-        cat_logits = {}
-        for name in self.config.cat_dims.keys():
-            logits = self.D.cat_recon_heads[name](h)
-            if self.config.temperature != 1.0:
-                logits = logits / self.config.temperature 
-            cat_logits[name] = logits
-        
-        return cont_recon, cat_logits
 
     def forward(
         self, 
@@ -163,7 +115,7 @@ class TabularAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureF
         loss_weights: dict[str, float],
         in_warmup: bool = False,
         reduction: str = "mean"
-    ) -> tuple[torch.Tensor] | torch.Tensor:
+    ) -> tuple[torch.Tensor, ...] | torch.Tensor:
         """Computes normalized weighted per-sample score and optionally reduces to average or sum."""
 
         cont_score, cat_score, per_sample_score = self.recon_scoring(
@@ -171,12 +123,14 @@ class TabularAE(BaseTabularPredictor, TabularFeatureEncodeMixin, TabularFeatureF
             x_cat,
             cont_recon,
             cat_logits,
-            self.config.cat_dims,
             loss_weights,
+            self.config.cat_dims,
             in_warmup
         )
 
         if reduction == "mean":
-            return cont_score, cat_score, per_sample_score.mean()
+            return cont_score, cat_score, torch.mean(per_sample_score)
+        elif reduction == "sum":
+            return cont_score, cat_score, torch.sum(per_sample_score)
         else:
             return per_sample_score

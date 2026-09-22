@@ -2,16 +2,18 @@ import json, optuna
 from pathlib import Path
 import numpy as np
 from sklearn.preprocessing import RobustScaler
+from typing import Literal
 
 from . import set_global_seeds, YMLReader
-from app.src.data.feature_engineering import load_feature_matrix, load_supervised_feature_matrix
-from app.src.data.split import timeseries_seq_split
+from app.src.data.building.feature_engineering import load_feature_matrix, load_supervised_feature_matrix
+from app.src.data.processing.split import timeseries_seq_split
+from app.src.ml.models.configs import AEConfig, MTAEConfig, VAEConfig
 from app.src.ml.training.train_ae import train_autoencoder
 from app.src.ml.training.train_mt import train_mt_autoencoder
 
 
 def objective(
-    ae_type: str,
+    ae_type: Literal["ae", "vae", "mtae"],
     trial: optuna.Trial,
     country: str, 
     tr: int, 
@@ -31,32 +33,36 @@ def objective(
     # Load feature matrix
     # ------------------------------------
     if ae_type in ["ae", "vae"]:
-        X_cont, X_cat, num_cont, cat_dims, = load_feature_matrix(country)
+        fmatrix = load_feature_matrix(country)
     else:
-        X_cont, X_cat, y_l3, y_l7, y_at, num_cont, cat_dims = (
+        fmatrix = (
             load_supervised_feature_matrix(country)
         )
-
-    Xc = X_cont.values.astype(np.float32)
-    Xk = X_cat.values.astype(np.int64)
-    if ae_type in ["mtae"]:
-        y3 = y_l3.values.astype(np.float32)
-        y7 = y_l7.values.astype(np.float32)
-        ya = y_at.values.astype(np.int64)
+    Xc = fmatrix.X_cont.to_numpy(dtype=np.float32)
+    Xk = fmatrix.X_cat.to_numpy(dtype=np.int64)
+    if (
+        ae_type in ["mtae"]
+        and fmatrix.y_l3 is not None
+        and fmatrix.y_l7 is not None
+        and fmatrix.y_at is not None
+    ):
+        y3 = fmatrix.y_l3.to_numpy(dtype=np.float32)
+        y7 = fmatrix.y_l7.to_numpy(dtype=np.float32)
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     # ------------------------------------
     # Split dataset
     # ------------------------------------
     print(f"[INFO] Dataset split ratio: {tr}% train | {vr}% val | {100-tr-vr}% test")
-    (Xc_tr, Xk_tr), (Xc_val, Xk_val), _ = timeseries_seq_split(
-        Xc, Xk,
+    [Xc_tr, Xk_tr], [Xc_val, Xk_val], _ = timeseries_seq_split(
+        [Xc, Xk],
         tr/100,
         vr/100
     )
     if ae_type in ["mtae"]:
-        y3_tr, y3_val, _ = timeseries_seq_split(y3, None, tr/100, vr/100)
-        y7_tr, y7_val, _ = timeseries_seq_split(y7, None, tr/100, vr/100)
-        ya_tr, ya_val, _ = timeseries_seq_split(ya, None, tr/100, vr/100)
+        [y3_tr], [y3_val], _ = timeseries_seq_split([y3], tr/100, vr/100)
+        [y7_tr], [y7_val], _ = timeseries_seq_split([y7], tr/100, vr/100)
+        [ya_tr], [ya_val], _ = timeseries_seq_split([ya], tr/100, vr/100)
 
     # ------------------------------------
     # Scale cont features
@@ -68,13 +74,13 @@ def objective(
     # ------------------------------------
     # Load search space config
     # ------------------------------------
-    cfg = YMLReader(ae_type, trial).load_search_space(num_cont, cat_dims)
+    cfg = YMLReader(ae_type, trial).load_search_space(fmatrix.num_cont, fmatrix.cat_dims)
 
     loss_weights = {
         "cont_w": cfg.cont_w, 
         "cat_w": cfg.cat_w
     }
-    if ae_type == "mtae":
+    if isinstance(cfg, MTAEConfig):
         loss_weights |= {
             "l3_w": cfg.lambda_l3,
             "l7_w": cfg.lambda_l7,
@@ -84,15 +90,15 @@ def objective(
     # ------------------------------------
     # Train model
     # ------------------------------------
-    if ae_type in ["ae", "vae"]:
-        model, history = train_autoencoder(
+    if isinstance(cfg, (AEConfig, VAEConfig)):
+        _, hist_tracker = train_autoencoder(
             Xc_tr_scald, Xk_tr,
             Xc_val_scald, Xk_val, 
             cfg,
             loss_weights
         )
     else:
-        model, history = train_mt_autoencoder(
+        _, hist_tracker = train_mt_autoencoder(
             Xc_tr_scald, Xk_tr, y3_tr, y7_tr, ya_tr,
             Xc_val_scald, Xk_val, y3_val, y7_val, ya_val,
             cfg,
@@ -102,8 +108,8 @@ def objective(
     # ------------------------------------
     # Score trial
     # ------------------------------------
-    best_epoch = np.argmin(history[f"val_loss"])
-    final_val_loss = history[f"val_loss"][best_epoch]
+    best_epoch: int = hist_tracker.best_epoch
+    final_val_loss: float = hist_tracker["val_loss"][best_epoch-1]
 
     # ------------------------------------
     # Report trial
@@ -111,18 +117,18 @@ def objective(
     trial.report(final_val_loss, step=0)
     # Store additional metrics
     trial.set_user_attr("config", cfg.__dict__)
-    trial.set_user_attr("best_epoch", int(best_epoch) if 'best_epoch' in locals() else -1)
+    trial.set_user_attr("best_epoch", best_epoch)
     if ae_type in ["mtae"]:
-        trial.set_user_attr("train_at_counts", history["train_at_counts"])
-        trial.set_user_attr("val_at_counts", history["val_at_counts"])
-        trial.set_user_attr("attack_type_weights", history["attack_type_weights"])
+        trial.set_user_attr("train_at_counts", hist_tracker["train_at_counts"])
+        trial.set_user_attr("val_at_counts", hist_tracker["val_at_counts"])
+        trial.set_user_attr("attack_type_weights", hist_tracker["attack_type_weights"])
 
     # ------------------------------------
     # Store trial
     # ------------------------------------
     trial_history_path = trial_path / f"{country}_trial_{trial.number:04d}_history.json"
     with open(trial_history_path, "w") as f:
-        json.dump(history, f, indent=2)
+        hist_tracker.to_json(f)
 
     # ------------------------------------
     # Prune

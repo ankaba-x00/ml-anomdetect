@@ -1,12 +1,12 @@
-# app/src/exploration/core/__init__.py
+# app/src/data/analysis/__init__.py
 """
-core data exploration 
+data analysis package 
 =====================
-this package provides core utilities for data processing, analysis and visualization.
+this package provides core utilities for data analysis
 - params : parameter dictionaries and configuration values
 - time_utils : functions for time and timezone data conversions
 - data_prep : utilities for transforming and enriching datasets
-- plots : standardized plotting utilities for data visualization
+- analysis_fetch : standardized plotting utilities for fetch stage
 """
 from .params import regions, continental_regions, timezones, tzoffset_to_regions
 from .time_utils import timeit

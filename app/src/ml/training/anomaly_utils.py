@@ -1,16 +1,16 @@
 import numpy as np
+import numpy.typing as npt
 
 
 def _threshold_percentile(
-    scores: np.ndarray, 
+    scores: npt.NDArray[np.float32], 
     p: float = 99.
 ) -> float:
     """Computes p-th percentile threshold."""
     return float(np.percentile(scores, p))
 
-
 def _threshold_mad(
-    scores: np.ndarray, 
+    scores: npt.NDArray[np.float32], 
     k: float = 6.0, 
     min_p: float = 99.5, 
     max_p: float = 99.9
@@ -32,7 +32,7 @@ def _threshold_mad(
 
     return float(thr)
 
-def get_threshold(method: str, scores: np.ndarray):
+def get_threshold(method: str, scores: npt.NDArray[np.float32]) -> float:
     if method == "p95":
         return _threshold_percentile(scores, p=95.)
     elif method == "p99":
@@ -45,14 +45,14 @@ def get_threshold(method: str, scores: np.ndarray):
         raise ValueError(f"[Error] Unknown threshold method: {method}")
 
 def get_anomaly_mask(
-    scores: np.ndarray, 
+    scores: npt.NDArray[np.float32], 
     threshold: float
-) -> np.ndarray:
+) -> npt.NDArray[np.bool_]:
     """Creates boolean mask for anomaly flagging."""
     return scores > threshold
 
 def find_anomalies(
-    mask: np.ndarray, 
+    mask: npt.NDArray[np.bool_], 
     min_length: int = 1,
     merge_gap: int = 0,
 ) -> list[tuple[int, int]]:
@@ -64,24 +64,21 @@ def find_anomalies(
         min_length : min anomaly sample length to be considered
         merge_gap : sample interval gap to merge 2 adjacent anomalies into one
     """
-    mask = mask.astype(bool)
     N = len(mask)
     if N == 0:
         return []
 
     intervals = []
-    in_anom = False
-    start = None
+    start: None | int = None
 
     # identify raw intervals
     for i, is_anom in enumerate(mask):
-        if is_anom and not in_anom:
-            in_anom = True
-            start = i
-        elif not is_anom and in_anom:
+        if is_anom and start is None:
+            start = i 
+        elif not is_anom and start is not None:
             intervals.append((start, i))
-            in_anom = False
-    if in_anom:
+            start = None
+    if start is not None:
         intervals.append((start, N))
 
     # filter by minimum length

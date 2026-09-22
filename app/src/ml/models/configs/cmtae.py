@@ -1,12 +1,13 @@
-import inspect, json, torch
-from dataclasses import asdict, dataclass
-from typing import Sequence, TextIO
+import torch
+from dataclasses import dataclass, field
+from typing import Sequence
 
-from app.src.data import ATTACK_LABELS
+from .cbase import SharedEncoderConfig, SharedMTDecoderConfig
+from app.src.data.building import ATTACK_LABELS
 
 
 @dataclass
-class MTAEConfig:
+class MTAEConfig(SharedEncoderConfig, SharedMTDecoderConfig):
     """
     Represents a MTAE config object for MTTabularAE.
     """
@@ -18,7 +19,7 @@ class MTAEConfig:
     embedding_dim: int | None = None
     depth: int = 2
     base_dim: int = 256
-    hidden_dims: Sequence[int] | None = None
+    hidden_dims: Sequence[int] = field(init=False)
     latent_dim: int = 32
     activation_en: str = "relu"
     activation_de: str = "relu"
@@ -50,24 +51,3 @@ class MTAEConfig:
     lambda_l7: float = 1.0
     lambda_at: float = 1.0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    
-    def __post_init__(self):
-        self.hidden_dims = [max(32, int(self.base_dim / (2**i))) for i in range(self.depth)]
-
-    def to_json(self, file: TextIO) -> str:
-        return json.dump(asdict(self), file, indent=2)
-    
-    def get_args(self) -> set[str]:
-        sig = inspect.signature(self.__init__)
-    
-        return set([
-            name for name, param in sig.parameters.items()
-            if param.default is param.empty and name != "self"
-        ])
-    
-    def get_kwargs(self) -> set[str]:
-        sig = inspect.signature(self.__class__)
-        return set([
-            name for name, param in sig.parameters.items()
-            if param.default is not param.empty
-        ])

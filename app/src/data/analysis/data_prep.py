@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Union
+import numpy.typing as npt
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import (
@@ -16,40 +16,43 @@ from .time_utils import (
 )
 
 
-#########################################
-##       VALUE DIST / ACT. FLUCT       ##
-#########################################
+def add_local_daytypes(
+    df: pd.DataFrame, 
+    tzmap: dict
+) -> pd.DataFrame:
+    """Adds columns for local time, weekday and daytype classification."""
 
-def add_local_daytypes(df: pd.DataFrame, tzmap: dict) -> pd.DataFrame:
-    """Adds columns for local time and weekday/weekend classification."""
     df = df.copy()
+
     df["dates"] = conv_iso_to_utc(df["dates"])
+
     converted = df.apply(
         lambda row: conv_iso_to_local_with_daytype(row["dates"], row["countries"], tzmap),
         axis=1
-    )
-    df["local_time"] = converted.apply(lambda val: val["local_time"])
-    df["weekday"] = converted.apply(lambda val: val["weekday"])
-    df["daytype"] = converted.apply(lambda val: val["daytype"])
+    ).apply(pd.Series)
 
-    return df
+    df_wday: pd.DataFrame = pd.concat([df, converted], axis=1)
 
+    return df_wday
 
-def add_local_daytimes(df: pd.DataFrame, tzmap: dict) -> pd.DataFrame:
+def add_local_daytimes(
+    df: pd.DataFrame, 
+    tzmap: dict
+) -> pd.DataFrame:
     """Adds local time, local hour, and daytime classification per country's timezone."""
+
     df = df.copy()
     df["timestamps"] = conv_iso_to_utc(df["timestamps"])
 
     converted = df.apply(
         lambda row: conv_iso_to_local_with_daytimes(row["timestamps"], row["regions"], tzmap),
         axis=1
-    )
+    ).apply(pd.Series)
 
-    df["local_time"] = converted.apply(lambda val: val["local_time"])
-    df["local_hour"] = converted.apply(lambda val: val["local_hour"])
-    df["daytime"] = converted.apply(lambda val: val["daytime"])
 
-    return df
+    df_wtimes: pd.DataFrame = pd.concat([df, converted], axis=1)
+
+    return df_wtimes
 
 
 def add_fluctuation_metrics(
@@ -61,12 +64,14 @@ def add_fluctuation_metrics(
     """
     Compute per-country median activity across daytimes and fluctuation metrics.
 
-    Returns:
+    Returns
+    =======
         DataFrame with additional columns for each daytime:
         - range: max - min
         - std: standard deviation
         - ratio: max / min
     """
+
     country_daytime_medians = (
         df.groupby([group_col, type_col])[value_col]
         .median()
@@ -83,16 +88,11 @@ def add_fluctuation_metrics(
     return country_daytime_medians
 
 
-#########################################
-##             CLUSTERING              ##
-#########################################
-
 def normalize_per_date(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Input:  df with columns: [countries, dates, values]
-    Output: pivot table normalized per date (columns sum to 1)
-    --> ALL COUNTRY SHARES SUM UP TO 1 PER DAY
+    Converts df columns [countries, dates, values] to pivot table normalized per date (all country shares sum up to 1 per day)
     """
+
     pivot = df.pivot(index="countries", columns="dates", values="values").fillna(0.0)
     norm = pivot.copy()
     for d in pivot.columns:
@@ -104,10 +104,8 @@ def normalize_per_date(df: pd.DataFrame) -> pd.DataFrame:
 
     return norm
 
-
 def aggregate_directional(df: pd.DataFrame) -> pd.Series:
     return df.groupby("countries")["values"].sum()
-
 
 def preprocess_matrix(
     df: pd.DataFrame, 
@@ -116,7 +114,8 @@ def preprocess_matrix(
     """
     Standardizes the input country × date matrix.
     Removes countries with extremely low activity.
-    """    
+    """
+
     # Drop all-zero rows
     activity = df.sum(axis=1)
     keep = activity[activity > min_activity].index
@@ -126,9 +125,8 @@ def preprocess_matrix(
 
     return mat2.index.tolist(), X
 
-
 def evaluate_kmeans_over_k(
-    X: Union[np.ndarray, pd.DataFrame], 
+    X: np.ndarray | pd.DataFrame, 
     k_min: int = 2, 
     k_max: int = 15
 ) -> pd.DataFrame:
@@ -140,7 +138,8 @@ def evaluate_kmeans_over_k(
         - Davies–Bouldin
     for k = k_min … k_max.
     """
-    results = {
+    
+    results : dict[str, list[int | float]] = {
         "k": [],
         "SSE": [],
         "silhouette": [],
@@ -156,7 +155,7 @@ def evaluate_kmeans_over_k(
         results["k"].append(k)
         results["SSE"].append(km.inertia_)
         results["silhouette"].append(
-            silhouette_score(X, labels)
+            float(silhouette_score(X, labels))
         )
         results["calinski"].append(
             calinski_harabasz_score(X, labels)
@@ -167,9 +166,7 @@ def evaluate_kmeans_over_k(
 
     return pd.DataFrame(results)
 
-
-def fit_final_kmeans(X: Union[np.ndarray, pd.DataFrame], k: int) -> np.ndarray:
+def fit_final_kmeans(X: np.ndarray | pd.DataFrame, k: int) -> npt.NDArray:
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-    labels = km.fit_predict(X)
+    labels: npt.NDArray = km.fit_predict(X)
     return labels
-

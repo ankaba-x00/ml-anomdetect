@@ -1,19 +1,14 @@
 import json
-from typing import Optional
+from typing import Any, Optional
 from pathlib import Path
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    confusion_matrix,
-    mean_absolute_error,
-    root_mean_squared_error,
-)
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
-from app.src.data.attack_labelling import ATTACK_LABELS, ID_TO_ATTACK
+from app.src.data.building.attack_labelling import ATTACK_LABELS, ID_TO_ATTACK
 from .common import apply_custom_theme
 from app.src.ml.training.anomaly_utils import get_threshold
 
@@ -28,7 +23,7 @@ def plot_error_histogram(
     """Histogram of log errors with percentile lines."""
     apply_custom_theme()
 
-    scores = df["scores"].values
+    scores = df["scores"].to_numpy(dtype=np.float32)
     log_err = np.log10(scores + 1e-8)
     p95 = get_threshold("p95", scores)
     p99 = get_threshold("p99", scores)
@@ -84,15 +79,14 @@ def summarize_validation(
     fname: str = "summarize_validation.png",
 ) -> None:
     """Summary statistics for reconstruction error distribution as json."""
-    scores = df["scores"].values
+    scores = df["scores"].to_numpy(dtype=np.float32)
 
-
-    summary = {
+    summary: dict[str, Any] = {
         "country": country,
         "count": int(len(scores)),
-        "min": float(scores.min()),
-        "max": float(scores.max()),
-        "mean": float(scores.mean()),
+        "min": float(np.min(scores)),
+        "max": float(np.max(scores)),
+        "mean": float(np.mean(scores)),
         "p95": get_threshold("p95", scores),
         "p99": get_threshold("p99", scores),
         "p995": get_threshold("p995", scores),
@@ -110,24 +104,23 @@ def summarize_mt_validation(
     fname: str = "summarize_mt_validation.png",
 ) -> None:
     """Summary statistics for MT validation output as json."""
-    summary = {"country": country}
+    summary: dict[str, Any] = {"country": country}
 
     # -------------------------------
     # 1. Anomaly / total loss statistics
     # -------------------------------
-    if "loss_total" in df:
-        total = df["loss_total"].to_numpy(dtype=float)
+    if "scores" in df:
+        scores = df["scores"].to_numpy(dtype=np.float32)
 
         summary["anomaly"] = {
-            "count": int(len(total)),
-            "mean": float(np.mean(total)),
-            "median": float(np.median(total)),
-            "std": float(np.std(total)),
-            "min": float(np.min(total)),
-            "max": float(np.max(total)),
-            "p95": float(np.percentile(total, 95)),
-            "p99": float(np.percentile(total, 99)),
-            "p995": float(np.percentile(total, 99.5)),
+            "count": int(len(scores)),
+            "min": float(np.min(scores)),
+            "max": float(np.max(scores)),
+            "mean": float(np.mean(scores)),
+            "p95": get_threshold("p95", scores),
+            "p99": get_threshold("p99", scores),
+            "p995": get_threshold("p995", scores),
+            "mad": get_threshold("mad", scores)
         }
 
         if "threshold" in df:
@@ -140,44 +133,53 @@ def summarize_mt_validation(
     # -------------------------------
     # 2. L3 regression metrics
     # -------------------------------
-    if "l3_true" in df and "l3_pred" in df:
+    if (
+        "l3_true" in df 
+        and "l3_pred_0.5" in df
+        and "l3_pred_0.9" in df
+    ):
         y_true = df["l3_true"].to_numpy()
-        y_pred = df["l3_pred"].to_numpy()
+        y_pred_5 = df["l3_pred_0.5"].to_numpy()
+        y_pred_9 = df["l3_pred_0.9"].to_numpy()
 
         summary["l3"] = {
-            "mae": float(mean_absolute_error(y_true, y_pred)),
-            "rmse": float(root_mean_squared_error(y_true, y_pred)),
             "mean_true": float(np.mean(y_true)),
-            "mean_pred": float(np.mean(y_pred)),
+            "mean_q0.5": float(np.mean(y_pred_5)),
+            "mean_q0.9": float(np.mean(y_pred_9))
         }
 
     # -------------------------------
     # 3. L7 regression metrics
     # -------------------------------
-    if "l7_true" in df and "l7_pred" in df:
+    if (
+        "l7_true" in df 
+        and "l7_pred_0.5" in df
+        and "l7_pred_0.9" in df
+    ):
         y_true = df["l7_true"].to_numpy()
-        y_pred = df["l7_pred"].to_numpy()
+        y_pred_5 = df["l7_pred_0.5"].to_numpy()
+        y_pred_9 = df["l7_pred_0.9"].to_numpy()
 
-        summary["l7"] = {
-            "mae": float(mean_absolute_error(y_true, y_pred)),
-            "rmse": float(root_mean_squared_error(y_true, y_pred)),
+        summary["l3"] = {
             "mean_true": float(np.mean(y_true)),
-            "mean_pred": float(np.mean(y_pred)),
+            "mean_q0.5": float(np.mean(y_pred_5)),
+            "mean_q0.9": float(np.mean(y_pred_9))
         }
-
     # -------------------------------
     # 4. Attack classification metrics
     # -------------------------------
-    if "attack_pred" in df:
+    if (
+        "at_pred" in df
+        and "at_conf" in df
+    ):
         attack_block = {
-            "mean_confidence": float(df["attack_conf"].mean())
-            if "attack_conf" in df else None
+            "mean_confidence": float(df["at_conf"].mean())
         }
 
         # ground truth available; full metrics
-        if "attack_true" in df:
-            y_true = df["attack_true"].to_numpy()
-            y_pred = df["attack_pred"].to_numpy()
+        if "at_true" in df:
+            y_true = df["at_true"].to_numpy()
+            y_pred = df["at_pred"].to_numpy()
 
             attack_block.update({
                 "accuracy": float(accuracy_score(y_true, y_pred)),
@@ -188,7 +190,7 @@ def summarize_mt_validation(
         # no ground truth; inference-only stats
         else:
             attack_block.update({
-                "positive_rate": float(df["attack_pred"].mean()),
+                "positive_rate": float(df["at_pred"].mean()),
             })
 
         summary["attack"] = attack_block
@@ -198,8 +200,8 @@ def summarize_mt_validation(
     print(f"[OK] Saved to {fname}")
 
 def plot_regression_scatter(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: npt.NDArray[np.float32],
+    y_pred: npt.NDArray[np.float32],
     label: str,
     max_points: int = 5000,
     folder: Path = Path.cwd(),
@@ -222,9 +224,9 @@ def plot_regression_scatter(
 
     ax.plot([min_v, max_v], [min_v, max_v], "r--", linewidth=2)
 
-    ax.set_title(f"{label}: True vs Predicted")
+    ax.set_title(f"{label}: True vs Pred")
     ax.set_xlabel("True")
-    ax.set_ylabel("Predicted")
+    ax.set_ylabel("Pred")
     ax.grid(True)
 
     plt.tight_layout()
@@ -256,7 +258,7 @@ def plot_attack_confusion_matrix(
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     disp_raw = ConfusionMatrixDisplay(
         confusion_matrix=cm_raw,
-        display_labels=ID_TO_ATTACK.keys(),
+        display_labels=list(ID_TO_ATTACK.keys()),
     )
     disp_raw.plot(
         ax=axes[0],
@@ -268,7 +270,7 @@ def plot_attack_confusion_matrix(
 
     disp_norm = ConfusionMatrixDisplay(
         confusion_matrix=cm_norm,
-        display_labels=ID_TO_ATTACK.keys(),
+        display_labels=list(ID_TO_ATTACK.keys()),
     )
     disp_norm.plot(
         ax=axes[1],
@@ -295,7 +297,7 @@ def plot_attack_confusion_matrix(
         ),
     )
     plt.suptitle(f"{country} — Attack Classification Confusion Matrix")
-    plt.tight_layout(rect=[0, 0, 0.93, 1])
+    plt.tight_layout(rect=(0, 0, 0.93, 1))
     plt.savefig(folder / fname, dpi=160)
     print(f"[OK] Saved to {fname}")
     if show: plt.show()
@@ -367,13 +369,13 @@ def plot_anomaly_timeseries(
     """
     apply_custom_theme()
 
-    required = ["ts", "loss_total", "threshold", "is_flagged"]
+    required = ["ts", "scores", "threshold", "is_flagged"]
     if not all(k in df for k in required):
         print(f"[INFO] Missing columns for anomaly timeseries in {country}")
         return
 
     ts = df["ts"]
-    score = df["loss_total"]
+    score = df["scores"]
     threshold = df["threshold"].iloc[0]
     flagged = df["is_flagged"].astype(bool)
 
@@ -387,6 +389,7 @@ def plot_anomaly_timeseries(
         score,
         lw=1.4,
         color="steelblue",
+        alpha=0.7,
         label="Anomaly score",
         zorder=3,
     )
@@ -409,10 +412,10 @@ def plot_anomaly_timeseries(
             threshold,
             where=flagged,
             color="red",
-            alpha=0.25,
+            alpha=0.7,
             label="Flagged anomaly",
             interpolate=True,
-            zorder=2,
+            zorder=10,
         )
 
     # -----------------------------
@@ -436,13 +439,14 @@ def plot_anomaly_timeseries(
                 lw=0.8,
                 linestyle=":",
                 color="orange",
-                alpha=0.6,
+                alpha=0.7,
                 label="L7 loss",
             )
     ax.tick_params(axis="x", labelsize=10)
     ax.tick_params(axis="y", labelsize=10)
     ax.set_xlabel("Time", fontsize=14)
     ax.set_ylabel("Anomaly score / regression loss", fontsize=14)
+    ax.set_ylim(0.0, 1.05)
     ax.set_title(f"{country} — Multi-Task Anomaly Score Over Time", fontsize=16)
     ax.grid(True)
 
@@ -453,11 +457,11 @@ def plot_anomaly_timeseries(
         ax2 = ax.twinx()
         ax2.plot(
             ts,
-            df["at_conf"],
+            df["at_conf"].to_numpy() / 100,
             lw=1.0,
             color="purple",
-            alpha=0.35,
-            label="Attack confidence",
+            alpha=0.3,
+            label="At conf [0,1]",
         )
         ax2.tick_params(axis="y", labelsize=10)
         ax2.set_ylabel("Attack confidence", fontsize=14)
@@ -484,7 +488,7 @@ def plot_anomaly_timeseries(
             frameon=True,
         )
     fig.autofmt_xdate(rotation=45)
-    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.tight_layout(rect=(0, 0, 0.85, 1))
     fig.savefig(folder / fname, dpi=160, bbox_inches="tight")
     print(f"[OK] Saved to {fname}")
     if show: plt.show()

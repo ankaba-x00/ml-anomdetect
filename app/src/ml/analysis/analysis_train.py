@@ -1,6 +1,8 @@
 from pathlib import Path
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import numpy.typing as npt
+from typing import Literal
 
 from .common import apply_custom_theme
 
@@ -16,11 +18,11 @@ def plot_training_curves(
     """Lineplots showing a) loss curve (train vs val) and b) learning rate schedule."""
     apply_custom_theme()
 
-    train_loss = np.array(history["train_loss"], dtype=float)
-    val_loss = np.array(history["val_loss"], dtype=float)
-    lrs = np.array(history["learning_rates"], dtype=float)
+    train_loss = np.array(history["train_loss"], dtype=np.float32)
+    val_loss = np.array(history["val_loss"], dtype=np.float32)
+    lrs = np.array(history["learning_rates"], dtype=np.float32)
     epochs = np.arange(1, len(train_loss) + 1)
-    best_epoch = history.get("best_epoch", None)
+    best_epoch = history.get("best_epoch", -1)
 
     # Ensure lr schedule length matches number of epochs
     if len(lrs) < len(epochs):
@@ -40,7 +42,7 @@ def plot_training_curves(
     ax = axes[0]
     ax.plot(epochs, train_loss, label="Train", linewidth=2)
     ax.plot(epochs, val_loss, label="Val", linewidth=2)
-    if best_epoch:
+    if best_epoch != -1:
         ax.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
 
     ax.set_title(f"{country} — Loss Curve (Raw Loss, Log Scale)")
@@ -54,7 +56,7 @@ def plot_training_curves(
     ax2 = axes[1]
     ax2.plot(epochs, train_norm, label="Train (norm)", linewidth=2)
     ax2.plot(epochs, val_norm, label="Val (norm)", linewidth=2)
-    if best_epoch:
+    if best_epoch != -1:
         ax2.axvline(best_epoch, color="red", linestyle="--", label=f"Best Epoch = {best_epoch}")
 
     ax2.set_title(f"{country} — Learning Curve (Normalized to check for overfitting)")
@@ -86,7 +88,7 @@ def plot_training_curves(
     plt.close(fig2)
 
 def plot_detailed_loss_curves(
-    ae_type: str,
+    ae_type: Literal["ae", "vae", "mtae"],
     country: str,
     history: dict,
     folder: Path = Path.cwd(),
@@ -103,10 +105,10 @@ def plot_detailed_loss_curves(
         print(f"[INFO] Detailed loss components not available for {country}")
         return
     
-    train_cont = np.array(history[f"train_{cont_loss_name}"], dtype=float)
-    train_cat = np.array(history[f"train_{cat_loss_name}"], dtype=float)
-    val_cont = np.array(history.get(f"val_{cont_loss_name}", []), dtype=float)
-    val_cat = np.array(history.get(f"val_{cat_loss_name}", []), dtype=float)
+    train_cont = np.array(history[f"train_{cont_loss_name}"], dtype=np.float32)
+    train_cat = np.array(history[f"train_{cat_loss_name}"], dtype=np.float32)
+    val_cont = np.array(history.get(f"val_{cont_loss_name}", []), dtype=np.float32)
+    val_cat = np.array(history.get(f"val_{cat_loss_name}", []), dtype=np.float32)
     epochs = np.arange(1, len(train_cont) + 1)
 
     # normalization for shape comparison
@@ -115,22 +117,22 @@ def plot_detailed_loss_curves(
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     
-    axes[0, 0].plot(epochs, train_norm, label="Train Continuous", linewidth=2, color='blue')
+    axes[0, 0].plot(epochs, train_norm, label="Train Cont", linewidth=2, color='blue')
     if len(val_cont) > 0:
-        axes[0, 0].plot(epochs, val_norm, label="Val Continuous", linewidth=2, color='cyan')
-    axes[0, 0].set_title("Continuous MSE Loss (Normalized to check for overfitting)")
+        axes[0, 0].plot(epochs, val_norm, label="Val Cont", linewidth=2, color='cyan')
+    axes[0, 0].set_title("Continuous Huber Loss (Normalized to check for overfitting)")
     axes[0, 0].set_xlabel("Epoch")
-    axes[0, 0].set_ylabel("MSE")
+    axes[0, 0].set_ylabel("Huber loss")
     axes[0, 0].set_yscale("log")
     axes[0, 0].legend()
     axes[0, 0].grid(True)
 
-    axes[0, 1].plot(epochs, train_cat, label="Train Categorical", linewidth=2, color='red')
+    axes[0, 1].plot(epochs, train_cat, label="Train Cat", linewidth=2, color='red')
     if len(val_cat) > 0:
-        axes[0, 1].plot(epochs, val_cat, label="Val Categorical", linewidth=2, color='orange')
-    axes[0, 1].set_title("Categorical Cross-Entropy Loss")
+        axes[0, 1].plot(epochs, val_cat, label="Val Cat", linewidth=2, color='orange')
+    axes[0, 1].set_title("Categorical CE loss")
     axes[0, 1].set_xlabel("Epoch")
-    axes[0, 1].set_ylabel("Cross-Entropy")
+    axes[0, 1].set_ylabel("CE loss")
     axes[0, 1].set_yscale("log")
     axes[0, 1].legend()
     axes[0, 1].grid(True)
@@ -147,7 +149,7 @@ def plot_detailed_loss_curves(
     # loss weights
     if "loss_weights" in history:
         weights = history["loss_weights"]
-        axes[1, 1].bar(["Continuous", "Categorical"], 
+        axes[1, 1].bar(["Cont", "Cat"], 
                       [weights.get("cont_w", 1.0), weights.get("cat_w", 0.0)],
                       color=['blue', 'red'])
         axes[1, 1].set_title("Loss Weights")
@@ -176,18 +178,20 @@ def plot_detailed_mt_loss_curves(
         print(f"[INFO] Detailed MT loss components not available for {country}")
         return
     
-    train_l3 = np.array(history["train_l3"], dtype=float)
-    train_l7 = np.array(history["train_l7"], dtype=float)
-    train_at = np.array(history["train_at"], dtype=float)
+    train_l3 = np.array(history["train_l3"], dtype=np.float32)
+    train_l7 = np.array(history["train_l7"], dtype=np.float32)
+    train_at = np.array(history["train_at"], dtype=np.float32)
     
-    val_l3 = np.array(history.get("val_l3", []), dtype=float)
-    val_l7 = np.array(history.get("val_l7", []), dtype=float)
-    val_at = np.array(history.get("val_at", []), dtype=float)
+    val_l3 = np.array(history.get("val_l3", []), dtype=np.float32)
+    val_l7 = np.array(history.get("val_l7", []), dtype=np.float32)
+    val_at = np.array(history.get("val_at", []), dtype=np.float32)
     
     epochs = np.arange(1, len(train_l3) + 1)
 
     # normalization for shape comparison
-    def safe_norm(x):
+    def safe_norm(
+        x: npt.NDArray[np.float32]
+    ) -> npt.NDArray[np.float32]:
         ref = np.median(x[:3]) if len(x) >= 3 else x[0]
         return x / ref if ref > 0 else x
 
@@ -208,9 +212,9 @@ def plot_detailed_mt_loss_curves(
     if len(val_l7_n):
         axes[0, 0].plot(epochs, val_l7_n, "--", label="Val L7", lw=2, color="palegreen")
 
-    axes[0, 0].set_title("Regression Losses (Normalized)")
+    axes[0, 0].set_title("Regression Mean Quantile Loss (Normalized)")
     axes[0, 0].set_xlabel("Epoch")
-    axes[0, 0].set_ylabel("Normalized Loss")
+    axes[0, 0].set_ylabel("Normalized Mean Qunatile Loss")
     axes[0, 0].set_yscale("log")
     axes[0, 0].legend()
     axes[0, 0].grid(True)
@@ -219,9 +223,9 @@ def plot_detailed_mt_loss_curves(
     if len(val_at):
         axes[0, 1].plot(epochs, val_at, "--", label="Val Attack", lw=2, color="orange")
 
-    axes[0, 1].set_title("Attack Classification Loss")
+    axes[0, 1].set_title("Classification Focal Loss")
     axes[0, 1].set_xlabel("Epoch")
-    axes[0, 1].set_ylabel("Loss")
+    axes[0, 1].set_ylabel("Focal Loss")
     axes[0, 1].set_yscale("log")
     axes[0, 1].legend()
     axes[0, 1].grid(True)
@@ -259,13 +263,14 @@ def plot_detailed_mt_loss_curves(
                 w.get("l7_weight", 1.0),
                 w.get("attack_weight", 1.0),
             ],
+            color=['blue', 'red', 'green']
         )
         axes[1, 1].set_title("Loss Weights")
         axes[1, 1].set_ylabel("Weight")
         axes[1, 1].grid(True, axis="y")
     else:
         axes[1, 1].axis("off")
-    
+
     plt.suptitle(f"{country} — Detailed MT Loss Analysis", fontsize=20)
     plt.tight_layout()
     plt.savefig(folder / fname, dpi=160)

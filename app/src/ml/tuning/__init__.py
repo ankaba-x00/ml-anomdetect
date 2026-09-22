@@ -1,6 +1,6 @@
 # app/src/ml/tuning/__init__.py
 """
-tuning utilities
+ml tuning package
 =================
 this package provides core utilities for tuning
 - seed : ensures reproducability of tuning trials

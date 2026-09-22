@@ -34,6 +34,7 @@ def plot_log_candidates(
         plt.hist(np.log1p(feature_values), bins=200)
         plt.title(f"Log1p Scale: {feature_name}")
         plt.savefig(folder / fname, dpi=160)
+        print(f"[OK] Saved to {fname}")
         if show: plt.show()
         plt.close()
 

@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 from .common import apply_custom_theme
-from app.src.data.attack_labelling import ID_TO_ATTACK
-from app.src.data.split import timeseries_seq_split
-from app.src.data.feature_engineering import    build_supervised_feature_matrix
+from app.src.data.building.attack_labelling import ID_TO_ATTACK
+from app.src.data.processing.split import timeseries_seq_split
+from app.src.data.building.feature_engineering import build_supervised_feature_matrix
 
 
 def plot_l3_l7_scatter_by_attack(
@@ -16,7 +16,7 @@ def plot_l3_l7_scatter_by_attack(
     folder: Path = Path.cwd(),
     fname: str = "plot_attack_timeseries.png",
     show: bool = False,
-):
+) -> None:
     apply_custom_theme()
 
     colors = ["white", "orange", "red", "magenta", "blue", "green", "cyan", "brown"]
@@ -99,8 +99,9 @@ def plot_timeseries_with_attack_labels(
 
 def print_labeldist(country: str, df: pd.DataFrame) -> None:
     """Prints label distribution for different train-val-test split ratios."""
-    _, _, _, _, ya_s, _, _ = build_supervised_feature_matrix(country, df)
-    ya = ya_s.values.astype(np.int64)
+    fmatrix = build_supervised_feature_matrix(country, df)
+    if fmatrix.y_at is not None:
+        ya = fmatrix.y_at.to_numpy(dtype=np.int64)
 
     ratios = [
         (75, 15), 
@@ -116,7 +117,7 @@ def print_labeldist(country: str, df: pd.DataFrame) -> None:
     for tr, vr in ratios:
         print(f"\n{tr}% train | {vr}% val | {100 - tr - vr}% test")
 
-        ya_tr, ya_val, ya_te = timeseries_seq_split(ya, None, tr / 100, vr / 100)
+        [ya_tr], [ya_val], [ya_te] = timeseries_seq_split([ya], tr/100, vr/100)
         splits = {
             "train": ya_tr,
             "val": ya_val,

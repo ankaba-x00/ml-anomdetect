@@ -1,7 +1,14 @@
-import json, pickle, torch
+import json, pickle
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from sklearn.preprocessing import RobustScaler
+from torch import Tensor
+from typing import Literal
 
+from app.src.ml.models.configs import AEConfig, MTAEConfig, VAEConfig
+from app.src.ml.models.ae import TabularAE
+from app.src.ml.models.mtae import MTTabularAE
+from app.src.ml.models.vae import TabularVAE
 from app.src.ml.models.helpers import load_autoencoder
 
 
@@ -9,11 +16,29 @@ FILE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = FILE_DIR / "models"
 
 
-def load_model_bundle(
-    ae_type: str, 
+@dataclass(slots=True, frozen=True)
+class InferenceBundle:
+    """
+    Immutable container holding inference bundle and its metadata.
+    """
+
+    model: TabularAE | TabularVAE | MTTabularAE
+    cfg: AEConfig | VAEConfig | MTAEConfig
+    loss_weights: dict[str, float]
+    attack_type_weights: Tensor | None
+    scaler: RobustScaler
+    model_num_cont: int
+    model_cat_dims: dict[str, int]
+    threshold: float
+    method: str
+    temperature: float
+
+
+def load_inference_bundle(
+    ae_type: Literal["ae", "vae", "mtae"], 
     country: str
-) -> dict[str, Any]:
-    """Loads model bundle for inference."""
+) -> InferenceBundle:
+    """Loads inference bundle incl. model bundle, scaler and threshold.."""
     print(f"[INFO] Loading inference bundle for {country}...")
 
     model_path = MODELS_DIR / f"{ae_type.upper()}" / f"{country}_autoencoder.pt"
@@ -27,36 +52,33 @@ def load_model_bundle(
     if not threshold_path.exists():
         raise FileNotFoundError(f"[ERROR] Threshold not found: {threshold_path}")
 
-    model, cfg, model_num_cont, model_cat_dims, metadata = load_autoencoder(model_path, metadata=True)
+    model_bundle = load_autoencoder(model_path)
     
-    try:
-        loss_weights = metadata["loss_weights"]
+    if model_bundle.metadata is not None:
+        loss_weights = model_bundle.metadata["loss_weights"]
         if ae_type in ["mtae"]:
-            attack_type_weights = torch.Tensor(metadata["attack_type_weights"])
-    except KeyError:
-        print("[ERROR] No weights saved in model metadata")
+            attack_type_weights = Tensor(model_bundle.metadata["attack_type_weights"])
+        else:
+            attack_type_weights = None
 
     with open(scaler_path, "rb") as f:
-        scaler = pickle.load(f)
+        scaler: RobustScaler = pickle.load(f)
 
     with open(threshold_path, "r") as f:
-        calibration_obj = json.load(f)
-        threshold = calibration_obj["threshold"]
-        method = calibration_obj["method"]
-        temperature = calibration_obj.get("temperature_inference", 1.0)
+        cal_res = json.load(f)
+        threshold = cal_res["threshold"]
+        method = cal_res["method"]
+        temperature = cal_res.get("temperature_inference", model_bundle.cfg.temperature)
 
-    bundle_dict = {
-        "model": model,
-        "config": cfg,
-        "loss_weights": loss_weights,
-        "scaler": scaler,
-        "model_num_cont": model_num_cont,
-        "model_cat_dims": model_cat_dims,
-        "threshold": float(threshold),
-        "method": method,
-        "temperature": temperature,
-    }
-    if ae_type in ["mtae"]:
-        bundle_dict["attack_type_weights"] = attack_type_weights
-
-    return bundle_dict
+    return InferenceBundle(
+        model=model_bundle.model,
+        cfg=model_bundle.cfg,
+        loss_weights=loss_weights,
+        attack_type_weights=attack_type_weights,
+        scaler=scaler,
+        model_num_cont=model_bundle.num_cont,
+        model_cat_dims=model_bundle.cat_dims,
+        threshold=float(threshold),
+        method=method,
+        temperature=temperature
+    )

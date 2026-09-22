@@ -1,3 +1,4 @@
+from typing import cast, Sequence
 import torch
 import torch.nn.functional as F
 
@@ -6,7 +7,7 @@ def mse_loss(
     pred: torch.Tensor,
     target: torch.Tensor,
     reduction: str = "none"
-):
+) -> torch.Tensor:
     """
     Computes mean-squared loss.
     """
@@ -17,7 +18,7 @@ def huber_loss(
     pred: torch.Tensor,
     target: torch.Tensor,
     reduction: str = "none"
-):
+) -> torch.Tensor:
     """
     Computes Huber loss.
     """
@@ -38,9 +39,9 @@ def pinball_loss(
 def quantile_loss(
     pred: torch.Tensor,
     target: torch.Tensor,
-    quantiles: list[float],
+    quantiles: Sequence[float],
     reduction: str = "none"
-):
+) -> torch.Tensor:
     """
     Computes pinball loss over Q quantiles.
     """
@@ -59,7 +60,7 @@ def cross_entropy(
     logits: torch.Tensor,
     target: torch.Tensor,
     reduction: str = "none"
-):
+) -> torch.Tensor:
     """
     Computes cross-entropy loss.
     """
@@ -72,7 +73,7 @@ def focal_loss(
     gamma: float = 2.0,
     weights: torch.Tensor | None = None,
     reduction: str = "none"
-):
+) -> torch.Tensor:
     """
     Computes focal loss at given quantile.
     """
@@ -91,7 +92,7 @@ def focal_loss(
         loss = loss * type_weights
 
     if reduction == "mean":
-        return loss.mean()
+        return torch.mean(loss)
     elif reduction == "sum":
-        return loss.sum()
-    return loss
+        return torch.sum(loss)
+    return cast(torch.Tensor, loss)

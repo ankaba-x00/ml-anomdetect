@@ -1,6 +1,7 @@
 import torch
+from typing import Sequence
 
-from . import huber_loss, cross_entropy, quantile_loss, focal_loss
+from .metrics import huber_loss, cross_entropy, quantile_loss, focal_loss
 
 
 class TabularReconScoringMixin:
@@ -14,10 +15,10 @@ class TabularReconScoringMixin:
         x_cat: torch.Tensor,
         cont_recon: torch.Tensor,
         cat_logits: dict[str, torch.Tensor],
-        cat_dims: dict[str, int],
         loss_weights: dict[str, float],
-        in_warmup: bool = False,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        cat_dims: dict[str, int],
+        in_warmup: bool = False
+    ) -> tuple[torch.Tensor, ...]:
         """
         Computes Huber loss for cont features, CE for cat features and normalized weighted per-sample loss.
         """
@@ -87,11 +88,11 @@ class TabularMTScoringMixin:
         l3_pred: torch.Tensor,
         l7_pred: torch.Tensor,
         at_logits: torch.Tensor,
-        quantiles: tuple[float],
+        quantiles: Sequence[float],
         gamma: float,
         loss_weights: dict[str, float],
         attack_type_weights: torch.Tensor
-    ):
+    ) -> tuple[torch.Tensor, ...]:
         loss_l3 = quantile_loss(
             l3_pred,
             y3,
@@ -110,7 +111,7 @@ class TabularMTScoringMixin:
             at_logits,
             ya,
             gamma,
-            attack_type_weights,
+            attack_type_weights
         )
 
         l3_w = loss_weights["l3_w"]

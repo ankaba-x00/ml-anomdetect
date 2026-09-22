@@ -5,7 +5,7 @@ Analyze attack labelling for one or multiple countries:
 - generates plots and summary
 
 Output:
-    PATH : results/ml/tuned/analysis/<MODEL>/<COUNTRY>
+    PATH: results/ml/tuned/analysis/<MODEL>/<COUNTRY>
     FILES : <RETUNE_NO>_optimization_history.png | .html, 
             <RETUNE_NO>_param_importance.png | .html, 
             <RETUNE_NO>_parallel_coordinates.png | .html, 
@@ -19,7 +19,7 @@ Output:
             <RETUNE_NO>_loss_component_analysis.png,
     Add. FILES for MTAE: <RETUNE_NO>attack_type_weights.png
                          <RETUNE_NO>attack_type_balance.png
-    PATH : results/ae_ml/tuned/analysis/<MODEL>/_multi
+    PATH: results/ae_ml/tuned/analysis/<MODEL>/_multi
     FILES : <RETUNE_NO>_best_losses.png, 
             <RETUNE_NO>_best_losses.json, 
             <RETUNE_NO>_best_weights.png, 
@@ -38,8 +38,9 @@ import pandas as pd
 import math
 import matplotlib.pyplot as plt
 
-from app.src.data import ATTACK_TO_ID, ID_TO_ATTACK, ISO_3166_alpha2
-from app.src.data.feature_engineering import COUNTRIES, build_country_dataframe
+from app.src.data.building import ATTACK_TO_ID, ID_TO_ATTACK
+from app.src.data.fetching import ISO_3166_alpha2
+from app.src.data.building.feature_engineering import COUNTRIES, build_country_dataframe
 from app.src.ml.analysis import (
     plot_l3_l7_scatter_by_attack, 
     plot_timeseries_with_attack_labels,
@@ -150,9 +151,9 @@ def num_analysis(country: str, df: pd.DataFrame) -> None:
     uncorr = df.get("uncorr_attack_label")
     n = len(labels)
 
-    # --------------------------------------------------
+    # ---------------------------------------
     # A. Distribution sanity
-    # --------------------------------------------------
+    # ---------------------------------------
     print("\n[A] DISTRIBUTION SANITY")
 
     counts = labels.value_counts().sort_index()
@@ -171,9 +172,9 @@ def num_analysis(country: str, df: pd.DataFrame) -> None:
     print("  1.0–1.6 reasonable structure")
     print("  > 1.8   noisy / over-fragmented")
 
-    # --------------------------------------------------
+    # ---------------------------------------
     # B. Temporal coherence
-    # --------------------------------------------------
+    # ---------------------------------------
     print("\n[B] TEMPORAL COHERENCE")
 
     def run_lengths(mask: pd.Series) -> pd.Series:
@@ -195,9 +196,9 @@ def num_analysis(country: str, df: pd.DataFrame) -> None:
             continue
         print(f"{name:<3} {runs.median():>4.0f}h  {runs.quantile(0.95):>4.0f}h")
 
-    # --------------------------------------------------
+    # ---------------------------------------
     # C. Causal adjacency & correction impact
-    # --------------------------------------------------
+    # ---------------------------------------
     print("\n[C] CAUSAL / TEMPORAL CONSISTENCY")
 
     mv = ATTACK_TO_ID["multi_vector"]
@@ -270,7 +271,7 @@ def vis_analysis(country: str, df: pd.DataFrame, show_plots: bool) -> None:
     if show_plots: plt.show()
     plt.savefig(out_path / "hist_stealth_multivec.png")
 
-def purge():
+def purge() -> None:
     n = 0
     for file in FEATURE_DIR.glob("_interim_*.parquet"):
         if file.is_file():

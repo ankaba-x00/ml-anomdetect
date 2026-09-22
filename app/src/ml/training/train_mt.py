@@ -1,34 +1,31 @@
-from dataclasses import asdict
 import numpy as np
+import numpy.typing as npt
 import torch
-from typing import Any
+from torch.optim import Adam, AdamW, SGD 
+from torch.optim.lr_scheduler import CosineAnnealingLR, OneCycleLR, ReduceLROnPlateau, StepLR
 
+from . import TrainingTracker
 from app.src.ml.models.configs import MTAEConfig
 from app.src.ml.models.helpers import supervised_dataloader
 from app.src.ml.models.mtae import MTTabularAE
 
 
 def train_mt_autoencoder(
-    train_cont: np.ndarray,
-    train_cat: np.ndarray,
-    train_l3: np.ndarray,
-    train_l7: np.ndarray,
-    train_attack: np.ndarray,
-    val_cont: np.ndarray | None,
-    val_cat: np.ndarray | None,
-    val_l3: np.ndarray | None,
-    val_l7: np.ndarray | None,
-    val_attack: np.ndarray | None,
+    train_cont: npt.NDArray[np.float32],
+    train_cat: npt.NDArray[np.int64],
+    train_l3: npt.NDArray[np.float32],
+    train_l7: npt.NDArray[np.float32],
+    train_attack: npt.NDArray[np.int64],
+    val_cont: npt.NDArray[np.float32] | None,
+    val_cat:npt.NDArray[np.int64] | None,
+    val_l3: npt.NDArray[np.float32] | None,
+    val_l7: npt.NDArray[np.float32] | None,
+    val_attack: npt.NDArray[np.int64] | None,
     config: MTAEConfig,
     loss_weights: dict[str, float],
-) -> tuple[MTTabularAE, dict[str, Any]]:
+) -> tuple[MTTabularAE, TrainingTracker]:
     """
-    Train multi-task autoencoder with cont and cat features on split dataset with early stopping OR full dataset with no early stopping.
-    
-    Returns
-    -------
-    model : MTTabularAE
-    history : dict
+    Train  multi-task autoencoder with cont and cat features on split dataset with early stopping OR full dataset with no validation and early stopping.
     """
 
     device = torch.device(config.device)
@@ -47,7 +44,13 @@ def train_mt_autoencoder(
     )
 
     val_loader = None
-    if val_cont is not None:
+    if (
+        val_cont is not None
+        and val_cat is not None
+        and val_l3 is not None
+        and val_l7 is not None
+        and val_attack is not None
+    ):
         val_loader = supervised_dataloader(
             val_cont, 
             val_cat,
@@ -73,13 +76,11 @@ def train_mt_autoencoder(
         train_attack, 
         minlength=config.n_attack_types
     ).tolist()
-    if val_cont is not None:
+    if val_attack is not None:
         val_at_counts = np.bincount(
             val_attack, 
             minlength=config.n_attack_types
         ).tolist()
-    else:
-        val_at_counts = None
     attack_type_weights = model.compute_attack_type_weights(
         train_attack,
         config.n_attack_types,
@@ -89,7 +90,7 @@ def train_mt_autoencoder(
     # Optimizer
     # -------------------------
     if config.optimizer == "adam":
-        optimizer = torch.optim.Adam(
+        optimizer = Adam(
             model.parameters(), 
             lr=config.lr, 
             weight_decay=config.weight_decay,
@@ -97,7 +98,7 @@ def train_mt_autoencoder(
             eps=1e-8
         )
     elif config.optimizer == "adamw":
-        optimizer = torch.optim.AdamW(
+        optimizer = AdamW(
             model.parameters(), 
             lr=config.lr, 
             weight_decay=config.weight_decay,
@@ -105,7 +106,7 @@ def train_mt_autoencoder(
             eps=1e-8
         )
     elif config.optimizer == "sgd":
-        optimizer = torch.optim.SGD(
+        optimizer = SGD(
             model.parameters(),
             lr=config.lr,
             momentum=config.sgd_momentum,
@@ -137,8 +138,7 @@ def train_mt_autoencoder(
     elif config.lr_scheduler == "cosine":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, 
-            T_max=config.num_epochs,
-            eta_min=1e-6
+            T_max=config.num_epochs
         )
     elif config.lr_scheduler == "step":
         scheduler = torch.optim.lr_scheduler.StepLR(
@@ -150,62 +150,49 @@ def train_mt_autoencoder(
         scheduler = None
 
     # -------------------------
-    # Set history and param tracking
+    # Set up tracking
     # -------------------------
-    history = {
-        "train_loss": [],
-        "train_recon": [],
-        "train_l3": [],
-        "train_l7": [],
-        "train_at": [],
-        "train_cont": [],
-        "train_cat": [],
-        "val_recon": [],
-        "val_loss": [] if val_loader else None,
-        "val_l3": [] if val_loader else None,
-        "val_l7": [] if val_loader else None,
-        "val_at": [] if val_loader else None,
-        "val_cont": [],
-        "val_cat": [],
-        "learning_rates": [],
-        "best_epoch": 0,
-        "config": asdict(config),
-        "loss_weights": loss_weights,
-        "attack_type_weights": [],
-        "train_at_counts": train_at_counts
-    }
-    if val_cont is not None:
-        history["val_at_counts"] = val_at_counts
+    tracker = TrainingTracker(config=config.to_dict(), loss_weights=loss_weights)
 
     best_metric = float("inf")
+    best_epoch = -1
     best_state = None
     no_improve = 0
     in_warmup = False
     in_stepup = False
 
     # -------------------------
+    # Track attack type metrics
+    # -------------------------
+    tracker.extend("attack_type_weights", attack_type_weights.tolist())
+    tracker.extend("train_at_counts", train_at_counts)
+    if val_loader is not None:
+        tracker.extend("val_at_counts", val_at_counts)
+
+    # -------------------------
     # Print config summary
     # -------------------------
     print(f"[INFO] Training autoencoder with:")
-    print(f"\tCont features        {config.num_cont}")
-    print(f"\tCat features         {len(config.cat_dims)}")
-    print(f"\tTransformation Cont  {'RobustScaler'}")
-    print(f"\t               Cat   {'Embedding layers' if config.use_embedding else 'One-Hot encoding'}")
-    print(f"\tBatch size           {config.batch_size}")
-    print(f"\tHidden dimensions    {config.hidden_dims}")
-    print(f"\tLatent dimension     {config.latent_dim}")
-    print(f"\tActivation encoder   {config.activation_en}")
-    print(f"\tActivation decoder   {config.activation_de}")
-    print(f"\tOptimizer            {config.optimizer}")
-    print(f"\tLR scheduler         {config.lr_scheduler}")
-    print(f"\tNoise injection      {'enabled' if config.allow_noise_injection else 'disabled'}")
-    print(f"\tNum of warmup epochs {config.warmup_epochs}")
-    print(f"\tAlpha max            {config.alpha}")
-    print(f"\tLoss weights Cont    {loss_weights['cont_w']:.5f}")
-    print(f"\t             Cat     {loss_weights['cat_w']:.5f}")
-    print(f"\t             L3      {loss_weights['l3_w']:.5f}")
-    print(f"\t             L7      {loss_weights['l7_w']:.5f}")
-    print(f"\t             At      {loss_weights['at_w']:.5f}")
+    print(f"\tCont features          {config.num_cont}")
+    print(f"\tCat features           {len(config.cat_dims)}")
+    print(f"\tTransformation Cont    {'RobustScaler'}")
+    print(f"\t               Cat     {'Embedding layers' if config.use_embedding else 'One-Hot encoding'}")
+    print(f"\tBatch size             {config.batch_size}")
+    print(f"\tHidden dimensions      {config.hidden_dims}")
+    print(f"\tLatent dimension       {config.latent_dim}")
+    print(f"\tActivation encoder     {config.activation_en}")
+    print(f"\tActivation decoder     {config.activation_de}")
+    print(f"\tActivation decoder cls {config.activation_de}")
+    print(f"\tOptimizer              {config.optimizer}")
+    print(f"\tLR scheduler           {config.lr_scheduler}")
+    print(f"\tNoise injection        {'enabled' if config.allow_noise_injection else 'disabled'}")
+    print(f"\tNum of warmup epochs   {config.warmup_epochs}")
+    print(f"\tAlpha max              {config.alpha}")
+    print(f"\tLoss weights Cont      {loss_weights['cont_w']:.5f}")
+    print(f"\t             Cat       {loss_weights['cat_w']:.5f}")
+    print(f"\t             L3        {loss_weights['l3_w']:.5f}")
+    print(f"\t             L7        {loss_weights['l7_w']:.5f}")
+    print(f"\t             At        {loss_weights['at_w']:.5f}")
 
     # -------------------------
     # Training
@@ -282,7 +269,7 @@ def train_mt_autoencoder(
 
             optimizer.step()
 
-            if scheduler is not None and config.lr_scheduler == "onecycle":
+            if isinstance(scheduler, OneCycleLR):
                 scheduler.step()
 
             # Accumulate metrics
@@ -305,18 +292,15 @@ def train_mt_autoencoder(
         avg_tc = tc / max(1, tn)
         avg_tk = tk / max(1, tn)
         
-        history["train_loss"].append(avg_tl)
-        history["train_recon"].append(avg_train_recon)
-        history["train_l3"].append(avg_tl3)
-        history["train_l7"].append(avg_tl7)
-        history["train_at"].append(avg_tatt)
-        history["train_cont"].append(avg_tc)
-        history["train_cat"].append(avg_tk)
-        history["attack_type_weights"] = (
-            attack_type_weights.cpu().tolist()
-            if attack_type_weights is not None
-            else []
-        )
+        tracker["train_loss"].append(avg_tl)
+        tracker["train_recon"].append(avg_train_recon)
+        tracker["train_l3"].append(avg_tl3)
+        tracker["train_l7"].append(avg_tl7)
+        tracker["train_at"].append(avg_tatt)
+        tracker["train_cont"].append(avg_tc)
+        tracker["train_cat"].append(avg_tk)
+        tracker["warmup"].append(in_warmup)
+        tracker["stepup"].append(in_stepup)
 
         # -------------------------
         # Validation
@@ -367,19 +351,18 @@ def train_mt_autoencoder(
             avg_vc = vc / max(1, vn)
             avg_vk = vk / max(1, vn)
                 
-            history["val_loss"].append(avg_vl)
-            history["val_recon"].append(avg_vr)
-            history["val_l3"].append(avg_vl3)
-            history["val_l7"].append(avg_vl7)
-            history["val_at"].append(avg_vatt)
-            history["val_cont"].append(avg_vc)
-            history["val_cat"].append(avg_vk)
+            tracker["val_loss"].append(avg_vl)
+            tracker["val_recon"].append(avg_vr)
+            tracker["val_l3"].append(avg_vl3)
+            tracker["val_l7"].append(avg_vl7)
+            tracker["val_at"].append(avg_vatt)
+            tracker["val_cont"].append(avg_vc)
+            tracker["val_cat"].append(avg_vk)
 
-            if scheduler is not None:
-                if config.lr_scheduler == "plateau":
-                    scheduler.step(avg_tl)
-                elif config.lr_scheduler in ["cosine", "step"]:
-                    scheduler.step()
+            if isinstance(scheduler, ReduceLROnPlateau):
+                scheduler.step(avg_tl)
+            elif isinstance(scheduler, (CosineAnnealingLR, StepLR)):
+                scheduler.step()
             
             # -----------------------------
             # Early stopping
@@ -388,7 +371,7 @@ def train_mt_autoencoder(
                 if avg_vl < best_metric - 1e-9:
                     best_metric = avg_vl
                     best_state = model.state_dict().copy()
-                    history["best_epoch"] = epoch + 1
+                    best_epoch = epoch + 1
                     no_improve = 0
                 else:
                     no_improve += 1
@@ -426,7 +409,7 @@ def train_mt_autoencoder(
             if avg_tl < best_metric - 1e-9:
                 best_metric = avg_tl
                 best_state = model.state_dict().copy()
-                history["best_epoch"] = epoch + 1
+                best_epoch = epoch + 1
                 no_improve = 0
             else:
                 no_improve += 1
@@ -446,7 +429,7 @@ def train_mt_autoencoder(
                 f"LR {optimizer.param_groups[0]['lr']:.2e}, ɑ {model.current_alpha:.1f}"
             )
 
-        history["learning_rates"].append(optimizer.param_groups[0]["lr"])
+        tracker["learning_rates"].append(optimizer.param_groups[0]["lr"])
 
         # -----------------------------
         # Print gradient norm
@@ -462,8 +445,9 @@ def train_mt_autoencoder(
     # -----------------------------
     # Restore best model
     # -----------------------------
-    if best_state is not None:
+    if best_state is not None and best_epoch != -1:
         model.load_state_dict(best_state)
-        print(f"Restored best model from epoch {history['best_epoch']}")
+        tracker.best_epoch = best_epoch
+        print(f"Restored best model from epoch {best_epoch}")
 
-    return model.eval(), history
+    return model.eval(), tracker

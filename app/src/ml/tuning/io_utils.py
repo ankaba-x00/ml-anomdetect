@@ -1,8 +1,7 @@
 import csv, optuna, yaml
 from collections import OrderedDict
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from app.src.ml.models.configs import AEConfig, VAEConfig, MTAEConfig
 
@@ -18,10 +17,11 @@ class YMLReader:
     Reads hyperparameter search space from YAML tuning configuration, passes tuning parameters to objective function as trial suggestion variables and generates final config object for trial run.
     """
 
-    def __init__(self, 
-        ae_type: str,
+    def __init__(
+        self, 
+        ae_type: Literal["ae", "vae", "mtae"],
         trial: optuna.Trial | None
-    ):
+    ) -> None:
         self.ae_type = ae_type
         self.trial = trial
     
@@ -48,13 +48,13 @@ class YMLReader:
     def extract_params(self) -> dict[str, Any]:
         """Loads tuning configuration from YML file."""
 
-        param_file = Path(__file__).resolve().parents[2] / "config" / "tune" / f"param_{self.ae_type}.yml"
+        param_file = Path(__file__).resolve().parents[3] / "config" / "tune" / f"param_{self.ae_type}.yml"
         if not param_file.exists():
             raise YMLReaderError(f"[ERROR] YML tuning configuration not found: {param_file}")
 
         try:
             with open(param_file, "r") as f:
-                params = yaml.load(f, Loader=yaml.SafeLoader)
+                params: dict[str, Any] = yaml.load(f, Loader=yaml.SafeLoader)
             print(f"[OK] YML params of {self.ae_type} loaded")
         except AttributeError:
             raise YMLReaderError("[ERROR] YML file empty")
@@ -67,17 +67,20 @@ class YMLReader:
         self, 
         key: str, 
         value: dict[str, int | float] | list[int | float | str] 
-    ) -> None:
+    ) -> int | float | str | Any:
         "Adds search space parameters to objective function."
+        if self.trial is None:
+            raise YMLReaderError(f"[ERROR] YML objective is not initialized")
+        
         if isinstance(value, dict):
             if set(value.keys()) != set(["start", "end"]):
                 raise YMLReaderError(f"[ERROR] YML tune section value error for param {key}: only dict with start/end keys allowed")
             if all(isinstance(v, int) for v in value.values()):
-                return self.trial.suggest_int(key, value["start"], value["end"])
+                return self.trial.suggest_int(key, int(value["start"]), int(value["end"]))
             elif all(isinstance(v, float) for v in value.values()):
                 if value["start"] != 0.0 and value["end"] / value["start"] >= 100:
-                    return self.trial.suggest_float(key, value["start"], value["end"], log=True)
-                return self.trial.suggest_float(key, value["start"], value["end"])
+                    return self.trial.suggest_float(key, float(value["start"]), float(value["end"]), log=True)
+                return self.trial.suggest_float(key, float(value["start"]), float(value["end"]))
             else: 
                 raise YMLReaderError(f"[ERROR] YML tune section value error for param {key}: all dict values must be of same type and either int or float") 
         elif isinstance(value, list):
@@ -95,7 +98,7 @@ class YMLReader:
     ) -> AEConfig | VAEConfig | MTAEConfig:
         "Adds config parameters to config object."
 
-        config_map = {
+        config_map: dict[str, type[AEConfig | VAEConfig | MTAEConfig]] = {
             "ae": AEConfig,
             "vae": VAEConfig,
             "mtae": MTAEConfig
@@ -120,8 +123,7 @@ class YMLReader:
         if defaults:
             print("[YML] Config parameters missing in YML file, using defaults for:")
             for d in defaults:
-                if d != "hidden_dims":
-                    print(f"      {d}: {asdict(cfg)[d]}")
+                print(f"      {d}: {cfg.to_dict()[d]}")
 
 
 class TrialSummaryWriter:
@@ -132,13 +134,12 @@ class TrialSummaryWriter:
     def __init__(
         self, 
         retune_no: int, 
-        ae_type: str,
+        ae_type: Literal["ae", "vae", "mtae"],
         sampler: str,
         pruner: str,
         best_no: int,
         best_result: float
-
-    ):
+    ) -> None:
         self.retune_no = retune_no
         self.ae_type = ae_type
         self.sampler = sampler
@@ -146,7 +147,7 @@ class TrialSummaryWriter:
         self.best_no = best_no
         self.best_result = best_result
 
-    def write(self, summary_path: Path):
+    def write(self, summary_path: Path) -> None:
         "Writes trial summary."
 
         trial_info = self._trial_writeout()
