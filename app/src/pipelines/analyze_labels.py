@@ -29,7 +29,7 @@ Output:
                          <RETUNE_NO>_best_attack_type_weights.json
 
 Usage:
-    python -m app.src.pipelines.analyze_labels [-pre] [-V] [-N] [-D] [-s] [--purge] <COUNTRY|all>
+    python -m app.src.pipelines.analyze_labelling [-pre] [-V] [-N] [-D] [-s] [--purge] <COUNTRY|all>
 """
 
 from pathlib import Path
@@ -282,7 +282,7 @@ def purge() -> None:
             n += 1
     print(f"[OK] Purged {n} interim parquet files")
 
-def analyze_labels(
+def analyze_labelling(
     country: str, 
     pre_run: bool,
     vis: bool,
@@ -316,7 +316,7 @@ def analyze_all(
     """Runs attack label analysis pipeline for all pre-defined countries."""
     for c in COUNTRIES:
         try:
-            analyze_labels(
+            analyze_labelling(
                 c, 
                 pre_run, 
                 vis, 
@@ -398,7 +398,7 @@ if __name__ == "__main__":
             args.show
         )
     else:
-        analyze_labels(
+        analyze_labelling(
             target, 
             args.pre_run,
             args.vis,

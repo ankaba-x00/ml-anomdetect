@@ -111,7 +111,7 @@ Below is a minimal quick-start.
 ### 4. Analysis training, validation, tuning, testing
     
     python -m app.src.pipelines.analyze_dataset
-    python -m app.src.pipelines.analyze_labels mtae AT
+    python -m app.src.pipelines.analyze_labelling mtae AT
     python -m app.src.pipelines.analyze_training mtae AT
     python -m app.src.pipelines.analyze_tuning mtae AT
     python -m app.src.pipelines.analyze_testing mtae AT
