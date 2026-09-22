@@ -31,8 +31,8 @@ FEATURE_DIR = PROJECT_ROOT / "datasets" / "featured"
 def load_countries_from_config(models_path: Path) -> list[str]:
     """Loads user-defined models list for multi-country processing."""
     with open(models_path, "r") as f:
-        countries: list[str] = yaml.safe_load(f)
-    return countries
+        models: dict[str, list[str]] = yaml.safe_load(f)
+    return models["countries"]
 
 COUNTRIES = load_countries_from_config(PROJECT_ROOT / "config" / "models.yml")
 
@@ -421,3 +421,6 @@ def load_supervised_feature_matrix(
         num_cont=num_cont, 
         cat_dims=cat_dims
     )
+
+if __name__=="__main__":
+    print(COUNTRIES)
